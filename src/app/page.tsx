@@ -6,7 +6,23 @@ import {
   type GenerationParams, type GenerationResult, type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
-import { playNotes, playLayer, stopAllPlayback, getIsPlaying } from '@/lib/audio-engine';
+import { playNotes, playLayer, stopAllPlayback } from '@/lib/audio-engine';
+
+// ============================================================
+// TYPES
+// ============================================================
+interface HistoryEntry {
+  id: string;
+  prompt: string;
+  genre: string;
+  key: string;
+  scale: string;
+  bpm: number;
+  bars: number;
+  result: GenerationResult;
+  params: GenerationParams;
+  timestamp: Date;
+}
 
 // ============================================================
 // PIANO ROLL COMPONENT
@@ -17,7 +33,6 @@ function PianoRoll({ notes, color, height = 80 }: { notes: NoteEvent[]; color: s
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || notes.length === 0) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -28,11 +43,9 @@ function PianoRoll({ notes, color, height = 80 }: { notes: NoteEvent[]; color: s
     canvas.height = h * dpr;
     ctx.scale(dpr, dpr);
 
-    // Clear
     ctx.fillStyle = '#0A0A0F';
     ctx.fillRect(0, 0, w, h);
 
-    // Grid
     ctx.strokeStyle = 'rgba(255,255,255,0.04)';
     ctx.lineWidth = 0.5;
     for (let x = 0; x < w; x += w / 16) {
@@ -42,14 +55,12 @@ function PianoRoll({ notes, color, height = 80 }: { notes: NoteEvent[]; color: s
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
 
-    // Find note range
     const pitches = notes.map(n => n.pitch);
     const minPitch = Math.min(...pitches) - 1;
     const maxPitch = Math.max(...pitches) + 1;
     const pitchRange = Math.max(maxPitch - minPitch, 8);
     const maxTime = Math.max(...notes.map(n => n.startTime + n.duration), 4);
 
-    // Draw notes
     for (const note of notes) {
       const x = (note.startTime / maxTime) * w;
       const noteW = Math.max(2, (note.duration / maxTime) * w);
@@ -59,7 +70,17 @@ function PianoRoll({ notes, color, height = 80 }: { notes: NoteEvent[]; color: s
       ctx.fillStyle = color;
       ctx.globalAlpha = 0.5 + (note.velocity / 127) * 0.5;
       ctx.beginPath();
-      ctx.roundRect(x, y - noteH / 2, noteW, noteH, 1.5);
+      const rx = x, ry = y - noteH / 2, rw = noteW, rh = noteH, r = 1.5;
+      ctx.moveTo(rx + r, ry);
+      ctx.lineTo(rx + rw - r, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+      ctx.lineTo(rx + rw, ry + rh - r);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+      ctx.lineTo(rx + r, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+      ctx.lineTo(rx, ry + r);
+      ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+      ctx.closePath();
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -99,7 +120,7 @@ function LayerCard({
       setPlaying(false);
     } else {
       setPlaying(true);
-      playLayer(name as any, notes, bpm, genre, () => setPlaying(false));
+      playLayer(name as 'melody' | 'chords' | 'bass' | 'drums', notes, bpm, genre, () => setPlaying(false));
     }
   };
 
@@ -134,7 +155,63 @@ function LayerCard({
 }
 
 // ============================================================
-// GENRE LIST
+// HISTORY SIDEBAR
+// ============================================================
+function HistorySidebar({
+  history,
+  onRestore,
+  onClose,
+}: {
+  history: HistoryEntry[];
+  onRestore: (entry: HistoryEntry) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed right-0 top-0 h-full w-72 bg-bg-surface border-l border-white/8 z-40 flex flex-col">
+      <div className="flex items-center justify-between px-4 py-4 border-b border-white/8">
+        <span className="font-display font-bold text-sm">
+          History {history.length > 0 && <span className="text-muted font-normal">({history.length})</span>}
+        </span>
+        <button onClick={onClose} className="text-muted hover:text-white transition-colors text-lg leading-none">×</button>
+      </div>
+
+      {history.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-muted text-sm text-center px-6">Generate something to see your history here.</p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {history.map((entry) => (
+            <button
+              key={entry.id}
+              onClick={() => onRestore(entry)}
+              className="w-full text-left px-4 py-3 border-b border-white/5 hover:bg-white/5 transition-colors"
+            >
+              <p className="text-sm text-white/90 truncate mb-1">
+                {entry.prompt || GENRES[entry.genre]?.name || entry.genre}
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <span className="text-xs font-mono text-papaya">{GENRES[entry.genre]?.name || entry.genre}</span>
+                <span className="text-xs font-mono text-muted">{entry.key} {entry.scale}</span>
+                <span className="text-xs font-mono text-muted">{entry.bpm} BPM</span>
+              </div>
+              <p className="text-xs text-muted/50 mt-1">
+                {entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="px-4 py-3 border-t border-white/8">
+        <p className="text-xs text-muted/50 text-center">Session only · clears on refresh</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// CONSTANTS
 // ============================================================
 const GENRE_LIST = Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name }));
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -151,20 +228,20 @@ export default function Home() {
   const [playingAll, setPlayingAll] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
   const toolRef = useRef<HTMLDivElement>(null);
 
-  // Scroll detection for sticky nav
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Generate
-  const handleGenerate = useCallback((overrideParams?: Partial<GenerationParams>) => {
+  const handleGenerate = useCallback((overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
     setIsGenerating(true);
-    // Parse prompt for additional params
-    const parsed = prompt ? parsePrompt(prompt) : {};
+    const parsed = (overridePrompt ?? prompt) ? parsePrompt(overridePrompt ?? prompt) : {};
     const finalParams: GenerationParams = {
       ...params,
       ...parsed,
@@ -172,31 +249,42 @@ export default function Home() {
     };
     setParams(finalParams);
 
-    // Simulate brief delay for UX
     setTimeout(() => {
       const gen = generateTrack(finalParams);
       setResult(gen);
       setIsGenerating(false);
+
+      const entry: HistoryEntry = {
+        id: Date.now().toString(),
+        prompt: overridePrompt ?? prompt,
+        genre: finalParams.genre,
+        key: finalParams.key,
+        scale: finalParams.scale,
+        bpm: finalParams.bpm,
+        bars: finalParams.bars,
+        result: gen,
+        params: finalParams,
+        timestamp: new Date(),
+      };
+      setHistory(prev => [entry, ...prev].slice(0, 20));
     }, 300);
   }, [params, prompt]);
 
-  // Style tag click
   const handleStyleTag = (tag: string) => {
     const preset = STYLE_TAGS[tag];
-    if (preset) {
-      setPrompt(tag.toLowerCase());
-      const newParams = { ...params, ...preset };
-      setParams(newParams);
-      handleGenerate(preset);
-    }
+    if (!preset) return;
+    setActiveStyleTag(tag);
+    setPrompt(tag.toLowerCase());
+    const newParams = { ...params, ...preset };
+    setParams(newParams);
+    handleGenerate(preset, tag.toLowerCase());
+    toolRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Layer toggle
   const toggleLayer = (layer: keyof GenerationParams['layers']) => {
     setParams(p => ({ ...p, layers: { ...p.layers, [layer]: !p.layers[layer] } }));
   };
 
-  // Play all
   const handlePlayAll = () => {
     if (!result) return;
     if (playingAll) { stopAllPlayback(); setPlayingAll(false); return; }
@@ -212,14 +300,12 @@ export default function Home() {
     });
   };
 
-  // Download single layer
   const handleDownloadLayer = (name: string, notes: NoteEvent[]) => {
     const genre = GENRES[params.genre]?.name || 'track';
     const midi = generateMidiFormat0(notes, params.bpm, `pulp-${name}`);
     downloadMidi(midi, `pulp-${name}-${genre.toLowerCase().replace(/\s/g, '-')}-${params.key}${params.scale}.mid`);
   };
 
-  // Download all
   const handleDownloadAll = () => {
     if (!result) return;
     const tracks = [];
@@ -232,13 +318,34 @@ export default function Home() {
     downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${params.key}${params.scale}.mid`);
   };
 
-  // Scroll to tool
-  const scrollToTool = () => {
+  const handleRestoreHistory = (entry: HistoryEntry) => {
+    setParams(entry.params);
+    setResult(entry.result);
+    setPrompt(entry.prompt);
+    setShowHistory(false);
     toolRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const scrollToTool = () => toolRef.current?.scrollIntoView({ behavior: 'smooth' });
+
   return (
     <div className="min-h-screen">
+
+      {/* HISTORY SIDEBAR */}
+      {showHistory && (
+        <>
+          <div
+            className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowHistory(false)}
+          />
+          <HistorySidebar
+            history={history}
+            onRestore={handleRestoreHistory}
+            onClose={() => setShowHistory(false)}
+          />
+        </>
+      )}
+
       {/* NAV */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled ? 'glass border-b border-white/5' : 'bg-transparent'
@@ -247,8 +354,17 @@ export default function Home() {
           <span className="font-display font-extrabold text-xl text-gradient">pulp</span>
           <div className="flex items-center gap-6 text-sm text-muted">
             <button onClick={scrollToTool} className="hover:text-white transition-colors">Create</button>
-            <span className="opacity-40">Explore</span>
-            <span className="opacity-40">Challenges</span>
+            <button
+              onClick={() => setShowHistory(true)}
+              className="hover:text-white transition-colors flex items-center gap-1.5"
+            >
+              History
+              {history.length > 0 && (
+                <span className="text-xs bg-papaya/20 text-papaya px-1.5 py-0.5 rounded-full font-mono">
+                  {history.length}
+                </span>
+              )}
+            </button>
           </div>
           <button className="text-sm px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors">
             Sign in
@@ -275,13 +391,14 @@ export default function Home() {
 
       {/* TOOL SECTION */}
       <section ref={toolRef} className="px-6 max-w-3xl mx-auto pb-20">
+
         {/* Prompt Input */}
         <div className="relative mb-4">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-papaya text-lg">✦</span>
           <input
             type="text"
             value={prompt}
-            onChange={e => setPrompt(e.target.value)}
+            onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
             onKeyDown={e => e.key === 'Enter' && handleGenerate()}
             placeholder="dark melodic techno, 128bpm, Am"
             className="w-full h-14 bg-bg-surface border border-bg-elevated rounded-lg pl-12 pr-32 text-base
@@ -300,7 +417,11 @@ export default function Home() {
         {/* Style Tags */}
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
           {Object.keys(STYLE_TAGS).map(tag => (
-            <button key={tag} onClick={() => handleStyleTag(tag)} className="style-pill">
+            <button
+              key={tag}
+              onClick={() => handleStyleTag(tag)}
+              className={`style-pill ${activeStyleTag === tag ? 'active' : ''}`}
+            >
               {tag}
             </button>
           ))}
@@ -333,7 +454,6 @@ export default function Home() {
           </button>
           {showManual && (
             <div className="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/5 pt-4">
-              {/* Genre */}
               <div>
                 <label className="text-xs text-muted uppercase tracking-wider mb-1 block">Genre</label>
                 <select
@@ -346,7 +466,6 @@ export default function Home() {
                   ))}
                 </select>
               </div>
-              {/* Key */}
               <div>
                 <label className="text-xs text-muted uppercase tracking-wider mb-1 block">Key</label>
                 <select
@@ -357,7 +476,6 @@ export default function Home() {
                   {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
               </div>
-              {/* Scale */}
               <div>
                 <label className="text-xs text-muted uppercase tracking-wider mb-1 block">Scale</label>
                 <select
@@ -368,7 +486,6 @@ export default function Home() {
                   {SCALES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                 </select>
               </div>
-              {/* BPM */}
               <div>
                 <label className="text-xs text-muted uppercase tracking-wider mb-1 block">
                   BPM <span className="font-mono text-papaya">{params.bpm}</span>
@@ -380,7 +497,6 @@ export default function Home() {
                   className="w-full accent-papaya"
                 />
               </div>
-              {/* Bars */}
               <div>
                 <label className="text-xs text-muted uppercase tracking-wider mb-1 block">Bars</label>
                 <select
@@ -397,7 +513,7 @@ export default function Home() {
 
         {/* Global Controls */}
         {result && (
-          <div className="flex gap-3 mb-4 animate-in">
+          <div className="flex gap-3 mb-4 animate-in flex-wrap">
             <button
               onClick={handlePlayAll}
               className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-lg text-sm hover:bg-white/5 transition-colors"
@@ -485,8 +601,14 @@ export default function Home() {
           <h2 className="font-display font-extrabold text-3xl text-chrome mb-8">EVERY STYLE</h2>
           <div className="flex flex-wrap gap-3">
             {GENRE_LIST.map(g => (
-              <span key={g.key} className="px-4 py-2 border border-white/8 rounded-lg text-sm text-muted hover:border-papaya/30 hover:text-white transition-all cursor-pointer"
-                onClick={() => { setParams(p => ({ ...p, genre: g.key })); scrollToTool(); }}
+              <span
+                key={g.key}
+                className="px-4 py-2 border border-white/8 rounded-lg text-sm text-muted hover:border-papaya/30 hover:text-white transition-all cursor-pointer"
+                onClick={() => {
+                  setParams(p => ({ ...p, genre: g.key }));
+                  setActiveStyleTag(null);
+                  scrollToTool();
+                }}
               >
                 {g.name}
               </span>

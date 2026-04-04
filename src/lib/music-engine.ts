@@ -24,11 +24,9 @@ export type NoteName = typeof NOTE_NAMES[number];
 
 // --- MIDI NOTE HELPERS ---
 export function noteNameToMidi(name: string, octave: number): number {
-  const idx = NOTE_NAMES.indexOf(name.replace('b', '#') as NoteName);
-  // Handle flats
   const flatMap: Record<string, string> = { 'Db':'C#','Eb':'D#','Fb':'E','Gb':'F#','Ab':'G#','Bb':'A#','Cb':'B' };
   const normalized = flatMap[name] || name;
-  const i = NOTE_NAMES.indexOf(normalized as NoteName);
+  const i = (NOTE_NAMES as readonly string[]).indexOf(normalized);
   return i >= 0 ? (octave + 1) * 12 + i : 60;
 }
 
