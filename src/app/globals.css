@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap');
+
+body {
+  background: #09090B;
+  color: #F0F0FF;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* Chrome metallic text effect */
+.text-chrome {
+  background: linear-gradient(180deg, #fff 0%, #999 40%, #fff 50%, #888 60%, #ddd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Orange gradient text */
+.text-gradient {
+  background: linear-gradient(135deg, #FF6D3F, #FF8A65, #FFAB91);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass effect for nav */
+.glass {
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Piano roll grid */
+.piano-roll {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 25% 16.66%;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1A1A2E; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #FF6D3F; }
+
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fadeInUp 0.6s ease-out forwards;
+  opacity: 0;
+}
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 109, 63, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 109, 63, 0.15); }
+}
+.focus-glow:focus {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Style tag pills */
+.style-pill {
+  @apply px-3 py-1.5 text-sm rounded-md border border-white/10 text-muted
+    hover:border-papaya/30 hover:text-white transition-all cursor-pointer
+    whitespace-nowrap select-none;
+}
+.style-pill.active {
+  @apply bg-papaya/10 border-papaya/50 text-papaya;
+}
+
+/* Layer toggle */
+.layer-toggle {
+  @apply px-3 py-1.5 text-sm rounded-md border transition-all cursor-pointer select-none;
+}
+.layer-toggle.on {
+  @apply border-current bg-current/10;
+}
+.layer-toggle.off {
+  @apply border-white/10 text-muted opacity-50;
+}
