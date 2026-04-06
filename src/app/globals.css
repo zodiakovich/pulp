@@ -85,7 +85,8 @@ body {
   @apply px-3 py-1.5 text-sm rounded-md border transition-all cursor-pointer select-none;
 }
 .layer-toggle.on {
-  @apply border-current bg-current/10;
+  @apply border-current;
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
 }
 .layer-toggle.off {
   @apply border-white/10 text-muted opacity-50;
