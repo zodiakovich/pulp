@@ -9,6 +9,7 @@ import {
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { playNotes, playLayer, stopAllPlayback } from '@/lib/audio-engine';
+import { supabase } from '@/lib/supabase';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 const EASE_OUT = [0, 0, 0.2, 1] as const;
@@ -410,12 +411,88 @@ function HistorySidebar({
       <div className="px-6 py-4" style={{ borderTop: '1px solid #1A1A2E' }}>
         <p className="text-xs text-center"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
-          Session only — clears on refresh
+          Last 10 generations · synced to account
         </p>
       </div>
     </motion.div>
   );
 }
+
+// ─── UPGRADE MODAL ────────────────────────────────────────────
+function UpgradeModal({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-[80] flex items-center justify-center px-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        className="relative z-10 w-full max-w-md rounded-2xl p-8 text-center"
+        style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+        initial={{ scale: 0.95, opacity: 0, y: 12 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 8 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+      >
+        <div className="text-3xl mb-4" style={{ color: '#FF6D3F' }}>✦</div>
+        <h2 className="font-extrabold text-xl mb-3" style={{ fontFamily: 'Syne, sans-serif' }}>
+          You&apos;ve used your 10 free<br />generations this month.
+        </h2>
+        <p className="text-sm mb-8" style={{ color: '#8A8A9A' }}>
+          Upgrade to Pro for unlimited access.
+        </p>
+        <div className="flex flex-col gap-3">
+          <a
+            href="/pricing"
+            className="btn-primary w-full text-center py-3 rounded-xl font-semibold text-sm"
+            style={{ display: 'block', textDecoration: 'none' }}
+          >
+            Upgrade to Pro
+          </a>
+          <button
+            onClick={onClose}
+            className="text-sm transition-colors"
+            style={{ color: '#8A8A9A' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8A8A9A')}
+          >
+            Maybe later
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── GENRE NAME MAP (Claude AI → music-engine key) ────────────
+const GENRE_NAME_MAP: Record<string, string> = {
+  'Deep House': 'deep_house',
+  'Melodic House': 'melodic_house',
+  'Tech House': 'tech_house',
+  'Minimal Tech': 'minimal_tech',
+  'Techno': 'techno',
+  'Melodic Techno': 'melodic_techno',
+  'Hard Techno': 'hard_techno',
+  'Progressive House': 'progressive_house',
+  'Afro House': 'afro_house',
+  'Organic House': 'afro_house',
+  'Trance': 'trance',
+  'UK Garage': 'house',
+  'Drum & Bass': 'drum_and_bass',
+  'Amapiano': 'afro_house',
+  'Lo-Fi Hip-Hop': 'hiphop',
+  'Hip-Hop': 'hiphop',
+  'Trap': 'hiphop',
+  'Pop': 'house',
+  'R&B': 'rnb',
+  'Disco/Nu-Disco': 'disco_nu_disco',
+};
+
+const VALID_SCALES = ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian',
+  'pentatonic_minor', 'pentatonic_major', 'blues'];
 
 // ─── CONSTANTS ────────────────────────────────────────────────
 const GENRE_LIST = Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name }));
@@ -461,7 +538,7 @@ const LAYER_EXPLAINER = [
 
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function Home() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, userId } = useAuth();
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -473,6 +550,8 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
+  const [credits, setCredits] = useState<{ used: number; isPro: boolean } | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const toolRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
@@ -497,19 +576,174 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const handleGenerate = useCallback((overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
+  // ── SUPABASE HELPERS ─────────────────────────────────────────
+
+  const loadUserCredits = useCallback(async (uid: string) => {
+    try {
+      const now = new Date();
+      const { data, error } = await supabase
+        .from('user_credits')
+        .select('*')
+        .eq('user_id', uid)
+        .single();
+
+      if (error || !data) {
+        await supabase.from('user_credits').insert({ user_id: uid, credits_used: 0, is_pro: false });
+        setCredits({ used: 0, isPro: false });
+        return;
+      }
+
+      const createdAt = new Date(data.created_at as string);
+      if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) {
+        await supabase
+          .from('user_credits')
+          .update({ credits_used: 0, created_at: now.toISOString() })
+          .eq('user_id', uid);
+        setCredits({ used: 0, isPro: data.is_pro as boolean });
+        return;
+      }
+
+      setCredits({ used: data.credits_used as number, isPro: data.is_pro as boolean });
+    } catch {
+      // Ignore credit load errors
+    }
+  }, []);
+
+  const checkCreditsAllowed = useCallback(async (uid: string): Promise<boolean> => {
+    try {
+      const now = new Date();
+      const { data, error } = await supabase
+        .from('user_credits')
+        .select('*')
+        .eq('user_id', uid)
+        .single();
+
+      if (error || !data) return true;
+
+      const createdAt = new Date(data.created_at as string);
+      if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) return true;
+      if (data.is_pro) return true;
+      return (data.credits_used as number) < 10;
+    } catch {
+      return true;
+    }
+  }, []);
+
+  const incrementCredits = useCallback(async (uid: string) => {
+    try {
+      const now = new Date();
+      const { data } = await supabase.from('user_credits').select('*').eq('user_id', uid).single();
+
+      if (!data) {
+        await supabase.from('user_credits').insert({ user_id: uid, credits_used: 1, is_pro: false });
+        return;
+      }
+
+      const createdAt = new Date(data.created_at as string);
+      if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) {
+        await supabase.from('user_credits').update({ credits_used: 1, created_at: now.toISOString() }).eq('user_id', uid);
+      } else {
+        await supabase.from('user_credits').update({ credits_used: (data.credits_used as number) + 1 }).eq('user_id', uid);
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const loadHistoryFromDb = useCallback(async (uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('generations')
+        .select('id, prompt, genre, bpm, style_tag, layers, created_at')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error || !data) return;
+
+      const entries: HistoryEntry[] = (data as Array<{
+        id: string; prompt: string; genre: string; bpm: number;
+        style_tag: string | null; layers: GenerationResult; created_at: string;
+      }>).map(row => ({
+        id: row.id,
+        prompt: row.prompt,
+        genre: row.genre,
+        key: 'C',
+        scale: 'minor',
+        bpm: row.bpm,
+        bars: 4,
+        result: row.layers,
+        params: { ...getDefaultParams(), genre: row.genre, bpm: row.bpm },
+        timestamp: new Date(row.created_at),
+      }));
+
+      setHistory(prev => {
+        const dbIds = new Set(entries.map(e => e.id));
+        const sessionOnly = prev.filter(e => !dbIds.has(e.id));
+        return [...sessionOnly, ...entries].slice(0, 20);
+      });
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  // Load credits + history when signed in
+  useEffect(() => {
+    if (!isSignedIn || !userId) return;
+    loadUserCredits(userId);
+    loadHistoryFromDb(userId);
+  }, [isSignedIn, userId, loadUserCredits, loadHistoryFromDb]);
+
+  // ── GENERATE ─────────────────────────────────────────────────
+
+  const handleGenerate = useCallback(async (overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
+    // Check credits before generating (signed-in users only)
+    if (isSignedIn && userId) {
+      const allowed = await checkCreditsAllowed(userId);
+      if (!allowed) {
+        setShowUpgradeModal(true);
+        return;
+      }
+    }
+
     setIsGenerating(true);
-    const parsed = (overridePrompt ?? prompt) ? parsePrompt(overridePrompt ?? prompt) : {};
-    const finalParams: GenerationParams = { ...params, ...parsed, ...overrideParams };
+
+    // Try Claude AI prompt parsing, fall back silently
+    let aiParsed: Partial<GenerationParams> = {};
+    const promptText = overridePrompt ?? prompt;
+    if (promptText && isSignedIn) {
+      try {
+        const res = await fetch('/api/parse-prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: promptText }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { genre?: string; bpm?: number; scale?: string };
+          if (data.genre) {
+            const genreKey = GENRE_NAME_MAP[data.genre];
+            if (genreKey) aiParsed.genre = genreKey;
+          }
+          if (data.bpm) aiParsed.bpm = Math.max(60, Math.min(180, data.bpm));
+          if (data.scale && VALID_SCALES.includes(data.scale)) aiParsed.scale = data.scale;
+        }
+      } catch {
+        // Fall back to rule-based parser silently
+      }
+    }
+
+    const parsed = promptText ? parsePrompt(promptText) : {};
+    const finalParams: GenerationParams = { ...params, ...parsed, ...aiParsed, ...overrideParams };
     setParams(finalParams);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const gen = generateTrack(finalParams);
       setResult(gen);
       setIsGenerating(false);
-      setHistory(prev => [{
+
+      const newEntry: HistoryEntry = {
         id: Date.now().toString(),
-        prompt: overridePrompt ?? prompt,
+        prompt: promptText,
         genre: finalParams.genre,
         key: finalParams.key,
         scale: finalParams.scale,
@@ -518,9 +752,28 @@ export default function Home() {
         result: gen,
         params: finalParams,
         timestamp: new Date(),
-      }, ...prev].slice(0, 20));
+      };
+      setHistory(prev => [newEntry, ...prev].slice(0, 20));
+
+      // Persist to Supabase + update credits
+      if (isSignedIn && userId) {
+        try {
+          await supabase.from('generations').insert({
+            user_id: userId,
+            prompt: promptText,
+            genre: finalParams.genre,
+            bpm: finalParams.bpm,
+            style_tag: activeStyleTag,
+            layers: gen,
+          });
+          await incrementCredits(userId);
+          await loadUserCredits(userId);
+        } catch {
+          // Ignore save errors
+        }
+      }
     }, 320);
-  }, [params, prompt]);
+  }, [params, prompt, isSignedIn, userId, activeStyleTag, checkCreditsAllowed, incrementCredits, loadUserCredits]);
 
   const handleStyleTag = (tag: string) => {
     const preset = STYLE_TAGS[tag];
@@ -529,7 +782,7 @@ export default function Home() {
     setPrompt(tag.toLowerCase());
     setParams(p => ({ ...p, ...preset }));
     if (!isSignedIn) return;
-    handleGenerate(preset, tag.toLowerCase());
+    void handleGenerate(preset, tag.toLowerCase());
     toolRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -598,12 +851,19 @@ export default function Home() {
       <CommandBar
         isOpen={showCommandBar}
         onClose={() => setShowCommandBar(false)}
-        onGenerate={() => { if (isSignedIn) handleGenerate(); else setShowCommandBar(false); }}
+        onGenerate={() => { if (isSignedIn) { void handleGenerate(); } else setShowCommandBar(false); }}
         onFocusPrompt={handleCmdFocusPrompt}
         onToggleLayers={handleToggleAllLayers}
         onDownloadAll={handleDownloadAll}
         hasResult={!!result}
       />
+
+      {/* ── UPGRADE MODAL ── */}
+      <AnimatePresence>
+        {showUpgradeModal && (
+          <UpgradeModal onClose={() => setShowUpgradeModal(false)} />
+        )}
+      </AnimatePresence>
 
       {/* ── HISTORY SIDEBAR ── */}
       <AnimatePresence>
@@ -648,6 +908,9 @@ export default function Home() {
                 </span>
               )}
             </button>
+            <a href="/pricing" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
+              Pricing
+            </a>
             <button
               onClick={() => setShowCommandBar(true)}
               className="transition-colors hover:text-white flex items-center gap-1.5"
@@ -724,7 +987,7 @@ export default function Home() {
                 type="text"
                 value={prompt}
                 onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
-                onKeyDown={e => e.key === 'Enter' && isSignedIn && handleGenerate()}
+                onKeyDown={e => e.key === 'Enter' && isSignedIn && void handleGenerate()}
                 placeholder="dark melodic techno, 128bpm, Am"
                 className="input-field"
                 style={{ paddingLeft: 40, paddingRight: 136 }}
@@ -733,7 +996,7 @@ export default function Home() {
                 <SpotlightButton
                   className={`btn-primary absolute right-2 top-1/2 -translate-y-1/2${isGenerating ? ' pulsing' : ''}`}
                   style={{ height: 36, padding: '0 16px', fontSize: 13 }}
-                  onClick={() => handleGenerate()}
+                  onClick={() => void handleGenerate()}
                   disabled={isGenerating}
                 >
                   {isGenerating ? (
@@ -754,6 +1017,17 @@ export default function Home() {
                 </SignInButton>
               )}
             </div>
+
+            {/* Credits indicator */}
+            {isSignedIn && credits !== null && !credits.isPro && (
+              <p className="text-xs mb-3 mt-1" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
+                <span style={{ color: credits.used >= 10 ? '#E94560' : '#8A8A9A' }}>
+                  {Math.max(0, 10 - credits.used)} / 10
+                </span>
+                {' '}generations remaining ·{' '}
+                <a href="/pricing" style={{ color: '#FF6D3F', textDecoration: 'none' }}>Upgrade to Pro</a>
+              </p>
+            )}
 
             {/* Style tags */}
             <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
@@ -864,7 +1138,7 @@ export default function Home() {
                   <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
                     ↓  Download All
                   </SpotlightButton>
-                  <SpotlightButton onClick={() => handleGenerate()} className="btn-secondary btn-sm">
+                  <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm">
                     ↻  Regenerate
                   </SpotlightButton>
                 </motion.div>
