@@ -10,6 +10,8 @@ import {
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { playNotes, playLayer, stopAllPlayback } from '@/lib/audio-engine';
 import { supabase } from '@/lib/supabase';
+import { track } from '@vercel/analytics';
+import { Skeleton, SkeletonText } from '@/components/Skeleton';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 const EASE_OUT = [0, 0, 0.2, 1] as const;
@@ -874,6 +876,7 @@ function VariationCard({
                   disabled={notes.length === 0}
                   onClick={e => {
                     e.stopPropagation();
+                    track('midi_downloaded', { genre: variationParams.genre, layer });
                     const midi = generateMidiFormat0(notes, variationParams.bpm, `pulp-${layer}`);
                     downloadMidi(midi, `pulp-${layer}-${genreName.toLowerCase().replace(/\s/g, '-')}-${variationParams.key}${variationParams.scale}.mid`);
                   }}
@@ -1010,9 +1013,10 @@ function CommandBar({
 
 // ─── HISTORY SIDEBAR ──────────────────────────────────────────
 function HistorySidebar({
-  history, onRestore, onClose,
+  history, loading, onRestore, onClose,
 }: {
   history: HistoryEntry[];
+  loading: boolean;
   onRestore: (entry: HistoryEntry) => void;
   onClose: () => void;
 }) {
@@ -1029,7 +1033,7 @@ function HistorySidebar({
         style={{ borderBottom: '1px solid #1A1A2E' }}>
         <span className="text-sm font-semibold" style={{ fontFamily: 'Syne, sans-serif' }}>
           History
-          {history.length > 0 && (
+          {!loading && history.length > 0 && (
             <span className="ml-2 text-xs font-normal"
               style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>
               ({history.length})
@@ -1045,7 +1049,23 @@ function HistorySidebar({
         >×</button>
       </div>
 
-      {history.length === 0 ? (
+      {loading ? (
+        <div className="flex-1 overflow-y-auto">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="w-full px-6 py-4"
+              style={{ borderBottom: '1px solid rgba(26,26,46,0.5)' }}
+            >
+              <SkeletonText lines={2} gap={8} lastLineWidth="85%" />
+              <div className="flex gap-2 mt-3">
+                <Skeleton style={{ height: 14, width: 88, borderRadius: 4 }} />
+                <Skeleton style={{ height: 14, width: 64, borderRadius: 4 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : history.length === 0 ? (
         <div className="flex-1 flex items-center justify-center px-8">
           <p className="text-sm text-center leading-relaxed" style={{ color: '#8A8A9A' }}>
             Generate a track to see your history here.
@@ -1221,6 +1241,9 @@ const LAYER_EXPLAINER = [
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function Home() {
   const { isSignedIn, isLoaded, userId } = useAuth();
+  const e2eBypass = process.env.NEXT_PUBLIC_E2E === '1';
+  const effectiveIsSignedIn = e2eBypass ? true : isSignedIn;
+  const effectiveUserId = e2eBypass ? 'e2e' : userId;
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
   const [variations, setVariations] = useState<{ result: GenerationResult; params: GenerationParams }[]>([]);
   const [selectedVariation, setSelectedVariation] = useState(0);
@@ -1231,6 +1254,7 @@ export default function Home() {
   const [showManual, setShowManual] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
@@ -1351,6 +1375,7 @@ export default function Home() {
   }, []);
 
   const loadHistoryFromDb = useCallback(async (uid: string) => {
+    setHistoryLoading(true);
     try {
       const { data, error } = await supabase
         .from('generations')
@@ -1380,19 +1405,21 @@ export default function Home() {
       setHistory(entries);
     } catch {
       // Ignore
+    } finally {
+      setHistoryLoading(false);
     }
   }, []);
 
   // Load credits + history when signed in
   useEffect(() => {
-    if (!isSignedIn || !userId) return;
-    loadUserCredits(userId);
-    loadHistoryFromDb(userId);
-  }, [isSignedIn, userId, loadUserCredits, loadHistoryFromDb]);
+    if (!effectiveIsSignedIn || !effectiveUserId) return;
+    loadUserCredits(effectiveUserId);
+    loadHistoryFromDb(effectiveUserId);
+  }, [effectiveIsSignedIn, effectiveUserId, loadUserCredits, loadHistoryFromDb]);
 
   // First-time onboarding (only if 0 generations in Supabase)
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !userId) return;
+    if (!isLoaded || !effectiveIsSignedIn || !effectiveUserId) return;
     const key = 'pulp_onboarding_complete_v1';
     try {
       if (localStorage.getItem(key) === '1') return;
@@ -1406,7 +1433,7 @@ export default function Home() {
         const { count } = await supabase
           .from('generations')
           .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
+          .eq('user_id', effectiveUserId)
           .limit(1);
         if (cancelled) return;
         if ((count ?? 0) === 0) {
@@ -1421,7 +1448,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, userId]);
+  }, [isLoaded, effectiveIsSignedIn, effectiveUserId]);
 
   const completeOnboarding = useCallback(() => {
     const key = 'pulp_onboarding_complete_v1';
@@ -1467,8 +1494,8 @@ export default function Home() {
 
   const handleGenerate = useCallback(async (overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
     // Check credits before generating (signed-in users only)
-    if (isSignedIn && userId) {
-      const allowed = await checkCreditsAllowed(userId);
+    if (!e2eBypass && effectiveIsSignedIn && effectiveUserId) {
+      const allowed = await checkCreditsAllowed(effectiveUserId);
       if (!allowed) {
         setShowUpgradeModal(true);
         return;
@@ -1481,7 +1508,7 @@ export default function Home() {
     // Try Claude AI prompt parsing, fall back silently
     let aiParsed: Partial<GenerationParams> = {};
     const promptText = overridePrompt ?? prompt;
-    if (promptText && isSignedIn) {
+    if (!e2eBypass && promptText && effectiveIsSignedIn) {
       try {
         const res = await fetch('/api/parse-prompt', {
           method: 'POST',
@@ -1521,12 +1548,18 @@ export default function Home() {
       setSelectedVariation(0);
       setIsGenerating(false);
 
+      track('generation_created', {
+        genre: finalParams.genre,
+        bpm: finalParams.bpm,
+        style_tag: activeStyleTag ?? '',
+      });
+
       // Persist to Supabase + update credits
-      if (isSignedIn && userId) {
+      if (!e2eBypass && effectiveIsSignedIn && effectiveUserId) {
         try {
           const ins = (layers: GenerationResult, p: GenerationParams) =>
             supabase.from('generations').insert({
-              user_id: userId,
+              user_id: effectiveUserId,
               prompt: promptText,
               genre: p.genre,
               bpm: p.bpm,
@@ -1535,15 +1568,15 @@ export default function Home() {
             }).select('id').single();
           const [r1, r2, r3] = await Promise.all([ins(gen1, p1), ins(gen2, p2), ins(gen3, p3)]);
           setVariationIds([r1.data?.id ?? null, r2.data?.id ?? null, r3.data?.id ?? null]);
-          await incrementCredits(userId);
-          await loadUserCredits(userId);
-          await loadHistoryFromDb(userId);
+          await incrementCredits(effectiveUserId);
+          await loadUserCredits(effectiveUserId);
+          await loadHistoryFromDb(effectiveUserId);
         } catch {
           // Ignore save errors
         }
       }
     }, 320);
-  }, [params, prompt, isSignedIn, userId, activeStyleTag, checkCreditsAllowed, incrementCredits, loadUserCredits]);
+  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, checkCreditsAllowed, incrementCredits, loadUserCredits, loadHistoryFromDb]);
 
   const handleStyleTag = (tag: string) => {
     const preset = STYLE_TAGS[tag];
@@ -1551,7 +1584,7 @@ export default function Home() {
     setActiveStyleTag(tag);
     setPrompt(tag.toLowerCase());
     setParams(p => ({ ...p, ...preset }));
-    if (!isSignedIn) return;
+    if (!effectiveIsSignedIn) return;
     void handleGenerate(preset, tag.toLowerCase());
     toolRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -1582,6 +1615,10 @@ export default function Home() {
   };
 
   const handleDownloadLayer = (name: string, notes: NoteEvent[]) => {
+    track('midi_downloaded', {
+      genre: params.genre,
+      layer: name as 'melody' | 'chords' | 'bass' | 'drums',
+    });
     const genre = GENRES[params.genre]?.name || 'track';
     const midi = generateMidiFormat0(notes, params.bpm, `pulp-${name}`);
     downloadMidi(midi, `pulp-${name}-${genre.toLowerCase().replace(/\s/g, '-')}-${params.key}${params.scale}.mid`);
@@ -1617,6 +1654,7 @@ export default function Home() {
     if (r.drums.length  > 0) tracks.push({ name: 'Drums',  notes: r.drums,  channel: 9 });
     const midi = generateMidiFormat1(tracks, p.bpm);
     const genre = GENRES[p.genre]?.name || 'track';
+    track('midi_downloaded', { genre: p.genre, layer: 'full' });
     downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
   };
 
@@ -1682,10 +1720,12 @@ export default function Home() {
   const handleShare = useCallback(() => {
     const id = variationIds[selectedVariation];
     if (!id) return;
+    const genreKey = variations[selectedVariation]?.params.genre ?? params.genre;
+    track('generation_shared', { genre: genreKey });
     void navigator.clipboard.writeText(`/g/${id}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [variationIds, selectedVariation]);
+  }, [variationIds, selectedVariation, variations, params.genre]);
 
   const handleCreateCollab = useCallback(() => {
     const sessionId = crypto.randomUUID();
@@ -1766,7 +1806,7 @@ export default function Home() {
       <CommandBar
         isOpen={showCommandBar}
         onClose={() => setShowCommandBar(false)}
-        onGenerate={() => { if (isSignedIn) { void handleGenerate(); } else setShowCommandBar(false); }}
+        onGenerate={() => { if (effectiveIsSignedIn) { void handleGenerate(); } else setShowCommandBar(false); }}
         onFocusPrompt={handleCmdFocusPrompt}
         onToggleLayers={handleToggleAllLayers}
         onDownloadAll={handleDownloadAll}
@@ -1792,6 +1832,7 @@ export default function Home() {
             />
             <HistorySidebar
               history={history}
+              loading={historyLoading}
               onRestore={handleRestoreHistory}
               onClose={() => setShowHistory(false)}
             />
@@ -1843,7 +1884,7 @@ export default function Home() {
           </div>
 
           {isLoaded && (
-            isSignedIn
+            effectiveIsSignedIn
               ? <UserButton />
               : (
                 <SignInButton mode="modal">
@@ -1908,12 +1949,12 @@ export default function Home() {
                 type="text"
                 value={prompt}
                 onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
-                onKeyDown={e => e.key === 'Enter' && isSignedIn && void handleGenerate()}
+                onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
                 placeholder="dark melodic techno, 128bpm, Am"
                 className="input-field"
                 style={{ paddingLeft: 40, paddingRight: 136 }}
               />
-              {isSignedIn ? (
+              {effectiveIsSignedIn ? (
                 <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
                   <SpotlightButton
                     className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
@@ -1942,7 +1983,7 @@ export default function Home() {
             </div>
 
             {/* Credits indicator */}
-            {isSignedIn && credits !== null && !credits.isPro && (
+            {effectiveIsSignedIn && credits !== null && !credits.isPro && (
               <p className="text-xs mb-3 mt-1" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
                 <span style={{ color: credits.used >= 10 ? '#E94560' : '#8A8A9A' }}>
                   {Math.max(0, 10 - credits.used)} / 10
@@ -2151,6 +2192,7 @@ export default function Home() {
                       }}
                       onDownload={e => {
                         e.stopPropagation();
+                        track('midi_downloaded', { genre: v.params.genre, layer: 'full' });
                         const tracks: { name: string; notes: NoteEvent[]; channel: number }[] = [];
                         if (v.result.melody.length > 0) tracks.push({ name: 'Melody', notes: v.result.melody, channel: 0 });
                         if (v.result.chords.length > 0) tracks.push({ name: 'Chords', notes: v.result.chords, channel: 1 });

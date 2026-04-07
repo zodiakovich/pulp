@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /collab/
+Sitemap: https://pulp-4ubq.vercel.app/sitemap.xml

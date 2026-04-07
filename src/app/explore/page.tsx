@@ -16,11 +16,15 @@ function formatTimeAgo(createdAt: string): string {
 }
 
 export default async function ExplorePage() {
-  const { data } = await supabase
-    .from('generations')
-    .select('id, prompt, genre, bpm, style_tag, created_at')
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const e2eBypass = process.env.NEXT_PUBLIC_E2E === '1';
+
+  const { data } = e2eBypass
+    ? { data: [] as any[] }
+    : await supabase
+      .from('generations')
+      .select('id, prompt, genre, bpm, style_tag, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
 
   const items = (data ?? []).map(row => ({
     id: row.id as string,
