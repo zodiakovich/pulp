@@ -1300,6 +1300,9 @@ export default function Home() {
 
           <div className="hidden md:flex items-center gap-8 text-sm" style={{ color: '#8A8A9A' }}>
             <button onClick={scrollToTool} className="transition-colors hover:text-white">Create</button>
+            <a href="/explore" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
+              Explore
+            </a>
             <button
               onClick={() => setShowHistory(true)}
               className="transition-colors hover:text-white flex items-center gap-2"
