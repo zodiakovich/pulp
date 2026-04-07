@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useAuth, SignInButton, UserButton } from '@clerk/nextjs';
 import {
   generateTrack, getDefaultParams, GENRES, STYLE_TAGS, parsePrompt,
   type GenerationParams, type GenerationResult, type NoteEvent,
@@ -221,6 +222,7 @@ const SCALES = ['minor', 'major', 'dorian', 'mixolydian', 'phrygian', 'lydian', 
 // MAIN PAGE
 // ============================================================
 export default function Home() {
+  const { isSignedIn, isLoaded } = useAuth();
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -277,6 +279,7 @@ export default function Home() {
     setPrompt(tag.toLowerCase());
     const newParams = { ...params, ...preset };
     setParams(newParams);
+    if (!isSignedIn) return; // Generate button will prompt sign-in
     handleGenerate(preset, tag.toLowerCase());
     toolRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -366,9 +369,17 @@ export default function Home() {
               )}
             </button>
           </div>
-          <button className="text-sm px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors">
-            Sign in
-          </button>
+          {isLoaded && (
+            isSignedIn
+              ? <UserButton />
+              : (
+                <SignInButton mode="modal">
+                  <button className="text-sm px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors">
+                    Sign in
+                  </button>
+                </SignInButton>
+              )
+          )}
         </div>
       </nav>
 
@@ -404,14 +415,25 @@ export default function Home() {
             className="w-full h-14 bg-bg-surface border border-bg-elevated rounded-lg pl-12 pr-32 text-base
               placeholder:text-muted/50 focus:outline-none focus:border-papaya/50 focus-glow transition-all"
           />
-          <button
-            onClick={() => handleGenerate()}
-            disabled={isGenerating}
-            className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-papaya text-white text-sm font-semibold
-              rounded-md hover:brightness-110 transition-all disabled:opacity-50"
-          >
-            {isGenerating ? '...' : 'Generate'}
-          </button>
+          {isSignedIn ? (
+            <button
+              onClick={() => handleGenerate()}
+              disabled={isGenerating}
+              className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-papaya text-white text-sm font-semibold
+                rounded-md hover:brightness-110 transition-all disabled:opacity-50"
+            >
+              {isGenerating ? '...' : 'Generate'}
+            </button>
+          ) : (
+            <SignInButton mode="modal">
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-papaya text-white text-sm font-semibold
+                  rounded-md hover:brightness-110 transition-all"
+              >
+                Generate
+              </button>
+            </SignInButton>
+          )}
         </div>
 
         {/* Style Tags */}
