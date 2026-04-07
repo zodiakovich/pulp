@@ -48,6 +48,18 @@ interface HistoryEntry {
   timestamp: Date;
 }
 
+function formatTimeAgo(date: Date): string {
+  const ms = Date.now() - date.getTime();
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
 // ─── SPOTLIGHT BUTTON ─────────────────────────────────────────
 interface SpotlightButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
@@ -439,6 +451,189 @@ function deriveChordProgression(chords: NoteEvent[], bars: number): string[] {
   });
 }
 
+function downloadTextFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function midiToPitchXml(midi: number): { step: string; alter?: number; octave: number } {
+  const pc = ((midi % 12) + 12) % 12;
+  const octave = Math.floor(midi / 12) - 1;
+  // Sharps only (simple + deterministic)
+  const map: Array<{ step: string; alter?: number }> = [
+    { step: 'C' },
+    { step: 'C', alter: 1 },
+    { step: 'D' },
+    { step: 'D', alter: 1 },
+    { step: 'E' },
+    { step: 'F' },
+    { step: 'F', alter: 1 },
+    { step: 'G' },
+    { step: 'G', alter: 1 },
+    { step: 'A' },
+    { step: 'A', alter: 1 },
+    { step: 'B' },
+  ];
+  const base = map[pc]!;
+  return { step: base.step, alter: base.alter, octave };
+}
+
+function beatsToDivisions(beats: number, divisionsPerQuarter: number): number {
+  return Math.max(1, Math.round(beats * divisionsPerQuarter));
+}
+
+function toMusicXml({
+  title,
+  bpm,
+  bars,
+  parts,
+}: {
+  title: string;
+  bpm: number;
+  bars: number;
+  parts: Array<{ id: string; name: string; notes: NoteEvent[] }>;
+}): string {
+  const divisions = 4; // quarter note = 4 divisions (16th = 1) matches 0.25 beat grid
+  const beatsPerBar = 4;
+  const barBeats = beatsPerBar;
+
+  const partList = parts
+    .map(p => (
+      `    <score-part id="${escapeXml(p.id)}">\n` +
+      `      <part-name>${escapeXml(p.name)}</part-name>\n` +
+      `    </score-part>`
+    ))
+    .join('\n');
+
+  const partXml = parts.map((p, partIdx) => {
+    const measures: string[] = [];
+
+    for (let bar = 0; bar < bars; bar++) {
+      const barStart = bar * barBeats;
+      const barEnd = barStart + barBeats;
+
+      // Collect notes that start within this bar, quantized to 16ths (0.25 beat)
+      const inBar = p.notes
+        .filter(n => n.startTime >= barStart && n.startTime < barEnd && n.duration > 0)
+        .map(n => ({
+          ...n,
+          startTime: Math.round(n.startTime * 4) / 4,
+          duration: Math.round(n.duration * 4) / 4,
+        }))
+        .sort((a, b) => (a.startTime - b.startTime) || (a.pitch - b.pitch));
+
+      // Group by startTime for basic chord handling
+      const groups = new Map<number, NoteEvent[]>();
+      for (const n of inBar) {
+        const t = n.startTime;
+        const arr = groups.get(t);
+        if (arr) arr.push(n);
+        else groups.set(t, [n]);
+      }
+      const times = [...groups.keys()].sort((a, b) => a - b);
+
+      let cursor = barStart;
+      const measureNotes: string[] = [];
+
+      const pushRest = (restBeats: number) => {
+        const dur = beatsToDivisions(restBeats, divisions);
+        measureNotes.push(
+          `      <note>\n` +
+          `        <rest/>\n` +
+          `        <duration>${dur}</duration>\n` +
+          `      </note>`
+        );
+      };
+
+      for (const t of times) {
+        if (t > cursor) pushRest(t - cursor);
+
+        const chordNotes = groups.get(t) ?? [];
+        // Use the max duration among chord tones; MusicXML chord tones share the same duration
+        const durBeats = Math.max(...chordNotes.map(n => n.duration));
+        const dur = beatsToDivisions(durBeats, divisions);
+
+        chordNotes.forEach((n, i) => {
+          const { step, alter, octave } = midiToPitchXml(n.pitch);
+          measureNotes.push(
+            `      <note>\n` +
+            (i > 0 ? `        <chord/>\n` : '') +
+            `        <pitch>\n` +
+            `          <step>${step}</step>\n` +
+            (typeof alter === 'number' ? `          <alter>${alter}</alter>\n` : '') +
+            `          <octave>${octave}</octave>\n` +
+            `        </pitch>\n` +
+            `        <duration>${dur}</duration>\n` +
+            `      </note>`
+          );
+        });
+
+        cursor = t + durBeats;
+      }
+
+      if (cursor < barEnd) pushRest(barEnd - cursor);
+
+      const attrs =
+        bar === 0
+          ? (
+            `      <attributes>\n` +
+            `        <divisions>${divisions}</divisions>\n` +
+            `        <key><fifths>0</fifths></key>\n` +
+            `        <time><beats>${beatsPerBar}</beats><beat-type>4</beat-type></time>\n` +
+            `        <clef>\n` +
+            `          <sign>${partIdx === 3 ? 'percussion' : 'G'}</sign>\n` +
+            `          <line>2</line>\n` +
+            `        </clef>\n` +
+            `      </attributes>\n` +
+            `      <direction placement="above">\n` +
+            `        <direction-type>\n` +
+            `          <metronome>\n` +
+            `            <beat-unit>quarter</beat-unit>\n` +
+            `            <per-minute>${Math.round(bpm)}</per-minute>\n` +
+            `          </metronome>\n` +
+            `        </direction-type>\n` +
+            `      </direction>\n`
+          )
+          : '';
+
+      measures.push(
+        `    <measure number="${bar + 1}">\n` +
+        attrs +
+        measureNotes.join('\n') +
+        `\n    </measure>`
+      );
+    }
+
+    return `  <part id="${escapeXml(p.id)}">\n${measures.join('\n')}\n  </part>`;
+  }).join('\n');
+
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n` +
+    `<score-partwise version="3.1">\n` +
+    `  <work><work-title>${escapeXml(title)}</work-title></work>\n` +
+    `  <part-list>\n${partList}\n  </part-list>\n` +
+    `${partXml}\n` +
+    `</score-partwise>\n`
+  );
+}
+
 // ─── SPLICE SEARCH TERMS ──────────────────────────────────────
 const SPLICE_INSTRUMENTS: Record<string, { melody: string; chords: string; bass: string; drums: string }> = {
   deep_house:        { melody: 'pluck',       chords: 'chord pad',    bass: 'bass loop',  drums: 'kick'         },
@@ -703,7 +898,7 @@ function HistorySidebar({
       <div className="flex items-center justify-between px-6 py-5"
         style={{ borderBottom: '1px solid #1A1A2E' }}>
         <span className="text-sm font-semibold" style={{ fontFamily: 'Syne, sans-serif' }}>
-          Session History
+          History
           {history.length > 0 && (
             <span className="ml-2 text-xs font-normal"
               style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -737,24 +932,29 @@ function HistorySidebar({
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <p className="text-sm truncate mb-2" style={{ color: 'rgba(240,240,255,0.85)' }}>
-                {entry.prompt || GENRES[entry.genre]?.name || entry.genre}
-              </p>
-              <div className="flex gap-2 flex-wrap">
-                <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF6D3F' }}>
-                  {GENRES[entry.genre]?.name || entry.genre}
-                </span>
-                <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
-                  {entry.key} {entry.scale}
-                </span>
-                <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
-                  {entry.bpm} BPM
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm mb-2" style={{ color: 'rgba(240,240,255,0.85)' }}>
+                    {(entry.prompt || '—').length > 40
+                      ? `${(entry.prompt || '—').slice(0, 40).trimEnd()}…`
+                      : (entry.prompt || '—')}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF6D3F' }}>
+                      {GENRES[entry.genre]?.name || entry.genre}
+                    </span>
+                    <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
+                      {entry.bpm} BPM
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className="text-xs flex-shrink-0"
+                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}
+                >
+                  {formatTimeAgo(entry.timestamp)}
                 </span>
               </div>
-              <p className="text-xs mt-2"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
-                {entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
             </button>
           ))}
         </div>
@@ -909,11 +1109,14 @@ export default function Home() {
   const [editorLayer, setEditorLayer] = useState<typeof LAYERS[number]>('melody');
   const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
   const [copied, setCopied] = useState(false);
+  const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
 
   const result = variations[selectedVariation]?.result ?? null;
 
   const toolRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
+  const tapTimesRef = useRef<number[]>([]);
+  const tapResetTimerRef = useRef<number | null>(null);
 
   // Scroll detection
   useEffect(() => {
@@ -1036,11 +1239,7 @@ export default function Home() {
         timestamp: new Date(row.created_at),
       }));
 
-      setHistory(prev => {
-        const dbIds = new Set(entries.map(e => e.id));
-        const sessionOnly = prev.filter(e => !dbIds.has(e.id));
-        return [...sessionOnly, ...entries].slice(0, 20);
-      });
+      setHistory(entries);
     } catch {
       // Ignore
     }
@@ -1111,20 +1310,6 @@ export default function Home() {
       setSelectedVariation(0);
       setIsGenerating(false);
 
-      const newEntry: HistoryEntry = {
-        id: Date.now().toString(),
-        prompt: promptText,
-        genre: finalParams.genre,
-        key: finalParams.key,
-        scale: finalParams.scale,
-        bpm: finalParams.bpm,
-        bars: finalParams.bars,
-        result: gen1,
-        params: finalParams,
-        timestamp: new Date(),
-      };
-      setHistory(prev => [newEntry, ...prev].slice(0, 20));
-
       // Persist to Supabase + update credits
       if (isSignedIn && userId) {
         try {
@@ -1141,6 +1326,7 @@ export default function Home() {
           setVariationIds([r1.data?.id ?? null, r2.data?.id ?? null, r3.data?.id ?? null]);
           await incrementCredits(userId);
           await loadUserCredits(userId);
+          await loadHistoryFromDb(userId);
         } catch {
           // Ignore save errors
         }
@@ -1223,6 +1409,49 @@ export default function Home() {
     downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
   };
 
+  const handleDownloadJson = useCallback(() => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const { result: r, params: p } = sel;
+    const chordProgression = deriveChordProgression(r.chords, p.bars);
+    const payload = {
+      prompt,
+      genre: p.genre,
+      bpm: p.bpm,
+      bars: p.bars,
+      chordProgression,
+      layers: r,
+      notes: {
+        melody: r.melody,
+        chords: r.chords,
+        bass: r.bass,
+        drums: r.drums,
+      },
+    };
+    const safeGenre = (GENRES[p.genre]?.name || p.genre).toLowerCase().replace(/\s/g, '-');
+    downloadTextFile(JSON.stringify(payload, null, 2), `pulp-${safeGenre}-${p.bpm}bpm.json`, 'application/json');
+  }, [prompt, variations, selectedVariation]);
+
+  const handleDownloadMusicXml = useCallback(() => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const { result: r, params: p } = sel;
+    const title = (prompt || GENRES[p.genre]?.name || 'Pulp generation').slice(0, 64);
+    const xml = toMusicXml({
+      title,
+      bpm: p.bpm,
+      bars: p.bars,
+      parts: [
+        { id: 'P1', name: 'Melody', notes: r.melody },
+        { id: 'P2', name: 'Chords', notes: r.chords },
+        { id: 'P3', name: 'Bass', notes: r.bass },
+        { id: 'P4', name: 'Drums', notes: r.drums },
+      ],
+    });
+    const safeGenre = (GENRES[p.genre]?.name || p.genre).toLowerCase().replace(/\s/g, '-');
+    downloadTextFile(xml, `pulp-${safeGenre}-${p.bpm}bpm.musicxml`, 'application/vnd.recordare.musicxml+xml');
+  }, [prompt, variations, selectedVariation]);
+
   const handleRestoreHistory = (entry: HistoryEntry) => {
     setParams(entry.params);
     setVariations([{ result: entry.result, params: entry.params }]);
@@ -1246,6 +1475,36 @@ export default function Home() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [variationIds, selectedVariation]);
+
+  const handleTapTempo = useCallback(() => {
+    const now = Date.now();
+
+    if (tapResetTimerRef.current !== null) {
+      window.clearTimeout(tapResetTimerRef.current);
+    }
+    tapResetTimerRef.current = window.setTimeout(() => {
+      tapTimesRef.current = [];
+      setDetectedBpm(null);
+    }, 3000);
+
+    const times = tapTimesRef.current;
+    times.push(now);
+    // Keep the last 5 taps to compute up to 4 intervals
+    if (times.length > 5) times.splice(0, times.length - 5);
+
+    if (times.length < 2) return;
+    const intervals: number[] = [];
+    for (let i = Math.max(1, times.length - 4); i < times.length; i++) {
+      intervals.push(times[i]! - times[i - 1]!);
+    }
+    const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    if (!Number.isFinite(avgMs) || avgMs <= 0) return;
+
+    const bpm = Math.round(60000 / avgMs);
+    const clamped = Math.max(60, Math.min(200, bpm));
+    setDetectedBpm(clamped);
+    setParams(p => ({ ...p, bpm: clamped }));
+  }, []);
 
   // ── RENDER ────────────────────────────────────────────────
   return (
@@ -1302,6 +1561,9 @@ export default function Home() {
             <button onClick={scrollToTool} className="transition-colors hover:text-white">Create</button>
             <a href="/explore" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
               Explore
+            </a>
+            <a href="/build" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
+              Build
             </a>
             <button
               onClick={() => setShowHistory(true)}
@@ -1509,12 +1771,54 @@ export default function Home() {
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-xs uppercase tracking-wider"
                             style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
-                          <span className="text-xs font-semibold"
-                            style={{ color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace' }}>{params.bpm}</span>
+                          <div className="flex items-center gap-2">
+                            {detectedBpm !== null && (
+                              <span
+                                className="text-[10px] px-2 py-0.5 rounded-md"
+                                style={{
+                                  fontFamily: 'JetBrains Mono, monospace',
+                                  background: 'rgba(0,184,148,0.10)',
+                                  border: '1px solid rgba(0,184,148,0.25)',
+                                  color: '#00B894',
+                                }}
+                              >
+                                Tap: {detectedBpm}
+                              </span>
+                            )}
+                            <span
+                              className="text-xs font-semibold"
+                              style={{ color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace' }}
+                            >
+                              {params.bpm}
+                            </span>
+                          </div>
                         </div>
-                        <input type="range" min={60} max={200} value={params.bpm}
-                          onChange={e => setParams(p => ({ ...p, bpm: parseInt(e.target.value) }))}
-                          className="w-full mt-1" />
+                        <div className="flex items-center gap-2 mt-1">
+                          <input
+                            type="range"
+                            min={60}
+                            max={200}
+                            value={params.bpm}
+                            onChange={e => setParams(p => ({ ...p, bpm: parseInt(e.target.value) }))}
+                            className="w-full"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleTapTempo}
+                            className="h-9 px-3 rounded-lg text-xs transition-all"
+                            style={{
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              color: '#F0F0FF',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              background: 'transparent',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                            title="Tap to detect BPM"
+                          >
+                            Tap
+                          </button>
+                        </div>
                       </div>
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wider"
@@ -1619,6 +1923,12 @@ export default function Home() {
                   </SpotlightButton>
                   <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
                     ↓  Download MIDI
+                  </SpotlightButton>
+                  <SpotlightButton onClick={handleDownloadMusicXml} className="btn-secondary btn-sm">
+                    ↓  Download MusicXML
+                  </SpotlightButton>
+                  <SpotlightButton onClick={handleDownloadJson} className="btn-secondary btn-sm">
+                    ↓  Download JSON
                   </SpotlightButton>
                   <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm">
                     ↻  Regenerate

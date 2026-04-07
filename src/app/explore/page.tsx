@@ -56,6 +56,9 @@ export default async function ExplorePage() {
             <Link href="/explore" className="transition-colors" style={{ color: '#F0F0FF', textDecoration: 'none' }}>
               Explore
             </Link>
+            <Link href="/build" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
+              Build
+            </Link>
             <Link href="/pricing" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
               Pricing
             </Link>

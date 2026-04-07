@@ -45,6 +45,9 @@ export default function PricingPage() {
             <Link href="/explore" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
               Explore
             </Link>
+            <Link href="/build" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
+              Build
+            </Link>
             <Link href="/pricing" className="transition-colors" style={{ color: '#F0F0FF', textDecoration: 'none' }}>
               Pricing
             </Link>
