@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
+import { ToastProvider } from '@/components/toast/ToastProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -12,7 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <ClerkProvider>
       <html lang="en">
         <body className="min-h-screen bg-bg font-body text-[#F0F0FF] antialiased">
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </body>
       </html>
     </ClerkProvider>

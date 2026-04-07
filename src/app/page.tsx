@@ -60,6 +60,136 @@ function formatTimeAgo(date: Date): string {
   return `${d}d ago`;
 }
 
+// ─── ONBOARDING TOOLTIP ───────────────────────────────────────
+function OnboardingTooltip({
+  title,
+  body,
+  stepLabel,
+  targetRect,
+  canNext,
+  onNext,
+  onSkip,
+}: {
+  title: string;
+  body: string;
+  stepLabel: string;
+  targetRect: DOMRect | null;
+  canNext: boolean;
+  onNext: () => void;
+  onSkip: () => void;
+}) {
+  if (!targetRect) return null;
+
+  const pad = 12;
+  const maxW = 340;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+
+  const centerX = targetRect.left + targetRect.width / 2;
+  const left = Math.min(vw - maxW - pad, Math.max(pad, centerX - maxW / 2));
+  const preferBelow = targetRect.top < vh * 0.5;
+  const top = preferBelow
+    ? Math.min(vh - 160, targetRect.bottom + 12)
+    : Math.max(pad, targetRect.top - 140);
+
+  const arrowLeft = Math.min(maxW - 20, Math.max(20, centerX - left));
+  const arrowTop = preferBelow ? -6 : undefined;
+  const arrowBottom = preferBelow ? undefined : -6;
+
+  return (
+    <>
+      {/* spotlight ring */}
+      <div
+        className="fixed z-[95] pointer-events-none"
+        style={{
+          left: targetRect.left - 6,
+          top: targetRect.top - 6,
+          width: targetRect.width + 12,
+          height: targetRect.height + 12,
+          borderRadius: 14,
+          border: '1px solid rgba(255,109,63,0.55)',
+          boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
+        }}
+      />
+
+      <motion.div
+        className="fixed z-[96]"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        style={{
+          left,
+          top,
+          width: maxW,
+          background: '#111118',
+          border: '1px solid #1A1A2E',
+          borderRadius: 16,
+          padding: 16,
+          pointerEvents: 'auto',
+        }}
+      >
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: arrowLeft,
+            width: 12,
+            height: 12,
+            background: '#111118',
+            borderLeft: '1px solid #1A1A2E',
+            borderTop: '1px solid #1A1A2E',
+            transform: 'translateX(-50%) rotate(45deg)',
+            top: arrowTop,
+            bottom: arrowBottom,
+          }}
+        />
+
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.55)', letterSpacing: '0.08em' }}>
+            {stepLabel}
+          </span>
+          <button
+            onClick={onSkip}
+            className="text-xs transition-colors"
+            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.6)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(138,138,154,0.6)')}
+          >
+            Skip
+          </button>
+        </div>
+
+        <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 16, color: '#F0F0FF' }}>
+          {title}
+        </p>
+        <p className="mt-2" style={{ color: '#8A8A9A', fontSize: 13, lineHeight: 1.6 }}>
+          {body}
+        </p>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            onClick={onNext}
+            disabled={!canNext}
+            className="h-9 px-3 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              background: 'rgba(255,109,63,0.12)',
+              border: '1px solid rgba(255,109,63,0.35)',
+              color: '#FF6D3F',
+              outline: 'none',
+            }}
+            onFocus={e => (e.currentTarget.style.boxShadow = '0 0 0 2px rgba(255,109,63,0.25)')}
+            onBlur={e => (e.currentTarget.style.boxShadow = 'none')}
+          >
+            Next
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
 // ─── SPOTLIGHT BUTTON ─────────────────────────────────────────
 interface SpotlightButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
@@ -1111,6 +1241,9 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const [collabCopied, setCollabCopied] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [onboardingTargetRect, setOnboardingTargetRect] = useState<DOMRect | null>(null);
 
   const result = variations[selectedVariation]?.result ?? null;
 
@@ -1118,6 +1251,10 @@ export default function Home() {
   const promptRef = useRef<HTMLInputElement>(null);
   const tapTimesRef = useRef<number[]>([]);
   const tapResetTimerRef = useRef<number | null>(null);
+  const generateBtnWrapRef = useRef<HTMLDivElement>(null);
+  const styleTagsRef = useRef<HTMLDivElement>(null);
+  const genreSelectRef = useRef<HTMLSelectElement>(null);
+  const layerCardsRef = useRef<HTMLDivElement>(null);
 
   // Scroll detection
   useEffect(() => {
@@ -1252,6 +1389,79 @@ export default function Home() {
     loadUserCredits(userId);
     loadHistoryFromDb(userId);
   }, [isSignedIn, userId, loadUserCredits, loadHistoryFromDb]);
+
+  // First-time onboarding (only if 0 generations in Supabase)
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !userId) return;
+    const key = 'pulp_onboarding_complete_v1';
+    try {
+      if (localStorage.getItem(key) === '1') return;
+    } catch {
+      // Ignore
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const { count } = await supabase
+          .from('generations')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .limit(1);
+        if (cancelled) return;
+        if ((count ?? 0) === 0) {
+          setShowOnboarding(true);
+          setOnboardingStep(0);
+        }
+      } catch {
+        // Ignore
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, userId]);
+
+  const completeOnboarding = useCallback(() => {
+    const key = 'pulp_onboarding_complete_v1';
+    try {
+      localStorage.setItem(key, '1');
+    } catch {
+      // Ignore
+    }
+    setShowOnboarding(false);
+  }, []);
+
+  // Ensure manual controls are open for step 2 (genre selector)
+  useEffect(() => {
+    if (!showOnboarding) return;
+    if (onboardingStep === 1) setShowManual(true);
+  }, [showOnboarding, onboardingStep]);
+
+  // Position onboarding tooltip on current step
+  useEffect(() => {
+    if (!showOnboarding) return;
+
+    const getRect = () => {
+      if (onboardingStep === 0) return promptRef.current?.getBoundingClientRect() ?? null;
+      if (onboardingStep === 1) return (genreSelectRef.current ?? styleTagsRef.current)?.getBoundingClientRect() ?? null;
+      if (onboardingStep === 2) return generateBtnWrapRef.current?.getBoundingClientRect() ?? null;
+      if (onboardingStep === 3) return layerCardsRef.current?.getBoundingClientRect() ?? null;
+      return null;
+    };
+
+    const update = () => setOnboardingTargetRect(getRect());
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, { passive: true } as AddEventListenerOptions);
+    const id = window.setInterval(update, 250);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update as any);
+      window.clearInterval(id);
+    };
+  }, [showOnboarding, onboardingStep, result]);
 
   // ── GENERATE ─────────────────────────────────────────────────
 
@@ -1519,6 +1729,39 @@ export default function Home() {
   return (
     <div className="min-h-screen">
 
+      {/* ── ONBOARDING ── */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <OnboardingTooltip
+            title={
+              onboardingStep === 0 ? 'Type what you want to create' :
+              onboardingStep === 1 ? 'Pick your genre and style' :
+              onboardingStep === 2 ? 'Hit Generate and get 3 variations' :
+              'Play, edit, download or share'
+            }
+            body={
+              onboardingStep === 0 ? 'Try “dark melodic techno, 128bpm, Am”. You can be specific or keep it vague.' :
+              onboardingStep === 1 ? 'Choose a genre, then tap a style tag to load a preset instantly.' :
+              onboardingStep === 2 ? 'Generate creates 3 variations. Click a card to select the one you like best.' :
+              'Press Play, tweak notes in the piano roll, download MIDI, or share the generation link.'
+            }
+            stepLabel={`STEP ${onboardingStep + 1} / 4`}
+            targetRect={onboardingTargetRect}
+            canNext={
+              onboardingStep < 2 ? true :
+              onboardingStep === 2 ? variations.length > 0 :
+              onboardingStep === 3 ? Boolean(result) :
+              true
+            }
+            onNext={() => {
+              if (onboardingStep >= 3) completeOnboarding();
+              else setOnboardingStep(s => Math.min(3, s + 1));
+            }}
+            onSkip={completeOnboarding}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ── COMMAND BAR ── */}
       <CommandBar
         isOpen={showCommandBar}
@@ -1671,19 +1914,21 @@ export default function Home() {
                 style={{ paddingLeft: 40, paddingRight: 136 }}
               />
               {isSignedIn ? (
-                <SpotlightButton
-                  className={`btn-primary absolute right-2 top-1/2 -translate-y-1/2${isGenerating ? ' pulsing' : ''}`}
-                  style={{ height: 36, padding: '0 16px', fontSize: 13 }}
-                  onClick={() => void handleGenerate()}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <span className="flex items-center gap-2">
-                      <span className="spinner" />
-                      Generating
-                    </span>
-                  ) : 'Generate'}
-                </SpotlightButton>
+                <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <SpotlightButton
+                    className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
+                    style={{ height: 36, padding: '0 16px', fontSize: 13 }}
+                    onClick={() => void handleGenerate()}
+                    disabled={isGenerating}
+                  >
+                    {isGenerating ? (
+                      <span className="flex items-center gap-2">
+                        <span className="spinner" />
+                        Generating
+                      </span>
+                    ) : 'Generate'}
+                  </SpotlightButton>
+                </div>
               ) : (
                 <SignInButton mode="modal">
                   <SpotlightButton
@@ -1708,7 +1953,7 @@ export default function Home() {
             )}
 
             {/* Style tags */}
-            <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
+            <div ref={styleTagsRef} className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
               {Object.keys(STYLE_TAGS).map(tag => (
                 <button key={tag} onClick={() => handleStyleTag(tag)}
                   className={`style-pill${activeStyleTag === tag ? ' active' : ''}`}>
@@ -1758,7 +2003,11 @@ export default function Home() {
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wider"
                           style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
-                        <select value={params.genre} onChange={e => setParams(p => ({ ...p, genre: e.target.value }))}>
+                        <select
+                          ref={genreSelectRef}
+                          value={params.genre}
+                          onChange={e => setParams(p => ({ ...p, genre: e.target.value }))}
+                        >
                           {GENRE_LIST.map(g => <option key={g.key} value={g.key}>{g.name}</option>)}
                         </select>
                       </div>
@@ -1999,6 +2248,7 @@ export default function Home() {
             <AnimatePresence>
               {result && !isGenerating && (
                 <motion.div
+                  ref={layerCardsRef}
                   className="grid grid-cols-2 gap-4"
                   variants={staggerContainer}
                   initial="hidden"
