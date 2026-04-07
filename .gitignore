@@ -1,6 +1,8 @@
 node_modules/
 .next/
 out/
+.claude/
+.claude-flow/
 .env
 .env.local
 .vercel
