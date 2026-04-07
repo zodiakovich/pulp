@@ -1110,6 +1110,7 @@ export default function Home() {
   const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
   const [copied, setCopied] = useState(false);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
+  const [collabCopied, setCollabCopied] = useState(false);
 
   const result = variations[selectedVariation]?.result ?? null;
 
@@ -1475,6 +1476,14 @@ export default function Home() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [variationIds, selectedVariation]);
+
+  const handleCreateCollab = useCallback(() => {
+    const sessionId = crypto.randomUUID();
+    const url = `${window.location.origin}/collab/${sessionId}`;
+    void navigator.clipboard.writeText(url);
+    setCollabCopied(true);
+    setTimeout(() => setCollabCopied(false), 2000);
+  }, []);
 
   const handleTapTempo = useCallback(() => {
     const now = Date.now();
@@ -1924,6 +1933,9 @@ export default function Home() {
                   <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
                     ↓  Download MIDI
                   </SpotlightButton>
+                  <SpotlightButton onClick={handleCreateCollab} className="btn-secondary btn-sm">
+                    {collabCopied ? 'Copied!' : 'Collab'}
+                  </SpotlightButton>
                   <SpotlightButton onClick={handleDownloadMusicXml} className="btn-secondary btn-sm">
                     ↓  Download MusicXML
                   </SpotlightButton>
@@ -1938,6 +1950,47 @@ export default function Home() {
                       {copied ? 'Copied!' : 'Share'}
                     </SpotlightButton>
                   )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Chord progression (prominent) */}
+            <AnimatePresence>
+              {result && !isGenerating && (
+                <motion.div
+                  key={`chords-${variationIds[selectedVariation] ?? 'local'}-${selectedVariation}-${variations[selectedVariation]?.params.bpm ?? params.bpm}`}
+                  className="mb-5"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                >
+                  <div className="rounded-2xl px-5 py-4" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
+                    <p
+                      className="leading-tight"
+                      style={{
+                        fontFamily: 'Syne, sans-serif',
+                        fontWeight: 800,
+                        fontSize: 26,
+                        letterSpacing: '-0.01em',
+                        backgroundImage: 'linear-gradient(90deg, #FF6D3F 0%, #FFAB91 100%)',
+                        WebkitBackgroundClip: 'text',
+                        backgroundClip: 'text',
+                        color: 'transparent',
+                      }}
+                    >
+                      {deriveChordProgression(
+                        result.chords,
+                        variations[selectedVariation]?.params.bars ?? params.bars
+                      ).join(' → ')}
+                    </p>
+                    <p
+                      className="mt-2 text-xs"
+                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.6)' }}
+                    >
+                      {(variations[selectedVariation]?.params.key ?? params.key)} {(variations[selectedVariation]?.params.scale ?? params.scale)}
+                    </p>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

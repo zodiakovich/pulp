@@ -295,6 +295,93 @@ export const GENRES: Record<string, GenreProfile> = {
   },
 };
 
+// ============================================================
+// GENRE → SOUND MAPPING (for Web Audio engine)
+// ============================================================
+// This is intentionally lightweight: it only tells the audio engine which
+// synthesized presets to prefer per genre (no samples, no external deps).
+
+export type SoundPresetName =
+  // Melody
+  | 'fmbell'
+  | 'detunedsaw'
+  | 'marimba'
+  | 'flute'
+  | 'choir'
+  | 'pizzicato'
+  | 'pluck'
+  | 'pad'
+  | 'acid'
+  | 'bell'
+  | 'supersaw'
+  | 'sinelead'
+  // Chords
+  | 'stringpad'
+  | 'rhodes'
+  | 'wurlitzer'
+  | 'vibraphone'
+  | 'brass'
+  | 'warmpad'
+  | 'epiano'
+  | 'organ'
+  | 'glass'
+  // Bass
+  | 'wobble'
+  | 'fingerbass'
+  | 'uprightbass'
+  | 'slapbass'
+  | 'tb303'
+  | 'logdrum'
+  | 'sub'
+  | 'reese'
+  | 'acidbass'
+  | '808'
+  | 'pluckbass';
+
+export type KickPresetName = 'deep' | 'punchy' | 'distorted' | 'house' | '808' | 'techno';
+export type SnarePresetName = 'tight' | 'fat' | 'brush' | 'clapreverb' | 'clap' | 'snare' | 'rim';
+export type HatPresetName = 'closed' | 'open' | 'pedal' | 'sizzle' | 'tambourine';
+
+export interface GenreSoundMap {
+  melody: SoundPresetName[];
+  chords: SoundPresetName[];
+  bass: SoundPresetName[];
+  kick: KickPresetName;
+  snare: SnarePresetName;
+  hats: HatPresetName[];
+  percussion: Array<'conga' | 'bongo' | 'timbale' | 'woodblock' | 'triangle' | 'cabasa'>;
+}
+
+export const GENRE_SOUND_MAP: Record<string, GenreSoundMap> = {
+  deep_house:        { melody: ['fmbell', 'pluck'], chords: ['rhodes'], bass: ['fingerbass'], kick: 'deep', snare: 'clap', hats: ['closed', 'sizzle'], percussion: ['cabasa'] },
+  melodic_house:     { melody: ['detunedsaw', 'choir'], chords: ['stringpad'], bass: ['sub'], kick: 'punchy', snare: 'clap', hats: ['closed'], percussion: ['triangle'] },
+  tech_house:        { melody: ['pluck', 'tb303'], chords: ['wurlitzer'], bass: ['pluckbass'], kick: 'punchy', snare: 'tight', hats: ['closed', 'pedal'], percussion: ['woodblock'] },
+  minimal_tech:      { melody: ['flute', 'pluck'], chords: ['vibraphone'], bass: ['uprightbass'], kick: 'techno', snare: 'tight', hats: ['closed', 'pedal'], percussion: ['woodblock'] },
+  techno:            { melody: ['tb303', 'sinelead'], chords: ['glass'], bass: ['reese'], kick: 'distorted', snare: 'fat', hats: ['closed', 'sizzle'], percussion: ['cabasa'] },
+  melodic_techno:    { melody: ['detunedsaw', 'supersaw'], chords: ['stringpad'], bass: ['wobble'], kick: 'techno', snare: 'fat', hats: ['closed'], percussion: ['triangle'] },
+  hard_techno:       { melody: ['tb303'], chords: ['brass'], bass: ['tb303'], kick: 'distorted', snare: 'tight', hats: ['closed', 'sizzle'], percussion: [] },
+  progressive_house: { melody: ['supersaw', 'choir'], chords: ['stringpad'], bass: ['sub'], kick: 'punchy', snare: 'clap', hats: ['closed'], percussion: ['triangle'] },
+
+  // Requested updates
+  afro_house:        { melody: ['pizzicato', 'flute'], chords: ['rhodes'], bass: ['sub'], kick: 'deep', snare: 'clap', hats: ['closed', 'tambourine'], percussion: ['bongo', 'conga'] },
+  amapiano:          { melody: ['choir'], chords: ['rhodes'], bass: ['logdrum', 'slapbass'], kick: 'deep', snare: 'tight', hats: ['closed', 'pedal'], percussion: ['conga'] },
+  disco_nu_disco:    { melody: ['brass'], chords: ['rhodes'], bass: ['slapbass'], kick: 'punchy', snare: 'clapreverb', hats: ['closed', 'tambourine'], percussion: ['triangle', 'cabasa'] },
+  lofi_hiphop:       { melody: ['marimba'], chords: ['rhodes'], bass: ['fingerbass'], kick: 'deep', snare: 'brush', hats: ['closed'], percussion: ['cabasa'] },
+
+  organic_house:     { melody: ['flute', 'fmbell'], chords: ['stringpad'], bass: ['uprightbass'], kick: 'deep', snare: 'clap', hats: ['closed'], percussion: ['triangle'] },
+  trance:            { melody: ['supersaw'], chords: ['stringpad'], bass: ['sub'], kick: 'punchy', snare: 'clap', hats: ['closed'], percussion: [] },
+  uk_garage:         { melody: ['pluck', 'fmbell'], chords: ['wurlitzer'], bass: ['fingerbass'], kick: 'punchy', snare: 'snare', hats: ['closed', 'pedal'], percussion: ['woodblock'] },
+  drum_and_bass:     { melody: ['detunedsaw'], chords: ['stringpad'], bass: ['wobble'], kick: 'techno', snare: 'fat', hats: ['closed', 'sizzle'], percussion: [] },
+  hiphop:            { melody: ['marimba', 'fmbell'], chords: ['rhodes'], bass: ['808'], kick: '808', snare: 'fat', hats: ['closed'], percussion: ['cabasa'] },
+  trap:              { melody: ['choir'], chords: ['stringpad'], bass: ['808'], kick: '808', snare: 'clap', hats: ['closed', 'sizzle'], percussion: [] },
+  pop:               { melody: ['detunedsaw', 'pluck'], chords: ['stringpad'], bass: ['fingerbass'], kick: 'punchy', snare: 'clap', hats: ['closed'], percussion: [] },
+  rnb:               { melody: ['flute', 'choir'], chords: ['rhodes'], bass: ['uprightbass'], kick: 'deep', snare: 'brush', hats: ['closed'], percussion: ['cabasa'] },
+};
+
+export function getGenreSoundMap(genreKey: string): GenreSoundMap {
+  return GENRE_SOUND_MAP[genreKey] ?? GENRE_SOUND_MAP.deep_house;
+}
+
 // --- RANDOM HELPERS ---
 function rand(min: number, max: number): number {
   return Math.random() * (max - min) + min;
