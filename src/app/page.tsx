@@ -1242,7 +1242,7 @@ export default function Home() {
   const handleShare = useCallback(() => {
     const id = variationIds[selectedVariation];
     if (!id) return;
-    void navigator.clipboard.writeText(`${window.location.origin}/g/${id}`);
+    void navigator.clipboard.writeText(`/g/${id}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [variationIds, selectedVariation]);
@@ -1622,7 +1622,7 @@ export default function Home() {
                   </SpotlightButton>
                   {variationIds[selectedVariation] && (
                     <SpotlightButton onClick={handleShare} className="btn-secondary btn-sm">
-                      {copied ? '✓ Copied!' : '⟐ Share'}
+                      {copied ? 'Copied!' : 'Share'}
                     </SpotlightButton>
                   )}
                 </motion.div>
