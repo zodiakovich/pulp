@@ -162,6 +162,12 @@ const LAYER_COLORS: Record<string, string> = {
 
 const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
 
+// ─── PIANO ROLL EDITOR CONSTANTS ──────────────────────────────
+const EDITOR_MIDI_MIN = 36;   // C2
+const EDITOR_MIDI_MAX = 84;   // C6 (rows show 36–83, 48 semitones)
+const EDITOR_PITCH_COUNT = EDITOR_MIDI_MAX - EDITOR_MIDI_MIN;
+const EDITOR_HEIGHT = 240;
+
 // ─── LAYER CARD ───────────────────────────────────────────────
 function LayerCard({
   name, notes, bpm, genre, enabled, onDownload, onRegenerate,
@@ -255,6 +261,150 @@ function SkeletonCard({ name }: { name: string }) {
       </div>
       <div className="skeleton w-full rounded-md" style={{ height: 88 }} />
     </motion.div>
+  );
+}
+
+// ─── PIANO ROLL EDITOR ────────────────────────────────────────
+function PianoRollEditor({
+  notes, color, bars, onNotesChange,
+}: {
+  notes: NoteEvent[];
+  color: string;
+  bars: number;
+  onNotesChange: (notes: NoteEvent[]) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const totalBeats = bars * 4;
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = EDITOR_HEIGHT;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    const rowH = h / EDITOR_PITCH_COUNT;
+
+    // Background
+    ctx.fillStyle = '#0A0A0F';
+    ctx.fillRect(0, 0, w, h);
+
+    // Pitch row shading (black keys darker)
+    for (let i = 0; i < EDITOR_PITCH_COUNT; i++) {
+      const pitch = (EDITOR_MIDI_MAX - 1) - i;
+      if ([1, 3, 6, 8, 10].includes(pitch % 12)) {
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.fillRect(0, i * rowH, w, rowH);
+      }
+    }
+
+    // Horizontal lines (C notes brighter)
+    for (let i = 0; i <= EDITOR_PITCH_COUNT; i++) {
+      const pitch = (EDITOR_MIDI_MAX - 1) - i;
+      const y = i * rowH;
+      const isC = pitch % 12 === 0;
+      ctx.strokeStyle = isC ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.035)';
+      ctx.lineWidth = isC ? 0.8 : 0.5;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // Vertical beat lines
+    for (let beat = 0; beat <= totalBeats; beat++) {
+      const x = (beat / totalBeats) * w;
+      const isBar = beat % 4 === 0;
+      ctx.strokeStyle = isBar ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = isBar ? 1 : 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    // Half-beat lines
+    for (let hb = 1; hb < totalBeats * 2; hb += 2) {
+      const x = (hb / 2 / totalBeats) * w;
+      ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    // Notes
+    ctx.save();
+    for (const note of notes) {
+      if (note.pitch < EDITOR_MIDI_MIN || note.pitch >= EDITOR_MIDI_MAX) continue;
+      const pi = (EDITOR_MIDI_MAX - 1) - note.pitch;
+      const x = (note.startTime / totalBeats) * w;
+      const nw = Math.max(3, (note.duration / totalBeats) * w) - 1;
+      const y = pi * rowH + 1;
+      const nh = Math.max(2, rowH - 2);
+      const r = Math.min(2, nh / 2, nw / 2);
+      ctx.globalAlpha = 0.5 + (note.velocity / 127) * 0.5;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + nw - r, y);
+      ctx.quadraticCurveTo(x + nw, y, x + nw, y + r);
+      ctx.lineTo(x + nw, y + nh - r);
+      ctx.quadraticCurveTo(x + nw, y + nh, x + nw - r, y + nh);
+      ctx.lineTo(x + r, y + nh);
+      ctx.quadraticCurveTo(x, y + nh, x, y + nh - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }, [notes, color, totalBeats]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    draw();
+    const obs = new ResizeObserver(() => draw());
+    obs.observe(canvas);
+    return () => obs.disconnect();
+  }, [draw]);
+
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const w = canvas.clientWidth;
+    const rowH = EDITOR_HEIGHT / EDITOR_PITCH_COUNT;
+
+    // Check hit on existing note (reverse order = topmost first)
+    let hitIdx = -1;
+    for (let i = notes.length - 1; i >= 0; i--) {
+      const note = notes[i];
+      if (note.pitch < EDITOR_MIDI_MIN || note.pitch >= EDITOR_MIDI_MAX) continue;
+      const pi = (EDITOR_MIDI_MAX - 1) - note.pitch;
+      const nx = (note.startTime / totalBeats) * w;
+      const nw = Math.max(3, (note.duration / totalBeats) * w);
+      const ny = pi * rowH;
+      if (x >= nx && x <= nx + nw && y >= ny && y < ny + rowH) { hitIdx = i; break; }
+    }
+
+    if (hitIdx !== -1) {
+      onNotesChange(notes.filter((_, i) => i !== hitIdx));
+    } else {
+      const pi = Math.floor(y / rowH);
+      const pitch = (EDITOR_MIDI_MAX - 1) - pi;
+      const snapped = Math.floor((x / w) * totalBeats / 0.25) * 0.25;
+      if (pitch >= EDITOR_MIDI_MIN && pitch < EDITOR_MIDI_MAX && snapped >= 0 && snapped < totalBeats) {
+        onNotesChange([...notes, { pitch, startTime: snapped, duration: 0.5, velocity: 80 }]);
+      }
+    }
+  }, [notes, onNotesChange, totalBeats]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      onClick={handleClick}
+      style={{ width: '100%', height: EDITOR_HEIGHT, display: 'block', cursor: 'crosshair' }}
+    />
   );
 }
 
@@ -756,6 +906,9 @@ export default function Home() {
   const [showCommandBar, setShowCommandBar] = useState(false);
   const [credits, setCredits] = useState<{ used: number; isPro: boolean } | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [editorLayer, setEditorLayer] = useState<typeof LAYERS[number]>('melody');
+  const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
+  const [copied, setCopied] = useState(false);
 
   const result = variations[selectedVariation]?.result ?? null;
 
@@ -913,6 +1066,7 @@ export default function Home() {
     }
 
     setIsGenerating(true);
+    setVariationIds([]);
 
     // Try Claude AI prompt parsing, fall back silently
     let aiParsed: Partial<GenerationParams> = {};
@@ -974,14 +1128,17 @@ export default function Home() {
       // Persist to Supabase + update credits
       if (isSignedIn && userId) {
         try {
-          await supabase.from('generations').insert({
-            user_id: userId,
-            prompt: promptText,
-            genre: finalParams.genre,
-            bpm: finalParams.bpm,
-            style_tag: activeStyleTag,
-            layers: gen1,
-          });
+          const ins = (layers: GenerationResult, p: GenerationParams) =>
+            supabase.from('generations').insert({
+              user_id: userId,
+              prompt: promptText,
+              genre: p.genre,
+              bpm: p.bpm,
+              style_tag: activeStyleTag,
+              layers,
+            }).select('id').single();
+          const [r1, r2, r3] = await Promise.all([ins(gen1, p1), ins(gen2, p2), ins(gen3, p3)]);
+          setVariationIds([r1.data?.id ?? null, r2.data?.id ?? null, r3.data?.id ?? null]);
           await incrementCredits(userId);
           await loadUserCredits(userId);
         } catch {
@@ -1046,6 +1203,12 @@ export default function Home() {
     ));
   }, [variations, selectedVariation]);
 
+  const handleEditorNotesChange = useCallback((layer: typeof LAYERS[number], newNotes: NoteEvent[]) => {
+    setVariations(prev => prev.map((v, i) =>
+      i === selectedVariation ? { ...v, result: { ...v.result, [layer]: newNotes } } : v
+    ));
+  }, [selectedVariation]);
+
   const handleDownloadAll = () => {
     const sel = variations[selectedVariation];
     if (!sel) return;
@@ -1075,6 +1238,14 @@ export default function Home() {
     scrollToTool();
     setTimeout(() => promptRef.current?.focus(), 150);
   };
+
+  const handleShare = useCallback(() => {
+    const id = variationIds[selectedVariation];
+    if (!id) return;
+    void navigator.clipboard.writeText(`${window.location.origin}/g/${id}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [variationIds, selectedVariation]);
 
   // ── RENDER ────────────────────────────────────────────────
   return (
@@ -1449,6 +1620,11 @@ export default function Home() {
                   <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm">
                     ↻  Regenerate
                   </SpotlightButton>
+                  {variationIds[selectedVariation] && (
+                    <SpotlightButton onClick={handleShare} className="btn-secondary btn-sm">
+                      {copied ? '✓ Copied!' : '⟐ Share'}
+                    </SpotlightButton>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1496,6 +1672,62 @@ export default function Home() {
                         {tag}
                       </span>
                     ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Piano Roll Editor */}
+            <AnimatePresence>
+              {variations.length > 0 && !isGenerating && (
+                <motion.div
+                  className="mt-6"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                  style={{ border: '1px solid #1A1A2E', borderRadius: 12, overflow: 'hidden' }}
+                >
+                  {/* Header: label + layer tabs */}
+                  <div className="flex items-center justify-between px-4 py-3"
+                    style={{ background: '#111118', borderBottom: '1px solid #1A1A2E' }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.5)', letterSpacing: '0.06em' }}>
+                      PIANO ROLL
+                    </span>
+                    <div className="flex gap-1">
+                      {LAYERS.map(layer => (
+                        <button
+                          key={layer}
+                          onClick={() => setEditorLayer(layer)}
+                          className="px-3 h-7 rounded-md capitalize transition-all"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: editorLayer === layer ? LAYER_COLORS[layer] : '#8A8A9A',
+                            background: editorLayer === layer ? `${LAYER_COLORS[layer]}18` : 'transparent',
+                            border: editorLayer === layer ? `1px solid ${LAYER_COLORS[layer]}40` : '1px solid transparent',
+                          }}
+                        >
+                          {layer}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hint bar */}
+                  <div className="px-4 py-1.5" style={{ background: '#0D0D12', borderBottom: '1px solid #1A1A2E' }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.35)' }}>
+                      click note to delete · click empty to add (snaps to 1/16)
+                    </span>
+                  </div>
+
+                  {/* Canvas */}
+                  <PianoRollEditor
+                    key={`${selectedVariation}-${editorLayer}`}
+                    notes={result?.[editorLayer] ?? []}
+                    color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
+                    bars={variations[selectedVariation]?.params.bars ?? params.bars}
+                    onNotesChange={newNotes => handleEditorNotesChange(editorLayer, newNotes)}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
