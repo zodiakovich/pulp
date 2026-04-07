@@ -164,10 +164,10 @@ const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
 
 // ─── LAYER CARD ───────────────────────────────────────────────
 function LayerCard({
-  name, notes, bpm, genre, enabled, onDownload,
+  name, notes, bpm, genre, enabled, onDownload, onRegenerate,
 }: {
   name: string; notes: NoteEvent[]; bpm: number; genre: string;
-  enabled: boolean; onDownload: () => void;
+  enabled: boolean; onDownload: () => void; onRegenerate: () => void;
 }) {
   const [playing, setPlaying] = useState(false);
   const color = LAYER_COLORS[name] || '#FF6D3F';
@@ -208,6 +208,17 @@ function LayerCard({
             {playing ? '■' : '▶'}
           </button>
           <button
+            onClick={onRegenerate}
+            disabled={!enabled}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
+            style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
+            title={`Regenerate ${name}`}
+          >
+            ↻
+          </button>
+          <button
             onClick={onDownload}
             disabled={!enabled || notes.length === 0}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
@@ -243,6 +254,197 @@ function SkeletonCard({ name }: { name: string }) {
         </div>
       </div>
       <div className="skeleton w-full rounded-md" style={{ height: 88 }} />
+    </motion.div>
+  );
+}
+
+// ─── CHORD NAME DERIVATION ────────────────────────────────────
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+const INTERVAL_QUALITY: Record<string, string> = {
+  '0,3,7': 'm',     '0,4,7': '',      '0,3,6': 'dim',  '0,4,8': 'aug',
+  '0,3,7,10': 'm7', '0,4,7,11': 'M7', '0,4,7,10': '7', '0,3,6,10': 'm7b5',
+  '0,3,7,11': 'mM7','0,2,7': 'sus2',  '0,5,7': 'sus4',
+};
+
+function pitchesToChordName(pitches: number[]): string {
+  if (pitches.length === 0) return '—';
+  const classes = [...new Set(pitches.map(p => ((p % 12) + 12) % 12))].sort((a, b) => a - b);
+  if (classes.length === 1) return NOTE_NAMES[classes[0]!];
+  for (const root of classes) {
+    const intervals = classes.map(c => (c - root + 12) % 12).sort((a, b) => a - b);
+    const key = intervals.join(',');
+    if (key in INTERVAL_QUALITY) return NOTE_NAMES[root] + INTERVAL_QUALITY[key];
+  }
+  return NOTE_NAMES[classes[0]!]; // fallback: lowest note
+}
+
+function deriveChordProgression(chords: NoteEvent[], bars: number): string[] {
+  return Array.from({ length: bars }, (_, bar) => {
+    const barNotes = chords.filter(n => n.startTime >= bar * 4 && n.startTime < bar * 4 + 4);
+    if (barNotes.length === 0) return '—';
+    const firstOnset = Math.min(...barNotes.map(n => n.startTime));
+    const onset = barNotes.filter(n => Math.abs(n.startTime - firstOnset) < 0.05);
+    return pitchesToChordName(onset.map(n => n.pitch));
+  });
+}
+
+// ─── SPLICE SEARCH TERMS ──────────────────────────────────────
+const SPLICE_INSTRUMENTS: Record<string, { melody: string; chords: string; bass: string; drums: string }> = {
+  deep_house:        { melody: 'pluck',       chords: 'chord pad',    bass: 'bass loop',  drums: 'kick'         },
+  melodic_house:     { melody: 'melody',      chords: 'chord pad',    bass: 'bass loop',  drums: 'kick'         },
+  tech_house:        { melody: 'pluck',       chords: 'chord stab',   bass: 'bass loop',  drums: 'kick'         },
+  minimal_tech:      { melody: 'lead',        chords: 'chord',        bass: 'bass',       drums: 'kick'         },
+  techno:            { melody: 'lead',        chords: 'chord',        bass: 'bass',       drums: 'kick loop'    },
+  melodic_techno:    { melody: 'lead',        chords: 'pad',          bass: 'bass',       drums: 'kick'         },
+  hard_techno:       { melody: 'lead',        chords: 'stab',         bass: 'bass',       drums: 'kick'         },
+  progressive_house: { melody: 'synth',       chords: 'chord pad',    bass: 'bass loop',  drums: 'kick'         },
+  afro_house:        { melody: 'melody',      chords: 'chord',        bass: 'bass loop',  drums: 'percussion'   },
+  trance:            { melody: 'lead',        chords: 'supersaw pad', bass: 'bass',       drums: 'kick'         },
+  house:             { melody: 'piano',       chords: 'chord stab',   bass: 'bass loop',  drums: 'kick'         },
+  drum_and_bass:     { melody: 'melody',      chords: 'chord',        bass: 'reese bass', drums: 'break'        },
+  hiphop:            { melody: 'melody',      chords: 'chord',        bass: '808',        drums: 'drum loop'    },
+  rnb:               { melody: 'melody',      chords: 'chord pad',    bass: 'bass',       drums: 'drum loop'    },
+  disco_nu_disco:    { melody: 'melody',      chords: 'chord',        bass: 'bass loop',  drums: 'disco drum'   },
+};
+
+function getSpliceTerms(genreKey: string, bpm: number): Record<'melody' | 'chords' | 'bass' | 'drums', string> {
+  const genreName = GENRES[genreKey]?.name ?? genreKey;
+  const inst = SPLICE_INSTRUMENTS[genreKey] ?? { melody: 'melody', chords: 'chord', bass: 'bass', drums: 'drums' };
+  return {
+    melody: `${genreName} ${inst.melody} ${bpm}`,
+    chords: `${genreName} ${inst.chords}`,
+    bass:   `${genreName} ${inst.bass} ${bpm}`,
+    drums:  `${genreName} ${inst.drums}`,
+  };
+}
+
+// ─── VARIATION CARD ───────────────────────────────────────────
+function VariationCard({
+  label, result: vResult, variationParams, selected, isPlaying,
+  onSelect, onPlayToggle, onDownload,
+}: {
+  label: string;
+  result: GenerationResult;
+  variationParams: GenerationParams;
+  selected: boolean;
+  isPlaying: boolean;
+  onSelect: () => void;
+  onPlayToggle: (e: React.MouseEvent) => void;
+  onDownload: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      onClick={onSelect}
+      style={{
+        border: selected ? '1.5px solid #FF6D3F' : '1px solid #1A1A2E',
+        borderRadius: 12,
+        padding: 16,
+        cursor: 'pointer',
+        background: selected ? 'rgba(255,109,63,0.04)' : '#111118',
+        transition: 'border-color 0.15s, background 0.15s',
+        flex: 1,
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: selected ? '#FF6D3F' : '#F0F0FF' }}>
+          {label}
+        </span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8A8A9A' }}>
+          {variationParams.bpm} BPM
+        </span>
+      </div>
+      <PianoRoll notes={vResult.melody} color="#FF6D3F" height={56} />
+      <div className="flex gap-1.5 flex-wrap mt-3 mb-1">
+        {deriveChordProgression(vResult.chords, variationParams.bars).map((name, i, arr) => (
+          <span key={i} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#8A8A9A', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {name}
+            {i < arr.length - 1 && <span style={{ color: 'rgba(138,138,154,0.35)' }}>→</span>}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
+        <button
+          onClick={onPlayToggle}
+          className="flex-1 h-8 flex items-center justify-center rounded-lg text-xs transition-all"
+          style={{ border: '1px solid rgba(255,255,255,0.08)', fontSize: 12 }}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
+          title={isPlaying ? 'Stop' : 'Play'}
+        >
+          {isPlaying ? '■' : '▶'}
+        </button>
+        <button
+          onClick={onDownload}
+          disabled={!selected}
+          className="flex-1 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
+          style={{ border: selected ? '1px solid rgba(0,184,148,0.4)' : '1px solid rgba(255,255,255,0.08)' }}
+          onMouseEnter={e => { if (selected) e.currentTarget.style.borderColor = 'rgba(0,184,148,0.7)'; }}
+          onMouseLeave={e => { if (selected) e.currentTarget.style.borderColor = 'rgba(0,184,148,0.4)'; }}
+          title={selected ? 'Download all tracks' : 'Select this variation to download'}
+        >
+          ↓ All
+        </button>
+      </div>
+      {selected && (
+        <>
+          <div className="flex gap-1.5 mt-2" onClick={e => e.stopPropagation()}>
+            {(['melody', 'chords', 'bass', 'drums'] as const).map(layer => {
+              const notes = vResult[layer];
+              const genreName = GENRES[variationParams.genre]?.name || 'track';
+              return (
+                <button
+                  key={layer}
+                  disabled={notes.length === 0}
+                  onClick={e => {
+                    e.stopPropagation();
+                    const midi = generateMidiFormat0(notes, variationParams.bpm, `pulp-${layer}`);
+                    downloadMidi(midi, `pulp-${layer}-${genreName.toLowerCase().replace(/\s/g, '-')}-${variationParams.key}${variationParams.scale}.mid`);
+                  }}
+                  className="flex-1 h-7 flex items-center justify-center rounded-md transition-all disabled:opacity-30"
+                  style={{
+                    border: `1px solid ${LAYER_COLORS[layer]}33`,
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 10,
+                    color: LAYER_COLORS[layer],
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = `${LAYER_COLORS[layer]}12`)}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  title={`Download ${layer}`}
+                >
+                  {layer.slice(0, 3)}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 pt-3" style={{ borderTop: '1px solid #1A1A2E' }} onClick={e => e.stopPropagation()}>
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.45)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              Find on Splice
+            </p>
+            {(['melody', 'chords', 'bass', 'drums'] as const).map(layer => {
+              const term = getSpliceTerms(variationParams.genre, variationParams.bpm)[layer];
+              return (
+                <div key={layer} className="flex items-center gap-2 mb-1.5">
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: LAYER_COLORS[layer], width: 40, flexShrink: 0 }}>
+                    {layer.charAt(0).toUpperCase() + layer.slice(1, 3)}
+                  </span>
+                  <a
+                    href={`https://splice.com/sounds/search?q=${encodeURIComponent(term)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#8A8A9A', textDecoration: 'none' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#8A8A9A')}
+                  >
+                    {term} ↗
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -540,7 +742,9 @@ const LAYER_EXPLAINER = [
 export default function Home() {
   const { isSignedIn, isLoaded, userId } = useAuth();
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
-  const [result, setResult] = useState<GenerationResult | null>(null);
+  const [variations, setVariations] = useState<{ result: GenerationResult; params: GenerationParams }[]>([]);
+  const [selectedVariation, setSelectedVariation] = useState(0);
+  const [playingVariationIndex, setPlayingVariationIndex] = useState<number | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [playingAll, setPlayingAll] = useState(false);
@@ -552,6 +756,8 @@ export default function Home() {
   const [showCommandBar, setShowCommandBar] = useState(false);
   const [credits, setCredits] = useState<{ used: number; isPro: boolean } | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  const result = variations[selectedVariation]?.result ?? null;
 
   const toolRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
@@ -737,8 +943,18 @@ export default function Home() {
     setParams(finalParams);
 
     setTimeout(async () => {
-      const gen = generateTrack(finalParams);
-      setResult(gen);
+      const p1 = finalParams;
+      const p2 = { ...finalParams, bpm: Math.min(200, finalParams.bpm + 4) };
+      const p3 = { ...finalParams, bpm: Math.max(60, finalParams.bpm - 4) };
+      const gen1 = generateTrack(p1);
+      const gen2 = generateTrack(p2);
+      const gen3 = generateTrack(p3);
+      setVariations([
+        { result: gen1, params: p1 },
+        { result: gen2, params: p2 },
+        { result: gen3, params: p3 },
+      ]);
+      setSelectedVariation(0);
       setIsGenerating(false);
 
       const newEntry: HistoryEntry = {
@@ -749,7 +965,7 @@ export default function Home() {
         scale: finalParams.scale,
         bpm: finalParams.bpm,
         bars: finalParams.bars,
-        result: gen,
+        result: gen1,
         params: finalParams,
         timestamp: new Date(),
       };
@@ -764,7 +980,7 @@ export default function Home() {
             genre: finalParams.genre,
             bpm: finalParams.bpm,
             style_tag: activeStyleTag,
-            layers: gen,
+            layers: gen1,
           });
           await incrementCredits(userId);
           await loadUserCredits(userId);
@@ -796,16 +1012,17 @@ export default function Home() {
   };
 
   const handlePlayAll = () => {
-    if (!result) return;
+    const sel = variations[selectedVariation];
+    if (!sel) return;
     if (playingAll) { stopAllPlayback(); setPlayingAll(false); return; }
     setPlayingAll(true);
     playNotes({
-      melody: params.layers.melody ? result.melody : undefined,
-      chords: params.layers.chords ? result.chords : undefined,
-      bass:   params.layers.bass   ? result.bass   : undefined,
-      drums:  params.layers.drums  ? result.drums  : undefined,
-      bpm: params.bpm,
-      genre: params.genre,
+      melody: params.layers.melody ? sel.result.melody : undefined,
+      chords: params.layers.chords ? sel.result.chords : undefined,
+      bass:   params.layers.bass   ? sel.result.bass   : undefined,
+      drums:  params.layers.drums  ? sel.result.drums  : undefined,
+      bpm: sel.params.bpm,
+      genre: sel.params.genre,
       onComplete: () => setPlayingAll(false),
     });
   };
@@ -816,21 +1033,37 @@ export default function Home() {
     downloadMidi(midi, `pulp-${name}-${genre.toLowerCase().replace(/\s/g, '-')}-${params.key}${params.scale}.mid`);
   };
 
+  const handleRegenerateLayer = useCallback((layer: typeof LAYERS[number]) => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const singleLayerParams: GenerationParams = {
+      ...sel.params,
+      layers: { melody: false, chords: false, bass: false, drums: false, [layer]: true },
+    };
+    const newGen = generateTrack(singleLayerParams);
+    setVariations(prev => prev.map((v, i) =>
+      i === selectedVariation ? { ...v, result: { ...v.result, [layer]: newGen[layer] } } : v
+    ));
+  }, [variations, selectedVariation]);
+
   const handleDownloadAll = () => {
-    if (!result) return;
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const { result: r, params: p } = sel;
     const tracks: { name: string; notes: NoteEvent[]; channel: number }[] = [];
-    if (result.melody.length > 0) tracks.push({ name: 'Melody', notes: result.melody, channel: 0 });
-    if (result.chords.length > 0) tracks.push({ name: 'Chords', notes: result.chords, channel: 1 });
-    if (result.bass.length   > 0) tracks.push({ name: 'Bass',   notes: result.bass,   channel: 2 });
-    if (result.drums.length  > 0) tracks.push({ name: 'Drums',  notes: result.drums,  channel: 9 });
-    const midi = generateMidiFormat1(tracks, params.bpm);
-    const genre = GENRES[params.genre]?.name || 'track';
-    downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${params.key}${params.scale}.mid`);
+    if (r.melody.length > 0) tracks.push({ name: 'Melody', notes: r.melody, channel: 0 });
+    if (r.chords.length > 0) tracks.push({ name: 'Chords', notes: r.chords, channel: 1 });
+    if (r.bass.length   > 0) tracks.push({ name: 'Bass',   notes: r.bass,   channel: 2 });
+    if (r.drums.length  > 0) tracks.push({ name: 'Drums',  notes: r.drums,  channel: 9 });
+    const midi = generateMidiFormat1(tracks, p.bpm);
+    const genre = GENRES[p.genre]?.name || 'track';
+    downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
   };
 
   const handleRestoreHistory = (entry: HistoryEntry) => {
     setParams(entry.params);
-    setResult(entry.result);
+    setVariations([{ result: entry.result, params: entry.params }]);
+    setSelectedVariation(0);
     setPrompt(entry.prompt);
     setShowHistory(false);
     toolRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -855,7 +1088,7 @@ export default function Home() {
         onFocusPrompt={handleCmdFocusPrompt}
         onToggleLayers={handleToggleAllLayers}
         onDownloadAll={handleDownloadAll}
-        hasResult={!!result}
+        hasResult={variations.length > 0}
       />
 
       {/* ── UPGRADE MODAL ── */}
@@ -1122,29 +1355,6 @@ export default function Home() {
               </AnimatePresence>
             </div>
 
-            {/* Result action bar */}
-            <AnimatePresence>
-              {result && !isGenerating && (
-                <motion.div
-                  className="flex gap-3 mb-5 flex-wrap items-center"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
-                >
-                  <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
-                    {playingAll ? '■  Stop' : '▶  Play All'}
-                  </SpotlightButton>
-                  <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
-                    ↓  Download All
-                  </SpotlightButton>
-                  <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm">
-                    ↻  Regenerate
-                  </SpotlightButton>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* Skeleton while generating */}
             <AnimatePresence>
               {isGenerating && (
@@ -1160,7 +1370,90 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            {/* Layer result cards */}
+            {/* Variation selector — 3 cards side by side */}
+            <AnimatePresence>
+              {variations.length > 0 && !isGenerating && (
+                <motion.div
+                  className="flex gap-3 mb-5"
+                  variants={staggerContainer}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  {variations.map((v, i) => (
+                    <VariationCard
+                      key={i}
+                      label={`V${i + 1}`}
+                      result={v.result}
+                      variationParams={v.params}
+                      selected={selectedVariation === i}
+                      isPlaying={playingVariationIndex === i}
+                      onSelect={() => {
+                        stopAllPlayback();
+                        setPlayingVariationIndex(null);
+                        setPlayingAll(false);
+                        setSelectedVariation(i);
+                      }}
+                      onPlayToggle={e => {
+                        e.stopPropagation();
+                        if (playingVariationIndex === i) {
+                          stopAllPlayback();
+                          setPlayingVariationIndex(null);
+                        } else {
+                          stopAllPlayback();
+                          setPlayingAll(false);
+                          setPlayingVariationIndex(i);
+                          playNotes({
+                            melody: params.layers.melody ? v.result.melody : undefined,
+                            chords: params.layers.chords ? v.result.chords : undefined,
+                            bass:   params.layers.bass   ? v.result.bass   : undefined,
+                            drums:  params.layers.drums  ? v.result.drums  : undefined,
+                            bpm: v.params.bpm,
+                            genre: v.params.genre,
+                            onComplete: () => setPlayingVariationIndex(null),
+                          });
+                        }
+                      }}
+                      onDownload={e => {
+                        e.stopPropagation();
+                        const tracks: { name: string; notes: NoteEvent[]; channel: number }[] = [];
+                        if (v.result.melody.length > 0) tracks.push({ name: 'Melody', notes: v.result.melody, channel: 0 });
+                        if (v.result.chords.length > 0) tracks.push({ name: 'Chords', notes: v.result.chords, channel: 1 });
+                        if (v.result.bass.length   > 0) tracks.push({ name: 'Bass',   notes: v.result.bass,   channel: 2 });
+                        if (v.result.drums.length  > 0) tracks.push({ name: 'Drums',  notes: v.result.drums,  channel: 9 });
+                        const midi = generateMidiFormat1(tracks, v.params.bpm);
+                        const genre = GENRES[v.params.genre]?.name || 'track';
+                        downloadMidi(midi, `pulp-v${i + 1}-${genre.toLowerCase().replace(/\s/g, '-')}-${v.params.key}${v.params.scale}.mid`);
+                      }}
+                    />
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Result action bar */}
+            <AnimatePresence>
+              {result && !isGenerating && (
+                <motion.div
+                  className="flex gap-3 mb-5 flex-wrap items-center"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                >
+                  <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
+                    {playingAll ? '■  Stop' : '▶  Play All'}
+                  </SpotlightButton>
+                  <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
+                    ↓  Download MIDI
+                  </SpotlightButton>
+                  <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm">
+                    ↻  Regenerate
+                  </SpotlightButton>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Layer result cards for selected variation */}
             <AnimatePresence>
               {result && !isGenerating && (
                 <motion.div
@@ -1175,9 +1468,10 @@ export default function Home() {
                         key={layer}
                         name={layer}
                         notes={result[layer]}
-                        bpm={params.bpm}
+                        bpm={variations[selectedVariation]?.params.bpm ?? params.bpm}
                         genre={params.genre}
                         enabled={params.layers[layer]}
+                        onRegenerate={() => handleRegenerateLayer(layer)}
                         onDownload={() => handleDownloadLayer(layer, result[layer])}
                       />
                     )
@@ -1194,7 +1488,7 @@ export default function Home() {
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   transition={{ delay: 0.3, duration: 0.3 }}
                 >
-                  {[GENRES[params.genre]?.name, `${params.key} ${params.scale}`, `${params.bpm} BPM`, `${params.bars} bars`]
+                  {[GENRES[params.genre]?.name, `${params.key} ${params.scale}`, `${variations[selectedVariation]?.params.bpm ?? params.bpm} BPM`, `${params.bars} bars`]
                     .filter(Boolean)
                     .map(tag => (
                       <span key={tag} className="px-2 py-1 rounded-md text-xs"
