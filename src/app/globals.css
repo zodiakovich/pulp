@@ -363,3 +363,79 @@ input[type="range"]::-moz-range-thumb {
   background: rgba(255,109,63,0.04);
   transform: translateY(-1px);
 }
+
+/* ─── NOISE TEXTURE ─── */
+.hero-noise {
+  position: relative;
+}
+.hero-noise::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+  z-index: 0;
+}
+.hero-noise > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── LIVE STATUS DOT ─── */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,184,148,0.5); }
+  50%       { opacity: 0.75; box-shadow: 0 0 0 5px rgba(0,184,148,0); }
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #00B894;
+  flex-shrink: 0;
+  animation: status-pulse 2.5s ease-in-out infinite;
+}
+
+/* ─── COMMAND BAR ─── */
+.cmd-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.cmd-modal {
+  background: #111118;
+  border: 1px solid #1A1A2E;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+}
+.cmd-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 130ms ease-out;
+  text-align: left;
+  border: none;
+  color: #F0F0FF;
+}
+.cmd-action:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
+.cmd-action:disabled { opacity: 0.3; cursor: not-allowed; }
+kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #8A8A9A;
+  background: rgba(255,255,255,0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+}

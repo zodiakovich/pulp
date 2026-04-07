@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useAuth, SignInButton, UserButton } from '@clerk/nextjs';
 import {
   generateTrack, getDefaultParams, GENRES, STYLE_TAGS, parsePrompt,
@@ -8,6 +9,29 @@ import {
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { playNotes, playLayer, stopAllPlayback } from '@/lib/audio-engine';
+
+// ─── MOTION VARIANTS ─────────────────────────────────────────
+const EASE_OUT = [0, 0, 0.2, 1] as const;
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_OUT } },
+};
+
+const staggerContainer: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
+const reveal: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_OUT } },
+};
+
+const revealContainer: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+};
 
 // ─── TYPES ───────────────────────────────────────────────────
 interface HistoryEntry {
@@ -23,19 +47,43 @@ interface HistoryEntry {
   timestamp: Date;
 }
 
-// ─── SCROLL REVEAL ────────────────────────────────────────────
-function useScrollReveal() {
-  useEffect(() => {
-    const els = document.querySelectorAll('.reveal');
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach(e => {
-        if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
-      }),
-      { threshold: 0.12 }
-    );
-    els.forEach(el => io.observe(el));
-    return () => io.disconnect();
-  }, []);
+// ─── SPOTLIGHT BUTTON ─────────────────────────────────────────
+interface SpotlightButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  children: React.ReactNode;
+}
+
+function SpotlightButton({ children, style, ...rest }: SpotlightButtonProps) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [spot, setSpot] = useState({ x: 0, y: 0, show: false });
+
+  return (
+    <button
+      ref={ref}
+      style={{ ...style, position: 'relative', overflow: 'hidden' }}
+      onMouseMove={e => {
+        const r = ref.current?.getBoundingClientRect();
+        if (r) setSpot({ x: e.clientX - r.left, y: e.clientY - r.top, show: true });
+      }}
+      onMouseLeave={() => setSpot(s => ({ ...s, show: false }))}
+      {...rest}
+    >
+      {spot.show && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: spot.x, top: spot.y,
+            transform: 'translate(-50%, -50%)',
+            width: 130, height: 130,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+      {children}
+    </button>
+  );
 }
 
 // ─── PIANO ROLL ───────────────────────────────────────────────
@@ -99,11 +147,7 @@ function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: s
   }, [notes, color, height]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="w-full rounded-md piano-roll"
-      style={{ height }}
-    />
+    <canvas ref={canvasRef} className="w-full rounded-md piano-roll" style={{ height }} />
   );
 }
 
@@ -134,7 +178,10 @@ function LayerCard({
   };
 
   return (
-    <div className={`layer-card active-${name}${!enabled ? ' opacity-40' : ''}`}>
+    <motion.div
+      variants={fadeUp}
+      className={`layer-card active-${name}${!enabled ? ' opacity-40' : ''}`}
+    >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
@@ -173,14 +220,14 @@ function LayerCard({
         </div>
       </div>
       <PianoRoll notes={notes} color={color} />
-    </div>
+    </motion.div>
   );
 }
 
 // ─── SKELETON CARD ────────────────────────────────────────────
 function SkeletonCard({ name }: { name: string }) {
   return (
-    <div className={`layer-card active-${name}`}>
+    <motion.div variants={fadeUp} className={`layer-card active-${name}`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="skeleton w-2 h-2 rounded-full" />
@@ -195,7 +242,91 @@ function SkeletonCard({ name }: { name: string }) {
         </div>
       </div>
       <div className="skeleton w-full rounded-md" style={{ height: 88 }} />
-    </div>
+    </motion.div>
+  );
+}
+
+// ─── COMMAND BAR ──────────────────────────────────────────────
+function CommandBar({
+  isOpen, onClose, onGenerate, onFocusPrompt, onToggleLayers, onDownloadAll, hasResult,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onGenerate: () => void;
+  onFocusPrompt: () => void;
+  onToggleLayers: () => void;
+  onDownloadAll: () => void;
+  hasResult: boolean;
+}) {
+  const actions = [
+    { icon: '✦', label: 'Generate track',       hint: 'G', action: onGenerate,      enabled: true },
+    { icon: '↵', label: 'Focus prompt',          hint: 'I', action: onFocusPrompt,  enabled: true },
+    { icon: '⊙', label: 'Toggle all layers',     hint: 'L', action: onToggleLayers, enabled: true },
+    { icon: '↓', label: 'Download last MIDI',    hint: 'D', action: onDownloadAll,  enabled: hasResult },
+  ];
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            className="cmd-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={onClose}
+          />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 pointer-events-none">
+            <motion.div
+              className="w-full max-w-[480px] pointer-events-auto"
+              initial={{ opacity: 0, y: -12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+            >
+              <div className="cmd-modal">
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3"
+                  style={{ borderBottom: '1px solid #1A1A2E' }}>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8A8A9A' }}>
+                    Quick actions
+                  </span>
+                  <kbd>ESC</kbd>
+                </div>
+
+                {/* Actions */}
+                <div className="p-2">
+                  {actions.map(a => (
+                    <button
+                      key={a.label}
+                      className="cmd-action"
+                      disabled={!a.enabled}
+                      onClick={() => { a.action(); onClose(); }}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span style={{ color: '#FF6D3F', fontSize: 14, width: 16, textAlign: 'center' }}>{a.icon}</span>
+                        <span style={{ fontSize: 14 }}>{a.label}</span>
+                      </span>
+                      <kbd>{a.hint}</kbd>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Footer */}
+                <div className="px-4 py-3 flex items-center justify-center gap-2"
+                  style={{ borderTop: '1px solid #1A1A2E' }}>
+                  <kbd>⌘K</kbd>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.4)' }}>
+                    to open · <kbd style={{ fontSize: 10 }}>ESC</kbd> to close
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -208,13 +339,21 @@ function HistorySidebar({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed right-0 top-0 h-full w-80 z-40 flex flex-col"
-      style={{ background: '#111118', borderLeft: '1px solid #1A1A2E' }}>
-      <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid #1A1A2E' }}>
+    <motion.div
+      className="fixed right-0 top-0 h-full w-80 z-40 flex flex-col"
+      style={{ background: '#111118', borderLeft: '1px solid #1A1A2E' }}
+      initial={{ x: 320 }}
+      animate={{ x: 0 }}
+      exit={{ x: 320 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
+    >
+      <div className="flex items-center justify-between px-6 py-5"
+        style={{ borderBottom: '1px solid #1A1A2E' }}>
         <span className="text-sm font-semibold" style={{ fontFamily: 'Syne, sans-serif' }}>
           Session History
           {history.length > 0 && (
-            <span className="ml-2 text-xs font-normal" style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>
+            <span className="ml-2 text-xs font-normal"
+              style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>
               ({history.length})
             </span>
           )}
@@ -236,11 +375,11 @@ function HistorySidebar({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          {history.map((entry) => (
+          {history.map(entry => (
             <button
               key={entry.id}
               onClick={() => onRestore(entry)}
-              className="w-full text-left px-6 py-4 transition-colors group"
+              className="w-full text-left px-6 py-4 transition-colors"
               style={{ borderBottom: '1px solid rgba(26,26,46,0.5)' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -259,7 +398,8 @@ function HistorySidebar({
                   {entry.bpm} BPM
                 </span>
               </div>
-              <p className="text-xs mt-2" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
+              <p className="text-xs mt-2"
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
                 {entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </button>
@@ -268,11 +408,12 @@ function HistorySidebar({
       )}
 
       <div className="px-6 py-4" style={{ borderTop: '1px solid #1A1A2E' }}>
-        <p className="text-xs text-center" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
+        <p className="text-xs text-center"
+          style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
           Session only — clears on refresh
         </p>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -301,31 +442,19 @@ const HOW_IT_WORKS = [
 
 const LAYER_EXPLAINER = [
   {
-    name: 'Melody',
-    key: 'melody' as const,
-    color: '#FF6D3F',
-    range: 'C4 – C6',
-    body: 'Genre-matched lead lines. Density and rhythm adapt to tempo and style — sparse for house, dense for trance and DnB.',
+    name: 'Melody',   key: 'melody' as const, color: '#FF6D3F', range: 'C4 – C6',
+    body: 'Genre-matched lead lines. Density and rhythm adapt to tempo and style — sparse for house, dense for trance.',
   },
   {
-    name: 'Chords',
-    key: 'chords' as const,
-    color: '#A78BFA',
-    range: 'C3 – C5',
-    body: 'Triads, sevenths, or extended voicings based on genre. Rhythm ranges from sustained pads to staccato stabs and arpeggios.',
+    name: 'Chords',   key: 'chords' as const, color: '#A78BFA', range: 'C3 – C5',
+    body: 'Triads, sevenths, or extended voicings based on genre. Rhythm ranges from sustained pads to staccato stabs.',
   },
   {
-    name: 'Bass',
-    key: 'bass' as const,
-    color: '#00B894',
-    range: 'C1 – C3',
-    body: 'Root, walking, octave, syncopated, or 808 style. Locked to chord changes for musical coherence across all genres.',
+    name: 'Bass',     key: 'bass' as const,   color: '#00B894', range: 'C1 – C3',
+    body: 'Root, walking, octave, syncopated, or 808 style. Locked to chord changes for musical coherence.',
   },
   {
-    name: 'Drums',
-    key: 'drums' as const,
-    color: '#E94560',
-    range: 'GM map',
+    name: 'Drums',    key: 'drums' as const,  color: '#E94560', range: 'GM map',
     body: 'Pattern-driven: four-on-floor, breakbeat, trap, DnB, shuffle. Hat density from 8 to 32 steps per bar.',
   },
 ];
@@ -343,14 +472,29 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
+  const [showCommandBar, setShowCommandBar] = useState(false);
+
   const toolRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLInputElement>(null);
 
-  useScrollReveal();
-
+  // Scroll detection
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Cmd+K / Ctrl+K
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandBar(p => !p);
+      }
+      if (e.key === 'Escape') setShowCommandBar(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   const handleGenerate = useCallback((overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
@@ -391,6 +535,12 @@ export default function Home() {
 
   const toggleLayer = (layer: keyof GenerationParams['layers']) =>
     setParams(p => ({ ...p, layers: { ...p.layers, [layer]: !p.layers[layer] } }));
+
+  const handleToggleAllLayers = () => {
+    const allOn = Object.values(params.layers).every(Boolean);
+    const v = !allOn;
+    setParams(p => ({ ...p, layers: { melody: v, chords: v, bass: v, drums: v } }));
+  };
 
   const handlePlayAll = () => {
     if (!result) return;
@@ -435,34 +585,61 @@ export default function Home() {
 
   const scrollToTool = () => toolRef.current?.scrollIntoView({ behavior: 'smooth' });
 
+  const handleCmdFocusPrompt = () => {
+    scrollToTool();
+    setTimeout(() => promptRef.current?.focus(), 150);
+  };
+
   // ── RENDER ────────────────────────────────────────────────
   return (
     <div className="min-h-screen">
 
-      {/* History sidebar */}
-      {showHistory && (
-        <>
-          <div className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm" onClick={() => setShowHistory(false)} />
-          <HistorySidebar history={history} onRestore={handleRestoreHistory} onClose={() => setShowHistory(false)} />
-        </>
-      )}
+      {/* ── COMMAND BAR ── */}
+      <CommandBar
+        isOpen={showCommandBar}
+        onClose={() => setShowCommandBar(false)}
+        onGenerate={() => { if (isSignedIn) handleGenerate(); else setShowCommandBar(false); }}
+        onFocusPrompt={handleCmdFocusPrompt}
+        onToggleLayers={handleToggleAllLayers}
+        onDownloadAll={handleDownloadAll}
+        hasResult={!!result}
+      />
 
-      {/* ═══ NAV ═══ */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'glass' : 'bg-transparent'}`}
-        style={scrolled ? { borderBottom: '1px solid #1A1A2E' } : {}}>
+      {/* ── HISTORY SIDEBAR ── */}
+      <AnimatePresence>
+        {showHistory && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setShowHistory(false)}
+            />
+            <HistorySidebar
+              history={history}
+              onRestore={handleRestoreHistory}
+              onClose={() => setShowHistory(false)}
+            />
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── NAV ── */}
+      <nav
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'glass' : 'bg-transparent'}`}
+        style={scrolled ? { borderBottom: '1px solid #1A1A2E' } : {}}
+      >
         <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between">
-
-          {/* Wordmark */}
           <span className="text-gradient font-extrabold text-xl" style={{ fontFamily: 'Syne, sans-serif' }}>
             pulp
           </span>
 
-          {/* Center links */}
           <div className="hidden md:flex items-center gap-8 text-sm" style={{ color: '#8A8A9A' }}>
-            <button onClick={scrollToTool}
-              className="transition-colors hover:text-white">Create</button>
-            <button onClick={() => setShowHistory(true)}
-              className="transition-colors hover:text-white flex items-center gap-2">
+            <button onClick={scrollToTool} className="transition-colors hover:text-white">Create</button>
+            <button
+              onClick={() => setShowHistory(true)}
+              className="transition-colors hover:text-white flex items-center gap-2"
+            >
               History
               {history.length > 0 && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full"
@@ -471,19 +648,27 @@ export default function Home() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setShowCommandBar(true)}
+              className="transition-colors hover:text-white flex items-center gap-1.5"
+              title="Open command bar (⌘K)"
+            >
+              <kbd style={{ fontSize: 10 }}>⌘K</kbd>
+            </button>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.4)' }}>v1.0</span>
           </div>
 
-          {/* Auth */}
           {isLoaded && (
             isSignedIn
               ? <UserButton />
               : (
                 <SignInButton mode="modal">
-                  <button className="text-sm h-9 px-4 rounded-lg transition-all"
+                  <button
+                    className="text-sm h-9 px-4 rounded-lg transition-all"
                     style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#F0F0FF' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
                     Sign in
                   </button>
                 </SignInButton>
@@ -492,35 +677,50 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* ═══ HERO ═══ */}
-      <section className="pt-32 pb-24 px-8">
+      {/* ── HERO ── */}
+      <section className="hero-noise pt-32 pb-24 px-8">
         <div className="max-w-[1280px] mx-auto">
 
-          {/* Headline */}
-          <div className="text-center mb-12">
-            <h1 className="animate-in text-gradient font-extrabold leading-[1.1]"
-              style={{
-                fontFamily: 'Syne, sans-serif',
-                fontSize: 'clamp(40px, 6vw, 64px)',
-                letterSpacing: '-0.02em',
-              }}>
+          {/* Staggered headline + subtitle */}
+          <motion.div
+            className="text-center mb-12"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
+            <motion.h1
+              variants={fadeUp}
+              className="text-gradient font-extrabold leading-[1.1]"
+              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(40px, 6vw, 64px)', letterSpacing: '-0.02em' }}
+            >
               Generate MIDI.<br />Instantly.
-            </h1>
-            <p className="animate-in stagger-1 mt-6 mx-auto leading-relaxed"
-              style={{ fontSize: 16, color: '#8A8A9A', maxWidth: 560 }}>
+            </motion.h1>
+            <motion.p
+              variants={fadeUp}
+              className="mt-6 mx-auto leading-relaxed"
+              style={{ fontSize: 16, color: '#8A8A9A', maxWidth: 560 }}
+            >
               Describe a track. Get 4 independent MIDI tracks — melody, chords, bass, and drums —
               tuned to genre, key, and tempo. Download directly into your DAW.
-            </p>
-          </div>
+            </motion.p>
+          </motion.div>
 
           {/* ── GENERATOR ── */}
-          <div ref={toolRef} className="max-w-[720px] mx-auto animate-in stagger-2">
+          <motion.div
+            ref={toolRef}
+            className="max-w-[720px] mx-auto"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            transition={{ delay: 0.16 }}
+          >
 
             {/* Prompt input */}
             <div className="relative mb-4">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none"
                 style={{ color: '#FF6D3F' }}>✦</span>
               <input
+                ref={promptRef}
                 type="text"
                 value={prompt}
                 onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
@@ -530,11 +730,11 @@ export default function Home() {
                 style={{ paddingLeft: 40, paddingRight: 136 }}
               />
               {isSignedIn ? (
-                <button
+                <SpotlightButton
+                  className={`btn-primary absolute right-2 top-1/2 -translate-y-1/2${isGenerating ? ' pulsing' : ''}`}
+                  style={{ height: 36, padding: '0 16px', fontSize: 13 }}
                   onClick={() => handleGenerate()}
                   disabled={isGenerating}
-                  className={`btn-primary btn-sm absolute right-2 top-1/2 -translate-y-1/2${isGenerating ? ' pulsing' : ''}`}
-                  style={{ height: 36, padding: '0 16px', fontSize: 13 }}
                 >
                   {isGenerating ? (
                     <span className="flex items-center gap-2">
@@ -542,15 +742,15 @@ export default function Home() {
                       Generating
                     </span>
                   ) : 'Generate'}
-                </button>
+                </SpotlightButton>
               ) : (
                 <SignInButton mode="modal">
-                  <button
+                  <SpotlightButton
                     className="btn-primary absolute right-2 top-1/2 -translate-y-1/2"
                     style={{ height: 36, padding: '0 16px', fontSize: 13 }}
                   >
                     Generate
-                  </button>
+                  </SpotlightButton>
                 </SignInButton>
               )}
             </div>
@@ -588,145 +788,189 @@ export default function Home() {
                 onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
                 onMouseLeave={e => (e.currentTarget.style.color = '#8A8A9A')}
               >
-                <span className="flex items-center gap-2">
-                  <span>⚙</span> Manual controls
-                </span>
+                <span className="flex items-center gap-2"><span>⚙</span> Manual controls</span>
                 <span className={`transform transition-transform text-xs ${showManual ? 'rotate-180' : ''}`}>▾</span>
               </button>
 
-              {showManual && (
-                <div className="px-5 pb-5 pt-4 grid grid-cols-2 md:grid-cols-4 gap-4"
-                  style={{ borderTop: '1px solid #1A1A2E' }}>
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wider"
-                      style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
-                    <select value={params.genre} onChange={e => setParams(p => ({ ...p, genre: e.target.value }))}>
-                      {GENRE_LIST.map(g => <option key={g.key} value={g.key}>{g.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wider"
-                      style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
-                    <select value={params.key} onChange={e => setParams(p => ({ ...p, key: e.target.value }))}>
-                      {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wider"
-                      style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
-                    <select value={params.scale} onChange={e => setParams(p => ({ ...p, scale: e.target.value }))}>
-                      {SCALES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs uppercase tracking-wider"
-                        style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
-                      <span className="text-xs font-semibold"
-                        style={{ color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace' }}>{params.bpm}</span>
+              <AnimatePresence>
+                {showManual && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div className="px-5 pb-5 pt-4 grid grid-cols-2 md:grid-cols-4 gap-4"
+                      style={{ borderTop: '1px solid #1A1A2E' }}>
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wider"
+                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
+                        <select value={params.genre} onChange={e => setParams(p => ({ ...p, genre: e.target.value }))}>
+                          {GENRE_LIST.map(g => <option key={g.key} value={g.key}>{g.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wider"
+                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
+                        <select value={params.key} onChange={e => setParams(p => ({ ...p, key: e.target.value }))}>
+                          {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wider"
+                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
+                        <select value={params.scale} onChange={e => setParams(p => ({ ...p, scale: e.target.value }))}>
+                          {SCALES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs uppercase tracking-wider"
+                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
+                          <span className="text-xs font-semibold"
+                            style={{ color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace' }}>{params.bpm}</span>
+                        </div>
+                        <input type="range" min={60} max={200} value={params.bpm}
+                          onChange={e => setParams(p => ({ ...p, bpm: parseInt(e.target.value) }))}
+                          className="w-full mt-1" />
+                      </div>
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wider"
+                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Bars</label>
+                        <select value={params.bars} onChange={e => setParams(p => ({ ...p, bars: parseInt(e.target.value) }))}>
+                          {[2, 4, 8].map(b => <option key={b} value={b}>{b} bars</option>)}
+                        </select>
+                      </div>
                     </div>
-                    <input type="range" min={60} max={200} value={params.bpm}
-                      onChange={e => setParams(p => ({ ...p, bpm: parseInt(e.target.value) }))}
-                      className="w-full mt-1" />
-                  </div>
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wider"
-                      style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Bars</label>
-                    <select value={params.bars} onChange={e => setParams(p => ({ ...p, bars: parseInt(e.target.value) }))}>
-                      {[2, 4, 8].map(b => <option key={b} value={b}>{b} bars</option>)}
-                    </select>
-                  </div>
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Result action bar */}
-            {(result || isGenerating) && (
-              <div className="flex gap-3 mb-5 flex-wrap items-center">
-                {result && !isGenerating && (
-                  <>
-                    <button onClick={handlePlayAll} className="btn-secondary btn-sm">
-                      {playingAll ? '■  Stop' : '▶  Play All'}
-                    </button>
-                    <button onClick={handleDownloadAll} className="btn-download btn-sm">
-                      ↓  Download All
-                    </button>
-                    <button onClick={() => handleGenerate()} className="btn-secondary btn-sm">
-                      ↻  Regenerate
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+            <AnimatePresence>
+              {result && !isGenerating && (
+                <motion.div
+                  className="flex gap-3 mb-5 flex-wrap items-center"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                >
+                  <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
+                    {playingAll ? '■  Stop' : '▶  Play All'}
+                  </SpotlightButton>
+                  <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
+                    ↓  Download All
+                  </SpotlightButton>
+                  <SpotlightButton onClick={() => handleGenerate()} className="btn-secondary btn-sm">
+                    ↻  Regenerate
+                  </SpotlightButton>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Skeleton while generating */}
-            {isGenerating && (
-              <div className="grid grid-cols-2 gap-4">
-                {LAYERS.map(l => <SkeletonCard key={l} name={l} />)}
-              </div>
-            )}
+            <AnimatePresence>
+              {isGenerating && (
+                <motion.div
+                  className="grid grid-cols-2 gap-4"
+                  variants={staggerContainer}
+                  initial="hidden"
+                  animate="visible"
+                  exit={{ opacity: 0 }}
+                >
+                  {LAYERS.map(l => <SkeletonCard key={l} name={l} />)}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Layer result cards */}
-            {result && !isGenerating && (
-              <div className="grid grid-cols-2 gap-4 animate-in">
-                {LAYERS.map(layer =>
-                  params.layers[layer] && result[layer].length > 0 && (
-                    <LayerCard
-                      key={layer}
-                      name={layer}
-                      notes={result[layer]}
-                      bpm={params.bpm}
-                      genre={params.genre}
-                      enabled={params.layers[layer]}
-                      onDownload={() => handleDownloadLayer(layer, result[layer])}
-                    />
-                  )
-                )}
-              </div>
-            )}
+            <AnimatePresence>
+              {result && !isGenerating && (
+                <motion.div
+                  className="grid grid-cols-2 gap-4"
+                  variants={staggerContainer}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  {LAYERS.map(layer =>
+                    params.layers[layer] && result[layer].length > 0 && (
+                      <LayerCard
+                        key={layer}
+                        name={layer}
+                        notes={result[layer]}
+                        bpm={params.bpm}
+                        genre={params.genre}
+                        enabled={params.layers[layer]}
+                        onDownload={() => handleDownloadLayer(layer, result[layer])}
+                      />
+                    )
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Generation metadata */}
-            {result && !isGenerating && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {[GENRES[params.genre]?.name, `${params.key} ${params.scale}`, `${params.bpm} BPM`, `${params.bars} bars`]
-                  .filter(Boolean)
-                  .map(tag => (
-                    <span key={tag} className="px-2 py-1 rounded-md text-xs"
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        color: '#8A8A9A',
-                        background: '#111118',
-                        border: '1px solid #1A1A2E',
-                      }}>
-                      {tag}
-                    </span>
-                  ))}
-              </div>
-            )}
-          </div>
+            <AnimatePresence>
+              {result && !isGenerating && (
+                <motion.div
+                  className="mt-4 flex flex-wrap gap-2"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3, duration: 0.3 }}
+                >
+                  {[GENRES[params.genre]?.name, `${params.key} ${params.scale}`, `${params.bpm} BPM`, `${params.bars} bars`]
+                    .filter(Boolean)
+                    .map(tag => (
+                      <span key={tag} className="px-2 py-1 rounded-md text-xs"
+                        style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A', background: '#111118', border: '1px solid #1A1A2E' }}>
+                        {tag}
+                      </span>
+                    ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
 
           {/* Social proof */}
-          <div className="text-center mt-12 animate-in stagger-3 space-y-2">
+          <motion.div
+            className="text-center mt-12 space-y-2"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.4, duration: 0.4 }}
+          >
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A', letterSpacing: '0.04em' }}>
               20 genres · 15 styles · 4 independent tracks · .mid export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
               No account required to generate
             </p>
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ═══ HOW IT WORKS ═══ */}
+      {/* ── HOW IT WORKS ── */}
       <section className="py-24 px-8" style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}>
         <div className="max-w-[1280px] mx-auto">
-          <h2 className="reveal font-extrabold mb-16"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}>
+          <motion.h2
+            className="font-extrabold mb-16"
+            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
+            variants={reveal}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+          >
             3 steps.<br />0 fuss.
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {HOW_IT_WORKS.map((step, i) => (
-              <div key={step.num} className="reveal" style={{ transitionDelay: `${i * 80}ms` }}>
+          </motion.h2>
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-3 gap-8"
+            variants={revealContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.15 }}
+          >
+            {HOW_IT_WORKS.map(step => (
+              <motion.div key={step.num} variants={reveal}>
                 <div className="text-gradient font-extrabold mb-5"
                   style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.02em', lineHeight: 1 }}>
                   {step.num}
@@ -736,26 +980,46 @@ export default function Home() {
                   {step.title}
                 </h3>
                 <p style={{ fontSize: 14, color: '#8A8A9A', lineHeight: 1.7 }}>{step.body}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ═══ GENRE GRID ═══ */}
+      {/* ── GENRE GRID ── */}
       <section className="py-24 px-8">
         <div className="max-w-[1280px] mx-auto">
-          <h2 className="reveal font-extrabold mb-3"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}>
+          <motion.h2
+            className="font-extrabold mb-3"
+            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
+            variants={reveal}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+          >
             20 genres, built in.
-          </h2>
-          <p className="reveal mb-12 text-sm" style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>
+          </motion.h2>
+          <motion.p
+            className="mb-12 text-sm"
+            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}
+            variants={reveal}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+          >
             Click any genre to load it into the generator.
-          </p>
-          <div className="reveal grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          </motion.p>
+          <motion.div
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
+            variants={revealContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.1 }}
+          >
             {GENRE_LIST.map(g => (
-              <button
+              <motion.button
                 key={g.key}
+                variants={reveal}
                 onClick={() => { setParams(p => ({ ...p, genre: g.key })); setActiveStyleTag(null); scrollToTool(); }}
                 className="genre-card text-left"
               >
@@ -763,44 +1027,57 @@ export default function Home() {
                   style={{ fontFamily: 'Syne, sans-serif', color: 'rgba(240,240,255,0.75)' }}>
                   {g.name}
                 </span>
-              </button>
+              </motion.button>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ═══ LAYER SYSTEM ═══ */}
+      {/* ── LAYER SYSTEM ── */}
       <section className="py-24 px-8" style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}>
         <div className="max-w-[1280px] mx-auto">
-          <h2 className="reveal font-extrabold mb-3"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}>
+          <motion.h2
+            className="font-extrabold mb-3"
+            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
+            variants={reveal}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+          >
             4 independent tracks.
-          </h2>
-          <p className="reveal mb-12" style={{ fontSize: 15, color: '#8A8A9A', maxWidth: 560, lineHeight: 1.7 }}>
+          </motion.h2>
+          <motion.p
+            className="mb-12"
+            style={{ fontSize: 15, color: '#8A8A9A', maxWidth: 560, lineHeight: 1.7 }}
+            variants={reveal}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+          >
             Each track has its own voice, rhythm, and range. Toggle any layer on or off. Download each one separately or all at once.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {LAYER_EXPLAINER.map((layer, i) => (
-              <div
-                key={layer.key}
-                className={`reveal layer-card active-${layer.key}`}
-                style={{ transitionDelay: `${i * 60}ms` }}
-              >
+          </motion.p>
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+            variants={revealContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.1 }}
+          >
+            {LAYER_EXPLAINER.map(layer => (
+              <motion.div key={layer.key} variants={reveal} className={`layer-card active-${layer.key}`}>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: layer.color }} />
                   <span className="font-bold text-sm" style={{ fontFamily: 'Syne, sans-serif' }}>{layer.name}</span>
-                  <span className="ml-auto text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
-                    {layer.range}
-                  </span>
+                  <span className="ml-auto text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>{layer.range}</span>
                 </div>
                 <p className="text-xs leading-relaxed" style={{ color: '#8A8A9A', lineHeight: 1.7 }}>{layer.body}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ═══ FOOTER ═══ */}
+      {/* ── FOOTER ── */}
       <footer className="px-8 py-16" style={{ borderTop: '1px solid #1A1A2E' }}>
         <div className="max-w-[1280px] mx-auto">
 
@@ -823,10 +1100,22 @@ export default function Home() {
           </div>
 
           {/* Bottom row */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs"
-            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
-            <span>© 2026 PULP. MADE BY PAPAYA.</span>
-            <span>zero APIs. runs in your browser.</span>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
+              © 2026 PULP. MADE BY PAPAYA.
+            </span>
+
+            {/* Live status */}
+            <div className="flex items-center gap-2">
+              <span className="status-dot" />
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A' }}>
+                All systems operational
+              </span>
+            </div>
+
+            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
+              zero APIs. runs in your browser.
+            </span>
           </div>
         </div>
       </footer>
