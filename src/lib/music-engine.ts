@@ -436,6 +436,8 @@ export interface GenerationParams {
   scale: string;
   bpm: number;
   bars: number;
+  /** 0 = perfect quantize, 100 = max human feel (timing + velocity jitter). */
+  humanization: number;
   layers: {
     melody: boolean;
     chords: boolean;
@@ -452,8 +454,21 @@ export interface GenerationResult {
   params: GenerationParams;
 }
 
+export type ContinuationContext = {
+  /** Pitches (MIDI numbers) of the last chord voicing played (any octave). */
+  lastChordPitches?: number[];
+  /** Last melody note pitch (MIDI number). */
+  lastMelodyPitch?: number | null;
+  /** Beat offset to place generated continuation at (e.g. existingBars * 4). */
+  startBeat?: number;
+};
+
 // --- MELODY GENERATOR ---
-function generateMelody(params: GenerationParams, genre: GenreProfile): NoteEvent[] {
+function generateMelody(
+  params: GenerationParams,
+  genre: GenreProfile,
+  opts?: { startBeat?: number; lastMelodyPitch?: number | null }
+): NoteEvent[] {
   const notes: NoteEvent[] = [];
   if (!params.layers.melody) return notes;
   
@@ -463,8 +478,21 @@ function generateMelody(params: GenerationParams, genre: GenreProfile): NoteEven
   );
   
   const totalBeats = params.bars * 4;
+  const startBeat = opts?.startBeat ?? 0;
   let currentBeat = 0;
   let lastNoteIdx = Math.floor(scaleNotes.length / 2); // start in middle
+  if (typeof opts?.lastMelodyPitch === 'number') {
+    let bestIdx = lastNoteIdx;
+    let bestDist = Infinity;
+    for (let i = 0; i < scaleNotes.length; i++) {
+      const d = Math.abs((scaleNotes[i] ?? 0) - opts.lastMelodyPitch);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    lastNoteIdx = bestIdx;
+  }
   
   while (currentBeat < totalBeats) {
     // Rest probability based on energy
@@ -498,7 +526,7 @@ function generateMelody(params: GenerationParams, genre: GenreProfile): NoteEven
     
     notes.push({
       pitch,
-      startTime: currentBeat,
+      startTime: startBeat + currentBeat,
       duration: duration * (0.8 + Math.random() * 0.2), // slight humanization
       velocity: finalVel,
     });
@@ -510,17 +538,67 @@ function generateMelody(params: GenerationParams, genre: GenreProfile): NoteEven
 }
 
 // --- CHORD GENERATOR ---
-function generateChords(params: GenerationParams, genre: GenreProfile): NoteEvent[] {
+function pitchClasses(pitches: number[]): number[] {
+  return [...new Set(pitches.map(p => ((p % 12) + 12) % 12))].sort((a, b) => a - b);
+}
+
+function scorePitchClassMatch(a: number[], b: number[]): number {
+  const sa = new Set(a);
+  let score = 0;
+  for (const x of b) if (sa.has(x)) score++;
+  return score;
+}
+
+function resolveProgressionForContinuation(params: GenerationParams, genre: GenreProfile, lastChordPitches: number[]) {
+  const scaleNotes = getScaleNotes(params.key, params.scale, 3);
+  const target = pitchClasses(lastChordPitches);
+
+  let bestProg = pick(genre.chordProgressions);
+  let bestIdx = 0;
+  let bestScore = -1;
+
+  for (const prog of genre.chordProgressions) {
+    for (let i = 0; i < prog.length; i++) {
+      const degree = prog[i] ?? 0;
+      const chord = buildChord(scaleNotes, degree, genre.chordComplexity).map(p => p + 12);
+      const score = scorePitchClassMatch(pitchClasses(chord), target);
+      if (score > bestScore) {
+        bestScore = score;
+        bestProg = prog;
+        bestIdx = i;
+      }
+    }
+  }
+
+  return { progression: bestProg, nextIndex: (bestIdx + 1) % bestProg.length };
+}
+
+function generateChords(
+  params: GenerationParams,
+  genre: GenreProfile,
+  opts?: { startBeat?: number; continuation?: { lastChordPitches?: number[]; progression?: number[]; progressionIndex?: number } }
+): NoteEvent[] {
   const notes: NoteEvent[] = [];
   if (!params.layers.chords) return notes;
   
+  const startBeat = opts?.startBeat ?? 0;
   const scaleNotes = getScaleNotes(params.key, params.scale, 3);
-  const progression = pick(genre.chordProgressions);
+  let progression = pick(genre.chordProgressions);
+  let startIndex = 0;
+  const cont = opts?.continuation;
+  if (cont?.progression && typeof cont.progressionIndex === 'number') {
+    progression = cont.progression;
+    startIndex = cont.progressionIndex;
+  } else if (cont?.lastChordPitches && cont.lastChordPitches.length > 0) {
+    const r = resolveProgressionForContinuation(params, genre, cont.lastChordPitches);
+    progression = r.progression;
+    startIndex = r.nextIndex;
+  }
   
   const totalBeats = params.bars * 4;
   
   for (let bar = 0; bar < params.bars; bar++) {
-    const degree = progression[bar % progression.length];
+    const degree = progression[(startIndex + bar) % progression.length];
     const chordPitches = buildChord(scaleNotes, degree, genre.chordComplexity);
     
     // Move chord to octave 4 range
@@ -532,7 +610,7 @@ function generateChords(params: GenerationParams, genre: GenreProfile): NoteEven
         for (const p of transposed) {
           notes.push({
             pitch: p,
-            startTime: bar * 4,
+            startTime: startBeat + bar * 4,
             duration: 3.8,
             velocity: 70 + randInt(-5, 10),
           });
@@ -547,7 +625,7 @@ function generateChords(params: GenerationParams, genre: GenreProfile): NoteEven
             for (const p of transposed) {
               notes.push({
                 pitch: p,
-                startTime: bar * 4 + pos,
+                startTime: startBeat + bar * 4 + pos,
                 duration: 0.3,
                 velocity: 85 + randInt(-5, 10),
               });
@@ -564,7 +642,7 @@ function generateChords(params: GenerationParams, genre: GenreProfile): NoteEven
             for (const p of transposed) {
               notes.push({
                 pitch: p,
-                startTime: bar * 4 + pos,
+                startTime: startBeat + bar * 4 + pos,
                 duration: 0.4,
                 velocity: 75 + randInt(-5, 10),
               });
@@ -582,7 +660,7 @@ function generateChords(params: GenerationParams, genre: GenreProfile): NoteEven
           if (beat < totalBeats && Math.random() < 0.85) {
             notes.push({
               pitch: transposed[noteIdx],
-              startTime: beat,
+              startTime: startBeat + beat,
               duration: 0.4,
               velocity: 65 + randInt(-5, 15),
             });
@@ -597,27 +675,33 @@ function generateChords(params: GenerationParams, genre: GenreProfile): NoteEven
 }
 
 // --- BASS GENERATOR ---
-function generateBass(params: GenerationParams, genre: GenreProfile): NoteEvent[] {
+function generateBass(
+  params: GenerationParams,
+  genre: GenreProfile,
+  opts?: { startBeat?: number; continuation?: { progression?: number[]; progressionIndex?: number } }
+): NoteEvent[] {
   const notes: NoteEvent[] = [];
   if (!params.layers.bass) return notes;
   
+  const startBeat = opts?.startBeat ?? 0;
   const scaleNotes = getScaleNotes(params.key, params.scale, genre.bassOctave);
-  const progression = pick(genre.chordProgressions);
+  const progression = opts?.continuation?.progression ?? pick(genre.chordProgressions);
+  const startIndex = opts?.continuation?.progressionIndex ?? 0;
   
   for (let bar = 0; bar < params.bars; bar++) {
-    const degree = progression[bar % progression.length];
+    const degree = progression[(startIndex + bar) % progression.length];
     const root = scaleNotes[degree % scaleNotes.length];
     const fifth = scaleNotes[(degree + 4) % scaleNotes.length];
     
     switch (genre.bassStyle) {
       case 'root': {
         // Simple root note pattern
-        notes.push({ pitch: root, startTime: bar * 4, duration: 0.8, velocity: 100 });
+        notes.push({ pitch: root, startTime: startBeat + bar * 4, duration: 0.8, velocity: 100 });
         if (Math.random() < 0.6) {
-          notes.push({ pitch: root, startTime: bar * 4 + 2, duration: 0.8, velocity: 90 });
+          notes.push({ pitch: root, startTime: startBeat + bar * 4 + 2, duration: 0.8, velocity: 90 });
         }
         if (Math.random() < 0.4) {
-          notes.push({ pitch: root, startTime: bar * 4 + 3, duration: 0.5, velocity: 85 });
+          notes.push({ pitch: root, startTime: startBeat + bar * 4 + 3, duration: 0.5, velocity: 85 });
         }
         break;
       }
@@ -628,7 +712,7 @@ function generateBass(params: GenerationParams, genre: GenreProfile): NoteEvent[
         for (let i = 0; i < 4; i++) {
           notes.push({
             pitch: walkNotes[i] || root,
-            startTime: bar * 4 + i,
+            startTime: startBeat + bar * 4 + i,
             duration: 0.8,
             velocity: 90 + randInt(-5, 10),
           });
@@ -640,7 +724,7 @@ function generateBass(params: GenerationParams, genre: GenreProfile): NoteEvent[
         for (let i = 0; i < 8; i++) {
           notes.push({
             pitch: i % 2 === 0 ? root : root + 12,
-            startTime: bar * 4 + i * 0.5,
+            startTime: startBeat + bar * 4 + i * 0.5,
             duration: 0.35,
             velocity: i % 2 === 0 ? 100 : 80,
           });
@@ -654,7 +738,7 @@ function generateBass(params: GenerationParams, genre: GenreProfile): NoteEvent[
           if (Math.random() < 0.7) {
             notes.push({
               pitch: pick([root, root, fifth]),
-              startTime: bar * 4 + pos,
+              startTime: startBeat + bar * 4 + pos,
               duration: 0.4 + Math.random() * 0.3,
               velocity: 95 + randInt(-10, 10),
             });
@@ -666,7 +750,7 @@ function generateBass(params: GenerationParams, genre: GenreProfile): NoteEvent[
         // 808-style long bass notes
         notes.push({
           pitch: root,
-          startTime: bar * 4,
+          startTime: startBeat + bar * 4,
           duration: 2 + Math.random() * 1.5,
           velocity: 110,
         });
@@ -674,7 +758,7 @@ function generateBass(params: GenerationParams, genre: GenreProfile): NoteEvent[
           const slideNote = pick([root - 2, root + 2, root - 1, root + 5]);
           notes.push({
             pitch: Math.max(24, slideNote),
-            startTime: bar * 4 + 2.5 + Math.random(),
+            startTime: startBeat + bar * 4 + 2.5 + Math.random(),
             duration: 1,
             velocity: 100,
           });
@@ -700,14 +784,15 @@ const CONGA_LO = 63;
 const SHAKER = 70;
 const RIM = 37;
 
-function generateDrums(params: GenerationParams, genre: GenreProfile): NoteEvent[] {
+function generateDrums(params: GenerationParams, genre: GenreProfile, opts?: { startBeat?: number }): NoteEvent[] {
   const notes: NoteEvent[] = [];
   if (!params.layers.drums) return notes;
   
+  const startBeat = opts?.startBeat ?? 0;
   const totalBeats = params.bars * 4;
   
   for (let bar = 0; bar < params.bars; bar++) {
-    const barStart = bar * 4;
+    const barStart = startBeat + bar * 4;
     
     switch (genre.drumPattern) {
       case 'four_on_floor': {
@@ -937,28 +1022,96 @@ export const STYLE_TAGS: Record<string, Partial<GenerationParams>> = {
   'Liquid DnB': { genre: 'drum_and_bass', scale: 'minor' },
 };
 
+/** Random ±1 for velocity / timing sign. */
+function randSign(): number {
+  return Math.random() < 0.5 ? -1 : 1;
+}
+
+/**
+ * Humanize a note pattern: timing jitter (±5–15 ms at 100%) and velocity swing (±8–15% at 100%).
+ * Scales linearly with amountPct (0–100).
+ */
+export function humanizePattern(notes: NoteEvent[], bpm: number, amountPct: number): NoteEvent[] {
+  const t = Math.min(100, Math.max(0, amountPct)) / 100;
+  if (t <= 0 || notes.length === 0) return notes.map(n => ({ ...n }));
+
+  const beatsPerMs = bpm / 60_000;
+
+  return notes.map(note => {
+    const msMag = (5 + Math.random() * 10) * t;
+    const shiftMs = randSign() * msMag;
+    const shiftBeats = shiftMs * beatsPerMs;
+    let startTime = note.startTime + shiftBeats;
+    if (startTime < 0) startTime = 0;
+
+    const velPct = ((8 + Math.random() * 7) / 100) * t;
+    const vMult = 1 + randSign() * velPct;
+    let velocity = Math.round(note.velocity * vMult);
+    velocity = Math.min(127, Math.max(1, velocity));
+
+    return { ...note, startTime, velocity };
+  });
+}
+
 // --- MAIN GENERATION FUNCTION ---
-export function generateTrack(params: GenerationParams): GenerationResult {
+export function generateTrack(params: GenerationParams, continuation?: ContinuationContext): GenerationResult {
   const genre = GENRES[params.genre] || GENRES.deep_house;
-  
+  const h = params.humanization ?? 40;
+  const startBeat = continuation?.startBeat ?? 0;
+
+  let progression: number[] | undefined;
+  let progressionIndex: number | undefined;
+  if (continuation?.lastChordPitches && continuation.lastChordPitches.length > 0) {
+    const r = resolveProgressionForContinuation(params, genre, continuation.lastChordPitches);
+    progression = r.progression;
+    progressionIndex = r.nextIndex;
+  }
+
   return {
-    melody: generateMelody(params, genre),
-    chords: generateChords(params, genre),
-    bass: generateBass(params, genre),
-    drums: generateDrums(params, genre),
+    melody: humanizePattern(
+      generateMelody(params, genre, { startBeat, lastMelodyPitch: continuation?.lastMelodyPitch }),
+      params.bpm,
+      h
+    ),
+    chords: humanizePattern(
+      generateChords(params, genre, {
+        startBeat,
+        continuation: { lastChordPitches: continuation?.lastChordPitches, progression, progressionIndex },
+      }),
+      params.bpm,
+      h
+    ),
+    bass: humanizePattern(
+      generateBass(params, genre, { startBeat, continuation: { progression, progressionIndex } }),
+      params.bpm,
+      h
+    ),
+    drums: humanizePattern(generateDrums(params, genre, { startBeat }), params.bpm, h),
     params,
   };
 }
+
+/** Scales exposed in the generator UI (values match SCALE_INTERVALS keys). */
+export const MANUAL_SCALE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'major', label: 'Major' },
+  { value: 'minor', label: 'Minor' },
+  { value: 'dorian', label: 'Dorian' },
+  { value: 'phrygian', label: 'Phrygian' },
+  { value: 'lydian', label: 'Lydian' },
+  { value: 'mixolydian', label: 'Mixolydian' },
+  { value: 'harmonic_minor', label: 'Harmonic Minor' },
+];
 
 // --- DEFAULT PARAMS ---
 export function getDefaultParams(genreKey?: string): GenerationParams {
   const genre = GENRES[genreKey || 'deep_house'] || GENRES.deep_house;
   return {
     genre: genreKey || 'deep_house',
-    key: 'C',
-    scale: genre.preferredScale,
+    key: 'A',
+    scale: 'minor',
     bpm: genre.defaultBpm,
     bars: 4,
+    humanization: 40,
     layers: { melody: true, chords: true, bass: true, drums: true },
   };
 }

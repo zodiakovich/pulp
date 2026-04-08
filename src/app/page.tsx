@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useAuth, SignInButton, UserButton } from '@clerk/nextjs';
 import {
-  generateTrack, getDefaultParams, GENRES, STYLE_TAGS, parsePrompt,
+  generateTrack, getDefaultParams, GENRES, STYLE_TAGS, parsePrompt, MANUAL_SCALE_OPTIONS,
   type GenerationParams, type GenerationResult, type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
@@ -12,6 +12,7 @@ import { playNotes, playLayer, stopAllPlayback } from '@/lib/audio-engine';
 import { supabase } from '@/lib/supabase';
 import { track } from '@vercel/analytics';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
+import { useToast } from '@/components/toast/useToast';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 const EASE_OUT = [0, 0, 0.2, 1] as const;
@@ -796,10 +797,124 @@ function getSpliceTerms(genreKey: string, bpm: number): Record<'melody' | 'chord
   };
 }
 
+// ─── SHEET MUSIC (CANVAS) ──────────────────────────────────────
+function midiToStaffY(pitch: number, staffTopY: number, lineGap: number): number {
+  // Treble-ish mapping using semitone steps relative to E4 as the bottom line reference.
+  // This is intentionally simple (no clef glyphs / accidentals rendering).
+  const bottomLinePitch = 64; // E4
+  const steps = (pitch - bottomLinePitch) / 1; // semitone steps
+  // Map 2 semitones ≈ 1 staff step (line/space). This is a simplification.
+  const staffSteps = steps / 2;
+  const bottomLineY = staffTopY + lineGap * 4;
+  return bottomLineY - staffSteps * (lineGap / 2);
+}
+
+function drawSheetMusic(
+  canvas: HTMLCanvasElement,
+  notes: NoteEvent[],
+  params: GenerationParams,
+  layer: string
+) {
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || 900;
+  const height = canvas.clientHeight || 320;
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#0D0D12';
+  ctx.fillRect(0, 0, width, height);
+
+  // Header text
+  ctx.fillStyle = 'rgba(240,240,255,0.92)';
+  ctx.font = '700 14px Syne, sans-serif';
+  ctx.fillText(`${layer.toUpperCase()} — Sheet Music`, 16, 26);
+  ctx.fillStyle = 'rgba(138,138,154,0.8)';
+  ctx.font = '12px "JetBrains Mono", monospace';
+  ctx.fillText(`4/4  ·  Key: ${params.key} ${scaleLabel(params.scale)}  ·  ${params.bpm} BPM`, 16, 46);
+
+  const staffTop = 86;
+  const staffLeft = 16;
+  const staffRight = width - 16;
+  const lineGap = 12;
+
+  // Staff (5 lines)
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const y = staffTop + i * lineGap;
+    ctx.beginPath();
+    ctx.moveTo(staffLeft, y);
+    ctx.lineTo(staffRight, y);
+    ctx.stroke();
+  }
+
+  // Measure lines for total bars
+  const bars = params.bars ?? 4;
+  const beatsTotal = bars * 4;
+  const usableW = staffRight - staffLeft - 60; // leave some margin
+  const startX = staffLeft + 60;
+  ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  for (let b = 0; b <= bars; b++) {
+    const x = startX + (b / bars) * usableW;
+    ctx.beginPath();
+    ctx.moveTo(x, staffTop);
+    ctx.lineTo(x, staffTop + lineGap * 4);
+    ctx.stroke();
+  }
+
+  // Notes
+  const sorted = [...notes].sort((a, b) => a.startTime - b.startTime);
+  for (const n of sorted) {
+    const t = Math.max(0, Math.min(beatsTotal, n.startTime));
+    const x = startX + (t / beatsTotal) * usableW;
+    const y = midiToStaffY(n.pitch, staffTop, lineGap);
+
+    // Duration → notehead style (very basic)
+    const dur = n.duration;
+    const isWhole = dur >= 3.75;
+    const isHalf = dur >= 1.75 && dur < 3.75;
+    const filled = !(isWhole || isHalf);
+
+    // Notehead
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-0.35);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = filled ? 'rgba(240,240,255,0.92)' : 'rgba(13,13,18,1)';
+    ctx.strokeStyle = 'rgba(240,240,255,0.92)';
+    ctx.lineWidth = 1.5;
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Stem (skip for whole notes)
+    if (!isWhole) {
+      const stemUp = y > staffTop + lineGap * 2; // simplistic
+      ctx.strokeStyle = 'rgba(240,240,255,0.92)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      if (stemUp) {
+        ctx.moveTo(x + 7, y);
+        ctx.lineTo(x + 7, y - 26);
+      } else {
+        ctx.moveTo(x - 7, y);
+        ctx.lineTo(x - 7, y + 26);
+      }
+      ctx.stroke();
+    }
+  }
+}
+
 // ─── VARIATION CARD ───────────────────────────────────────────
 function VariationCard({
   label, result: vResult, variationParams, selected, isPlaying,
-  onSelect, onPlayToggle, onDownload,
+  onSelect, onPlayToggle, onDownload, onExtend,
 }: {
   label: string;
   result: GenerationResult;
@@ -809,6 +924,7 @@ function VariationCard({
   onSelect: () => void;
   onPlayToggle: (e: React.MouseEvent) => void;
   onDownload: (e: React.MouseEvent) => void;
+  onExtend?: (e: React.MouseEvent) => void;
 }) {
   return (
     <motion.div
@@ -896,6 +1012,16 @@ function VariationCard({
               );
             })}
           </div>
+          <button
+            onClick={e => { e.stopPropagation(); onExtend?.(e); }}
+            className="w-full h-8 mt-2 flex items-center justify-center rounded-lg text-xs transition-all"
+            style={{ border: '1px solid rgba(255,255,255,0.10)', color: '#F0F0FF' }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)')}
+            title="Extend this variation by 8 bars"
+          >
+            + Extend 8 bars
+          </button>
           <div className="mt-3 pt-3" style={{ borderTop: '1px solid #1A1A2E' }} onClick={e => e.stopPropagation()}>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.45)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               Find on Splice
@@ -1193,13 +1319,33 @@ const GENRE_NAME_MAP: Record<string, string> = {
   'Disco/Nu-Disco': 'disco_nu_disco',
 };
 
-const VALID_SCALES = ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian',
-  'pentatonic_minor', 'pentatonic_major', 'blues'];
+const VALID_SCALES = ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'harmonic_minor',
+  'pentatonic_minor', 'pentatonic_major', 'blues', 'melodic_minor'];
 
 // ─── CONSTANTS ────────────────────────────────────────────────
 const GENRE_LIST = Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name }));
-const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const SCALES = ['minor', 'major', 'dorian', 'mixolydian', 'phrygian', 'lydian', 'pentatonic_minor', 'pentatonic_major', 'blues'];
+const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+
+function scaleLabel(value: string): string {
+  const row = MANUAL_SCALE_OPTIONS.find(o => o.value === value);
+  if (row) return row.label;
+  return value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function normalizeScaleToEngine(value: string): string {
+  const v = value.trim();
+  const lower = v.toLowerCase();
+  if (lower === 'harmonic minor') return 'harmonic_minor';
+  if (lower === 'major') return 'major';
+  if (lower === 'minor') return 'minor';
+  if (lower === 'dorian') return 'dorian';
+  if (lower === 'phrygian') return 'phrygian';
+  if (lower === 'lydian') return 'lydian';
+  if (lower === 'mixolydian') return 'mixolydian';
+  const asKey = lower.replace(/\s/g, '_');
+  if (VALID_SCALES.includes(asKey)) return asKey;
+  return 'minor';
+}
 
 const HOW_IT_WORKS = [
   {
@@ -1244,6 +1390,7 @@ export default function Home() {
   const e2eBypass = process.env.NEXT_PUBLIC_E2E === '1';
   const effectiveIsSignedIn = e2eBypass ? true : isSignedIn;
   const effectiveUserId = e2eBypass ? 'e2e' : userId;
+  const toast = useToast();
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
   const [variations, setVariations] = useState<{ result: GenerationResult; params: GenerationParams }[]>([]);
   const [selectedVariation, setSelectedVariation] = useState(0);
@@ -1264,17 +1411,36 @@ export default function Home() {
   const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
   const [copied, setCopied] = useState(false);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
+  const [showBpmDetect, setShowBpmDetect] = useState(false);
+  const [isDetectingBpm, setIsDetectingBpm] = useState(false);
   const [collabCopied, setCollabCopied] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [onboardingTargetRect, setOnboardingTargetRect] = useState<DOMRect | null>(null);
+  const [showInspire, setShowInspire] = useState(false);
+  const [inspireText, setInspireText] = useState('');
+  const [isInspiring, setIsInspiring] = useState(false);
+  const [isExtending, setIsExtending] = useState(false);
+  const [editorView, setEditorView] = useState<'piano' | 'sheet'>('piano');
 
   const result = variations[selectedVariation]?.result ?? null;
+
+  const selectedParams = useMemo(() => variations[selectedVariation]?.params ?? params, [variations, selectedVariation, params]);
+  const selectedLayerNotes = useMemo(() => result?.[editorLayer] ?? [], [result, editorLayer]);
 
   const toolRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
   const tapTimesRef = useRef<number[]>([]);
   const tapResetTimerRef = useRef<number | null>(null);
+  const bpmFileInputRef = useRef<HTMLInputElement>(null);
+  const sheetCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (editorView !== 'sheet') return;
+    if (!sheetCanvasRef.current) return;
+    if (!selectedLayerNotes) return;
+    drawSheetMusic(sheetCanvasRef.current, selectedLayerNotes, selectedParams, editorLayer);
+  }, [editorView, selectedLayerNotes, selectedParams, editorLayer]);
   const generateBtnWrapRef = useRef<HTMLDivElement>(null);
   const styleTagsRef = useRef<HTMLDivElement>(null);
   const genreSelectRef = useRef<HTMLSelectElement>(null);
@@ -1717,6 +1883,61 @@ export default function Home() {
     setTimeout(() => promptRef.current?.focus(), 150);
   };
 
+  const handleInspire = useCallback(async () => {
+    const inspiration = inspireText.trim();
+    if (!inspiration) return;
+    setIsInspiring(true);
+    try {
+      const res = await fetch('/api/inspire', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inspiration }),
+      });
+      if (!res.ok) throw new Error('Failed to inspire');
+
+      const data = await res.json() as {
+        genre?: string;
+        bpm?: number;
+        key?: string;
+        scale?: string;
+        mood?: string;
+        styleTag?: string | null;
+        promptSuggestion?: string;
+      };
+
+      const genreRaw = (data.genre ?? '').trim();
+      const genreKey =
+        (genreRaw && GENRES[genreRaw]) ? genreRaw :
+          GENRE_NAME_MAP[genreRaw] ??
+          Object.entries(GENRES).find(([, g]) => g.name.toLowerCase() === genreRaw.toLowerCase())?.[0] ??
+          params.genre;
+
+      const bpm = typeof data.bpm === 'number'
+        ? Math.max(60, Math.min(180, Math.round(data.bpm)))
+        : params.bpm;
+
+      const keyRaw = (data.key ?? '').trim().toUpperCase();
+      const key = (KEYS as readonly string[]).includes(keyRaw) ? keyRaw : params.key;
+
+      const scale = normalizeScaleToEngine(String(data.scale ?? params.scale));
+
+      const styleTag = (typeof data.styleTag === 'string' && data.styleTag.trim()) ? data.styleTag.trim() : null;
+      const promptSuggestion = (data.promptSuggestion ?? '').trim();
+
+      setParams(p => ({ ...p, genre: genreKey, bpm, key, scale }));
+      if (promptSuggestion) setPrompt(promptSuggestion);
+      setActiveStyleTag(styleTag && STYLE_TAGS[styleTag] ? styleTag : null);
+
+      toast.toast(`Inspired by ${inspiration}`, 'success');
+      setShowInspire(false);
+      setInspireText('');
+    } catch {
+      toast.toast('Inspire failed', 'danger');
+    } finally {
+      setIsInspiring(false);
+    }
+  }, [inspireText, params.genre, params.bpm, params.key, params.scale, toast]);
+
   const handleShare = useCallback(() => {
     const id = variationIds[selectedVariation];
     if (!id) return;
@@ -1726,6 +1947,54 @@ export default function Home() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [variationIds, selectedVariation, variations, params.genre]);
+
+  const handleExtendSelected = useCallback(async () => {
+    const sel = variations[selectedVariation];
+    if (!sel || isGenerating || isExtending) return;
+
+    setIsExtending(true);
+    try {
+      const existingBars = sel.params.bars;
+      const offset = existingBars * 4;
+
+      const lastMelodyPitch = sel.result.melody
+        .slice()
+        .sort((a, b) => a.startTime - b.startTime)
+        .at(-1)?.pitch ?? null;
+
+      const lastBarStart = Math.max(0, (existingBars - 1) * 4);
+      const chordNotesInLastBar = sel.result.chords.filter(n => n.startTime >= lastBarStart && n.startTime < lastBarStart + 4);
+      const firstChordStart = chordNotesInLastBar.length > 0 ? Math.min(...chordNotesInLastBar.map(n => n.startTime)) : null;
+      const lastChordPitches = firstChordStart === null
+        ? []
+        : chordNotesInLastBar.filter(n => Math.abs(n.startTime - firstChordStart) < 0.05).map(n => n.pitch);
+
+      const continuation = generateTrack(
+        { ...sel.params, bars: 8 },
+        { lastChordPitches, lastMelodyPitch, startBeat: offset }
+      );
+
+      setVariations(prev => prev.map((v, i) => {
+        if (i !== selectedVariation) return v;
+        return {
+          params: { ...v.params, bars: v.params.bars + 8 },
+          result: {
+            ...v.result,
+            melody: [...v.result.melody, ...continuation.melody],
+            chords: [...v.result.chords, ...continuation.chords],
+            bass:   [...v.result.bass,   ...continuation.bass],
+            drums:  [...v.result.drums,  ...continuation.drums],
+          },
+        };
+      }));
+
+      toast.toast('Extended +8 bars', 'success');
+    } catch {
+      toast.toast('Extend failed', 'danger');
+    } finally {
+      setIsExtending(false);
+    }
+  }, [variations, selectedVariation, isGenerating, isExtending, toast]);
 
   const handleCreateCollab = useCallback(() => {
     const sessionId = crypto.randomUUID();
@@ -1764,6 +2033,112 @@ export default function Home() {
     setDetectedBpm(clamped);
     setParams(p => ({ ...p, bpm: clamped }));
   }, []);
+
+  const estimateBpmFromAudioBuffer = useCallback(async (buffer: AudioBuffer): Promise<number | null> => {
+    const ch0 = buffer.getChannelData(0);
+    const ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : null;
+    const sr = buffer.sampleRate;
+
+    const maxSeconds = Math.min(60, Math.max(10, buffer.duration));
+    const maxSamples = Math.min(ch0.length, Math.floor(sr * maxSeconds));
+
+    const winSize = Math.max(256, Math.floor(sr * 0.01)); // ~10ms
+    const hop = winSize;
+    const env: number[] = [];
+
+    for (let i = 0; i + winSize < maxSamples; i += hop) {
+      let sum = 0;
+      for (let j = 0; j < winSize; j++) {
+        const s0 = ch0[i + j] ?? 0;
+        const s1 = ch1 ? (ch1[i + j] ?? 0) : 0;
+        const s = ch1 ? (s0 + s1) * 0.5 : s0;
+        sum += s * s;
+      }
+      env.push(Math.sqrt(sum / winSize));
+    }
+    if (env.length < 20) return null;
+
+    // Smooth
+    const smooth: number[] = new Array(env.length).fill(0);
+    const k = 3;
+    for (let i = 0; i < env.length; i++) {
+      let s = 0;
+      let n = 0;
+      for (let t = -k; t <= k; t++) {
+        const v = env[i + t];
+        if (typeof v === 'number') { s += v; n++; }
+      }
+      smooth[i] = s / Math.max(1, n);
+    }
+
+    // Threshold via median + MAD
+    const sorted = [...smooth].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+    const absDev = smooth.map(v => Math.abs(v - median)).sort((a, b) => a - b);
+    const mad = absDev[Math.floor(absDev.length / 2)] ?? 0;
+    const threshold = median + mad * 3.5;
+
+    // Peak picking with refractory period (~200ms)
+    const peakIdx: number[] = [];
+    const minDist = Math.floor((0.2 * sr) / hop);
+    let last = -Infinity;
+    for (let i = 1; i < smooth.length - 1; i++) {
+      const v = smooth[i] ?? 0;
+      if (v < threshold) continue;
+      if (v > (smooth[i - 1] ?? 0) && v >= (smooth[i + 1] ?? 0)) {
+        if (i - last >= minDist) {
+          peakIdx.push(i);
+          last = i;
+        }
+      }
+    }
+    if (peakIdx.length < 6) return null;
+
+    const intervals: number[] = [];
+    for (let i = 1; i < peakIdx.length; i++) {
+      const dtFrames = peakIdx[i]! - peakIdx[i - 1]!;
+      const dtSec = (dtFrames * hop) / sr;
+      if (dtSec >= 0.2 && dtSec <= 2.0) intervals.push(dtSec);
+    }
+    if (intervals.length < 4) return null;
+
+    intervals.sort((a, b) => a - b);
+    const trim = Math.floor(intervals.length * 0.15);
+    const core = intervals.slice(trim, intervals.length - trim);
+    const avg = core.reduce((a, b) => a + b, 0) / Math.max(1, core.length);
+    if (!isFinite(avg) || avg <= 0) return null;
+
+    let bpm = 60 / avg;
+    while (bpm < 60) bpm *= 2;
+    while (bpm > 200) bpm /= 2;
+    const rounded = Math.round(bpm);
+    if (rounded < 60 || rounded > 200) return null;
+    return rounded;
+  }, []);
+
+  const handleDetectBpmFile = useCallback(async (file: File | null) => {
+    if (!file) return;
+    setIsDetectingBpm(true);
+    try {
+      const arr = await file.arrayBuffer();
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audio = await ctx.decodeAudioData(arr.slice(0));
+      const bpm = await estimateBpmFromAudioBuffer(audio);
+      await ctx.close().catch(() => {});
+
+      if (!bpm) throw new Error('No BPM');
+
+      setParams(p => ({ ...p, bpm }));
+      setDetectedBpm(bpm);
+      toast.toast(`BPM detected: ${bpm}`, 'success');
+      setShowBpmDetect(false);
+    } catch {
+      toast.toast('BPM detection failed', 'danger');
+    } finally {
+      setIsDetectingBpm(false);
+      if (bpmFileInputRef.current) bpmFileInputRef.current.value = '';
+    }
+  }, [estimateBpmFromAudioBuffer, toast]);
 
   // ── RENDER ────────────────────────────────────────────────
   return (
@@ -1952,8 +2327,18 @@ export default function Home() {
                 onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
                 placeholder="dark melodic techno, 128bpm, Am"
                 className="input-field"
-                style={{ paddingLeft: 40, paddingRight: 136 }}
+                style={{ paddingLeft: 40, paddingRight: 220 }}
               />
+              <div className="absolute right-[104px] top-1/2 -translate-y-1/2">
+                <SpotlightButton
+                  type="button"
+                  className="btn-secondary"
+                  style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+                  onClick={() => setShowInspire(v => !v)}
+                >
+                  Inspire
+                </SpotlightButton>
+              </div>
               {effectiveIsSignedIn ? (
                 <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
                   <SpotlightButton
@@ -1981,6 +2366,40 @@ export default function Home() {
                 </SignInButton>
               )}
             </div>
+
+            <AnimatePresence>
+              {showInspire && (
+                <motion.form
+                  className="mb-4 rounded-xl p-3 flex items-center gap-2"
+                  style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  onSubmit={e => {
+                    e.preventDefault();
+                    void handleInspire();
+                  }}
+                >
+                  <input
+                    value={inspireText}
+                    onChange={e => setInspireText(e.target.value)}
+                    placeholder="Inspire from a song or artist..."
+                    className="input-field"
+                    style={{ height: 40, paddingLeft: 14, paddingRight: 14 }}
+                    disabled={isInspiring}
+                  />
+                  <SpotlightButton
+                    type="submit"
+                    className="btn-primary"
+                    style={{ height: 40, padding: '0 14px', fontSize: 12, whiteSpace: 'nowrap' }}
+                    disabled={isInspiring || !inspireText.trim()}
+                  >
+                    {isInspiring ? '…' : 'Apply'}
+                  </SpotlightButton>
+                </motion.form>
+              )}
+            </AnimatePresence>
 
             {/* Credits indicator */}
             {effectiveIsSignedIn && credits !== null && !credits.isPro && (
@@ -2039,38 +2458,75 @@ export default function Home() {
                     transition={{ duration: 0.2, ease: 'easeOut' }}
                     style={{ overflow: 'hidden' }}
                   >
-                    <div className="px-5 pb-5 pt-4 grid grid-cols-2 md:grid-cols-4 gap-4"
+                    <div className="px-5 pb-5 pt-4 flex flex-col gap-4"
                       style={{ borderTop: '1px solid #1A1A2E' }}>
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wider"
                           style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
                         <select
                           ref={genreSelectRef}
+                          className="w-full"
                           value={params.genre}
                           onChange={e => setParams(p => ({ ...p, genre: e.target.value }))}
                         >
                           {GENRE_LIST.map(g => <option key={g.key} value={g.key}>{g.name}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <label className="block mb-2 text-xs uppercase tracking-wider"
-                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
-                        <select value={params.key} onChange={e => setParams(p => ({ ...p, key: e.target.value }))}>
-                          {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block mb-2 text-xs uppercase tracking-wider"
-                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
-                        <select value={params.scale} onChange={e => setParams(p => ({ ...p, scale: e.target.value }))}>
-                          {SCALES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                        </select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block mb-2 text-xs uppercase tracking-wider"
+                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
+                          <select
+                            className="w-full"
+                            value={params.key}
+                            onChange={e => setParams(p => ({ ...p, key: e.target.value }))}
+                          >
+                            {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block mb-2 text-xs uppercase tracking-wider"
+                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
+                          <select
+                            className="w-full"
+                            value={MANUAL_SCALE_OPTIONS.some(o => o.value === params.scale) ? params.scale : 'minor'}
+                            onChange={e => setParams(p => ({ ...p, scale: e.target.value }))}
+                          >
+                            {MANUAL_SCALE_OPTIONS.map(s => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-xs uppercase tracking-wider"
+                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Feel</label>
+                          <span
+                            className="text-xs tabular-nums"
+                            style={{ color: '#F0F0FF', fontFamily: 'JetBrains Mono, monospace' }}
+                          >
+                            {params.humanization}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={params.humanization}
+                          onChange={e =>
+                            setParams(p => ({ ...p, humanization: parseInt(e.target.value, 10) }))
+                          }
+                          className="w-full"
+                          aria-label="Humanization amount"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="col-span-2 md:col-span-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs uppercase tracking-wider"
                             style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
                             {detectedBpm !== null && (
                               <span
                                 className="text-[10px] px-2 py-0.5 rounded-md"
@@ -2084,6 +2540,18 @@ export default function Home() {
                                 Tap: {detectedBpm}
                               </span>
                             )}
+                            <span
+                              className="text-[10px] px-2 py-0.5 rounded-md"
+                              style={{
+                                fontFamily: 'JetBrains Mono, monospace',
+                                background: 'rgba(255,109,63,0.10)',
+                                border: '1px solid rgba(255,109,63,0.25)',
+                                color: '#FFAB91',
+                              }}
+                            >
+                              {(variations.length > 0 ? variations[selectedVariation]?.params.key : null) ?? params.key}{' '}
+                              {scaleLabel((variations.length > 0 ? variations[selectedVariation]?.params.scale : null) ?? params.scale)}
+                            </span>
                             <span
                               className="text-xs font-semibold"
                               style={{ color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace' }}
@@ -2117,14 +2585,49 @@ export default function Home() {
                           >
                             Tap
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowBpmDetect(v => !v);
+                              // open file picker immediately when enabling
+                              if (!showBpmDetect) window.setTimeout(() => bpmFileInputRef.current?.click(), 0);
+                            }}
+                            className="h-9 px-3 rounded-lg text-xs transition-all"
+                            style={{
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              color: '#F0F0FF',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              background: 'transparent',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                            title="Detect BPM from an audio file"
+                            disabled={isDetectingBpm}
+                          >
+                            Detect BPM
+                          </button>
                         </div>
+                        {showBpmDetect && (
+                          <div className="mt-2">
+                            <input
+                              ref={bpmFileInputRef}
+                              type="file"
+                              accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/x-wav"
+                              onChange={e => void handleDetectBpmFile(e.target.files?.[0] ?? null)}
+                              disabled={isDetectingBpm}
+                              className="block w-full text-xs"
+                              style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div>
+                      <div className="col-span-2 md:col-span-1">
                         <label className="block mb-2 text-xs uppercase tracking-wider"
                           style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Bars</label>
-                        <select value={params.bars} onChange={e => setParams(p => ({ ...p, bars: parseInt(e.target.value) }))}>
+                        <select className="w-full" value={params.bars} onChange={e => setParams(p => ({ ...p, bars: parseInt(e.target.value) }))}>
                           {[2, 4, 8].map(b => <option key={b} value={b}>{b} bars</option>)}
                         </select>
+                      </div>
                       </div>
                     </div>
                   </motion.div>
@@ -2189,6 +2692,10 @@ export default function Home() {
                             onComplete: () => setPlayingVariationIndex(null),
                           });
                         }
+                      }}
+                      onExtend={() => {
+                        if (selectedVariation !== i) return;
+                        void handleExtendSelected();
                       }}
                       onDownload={e => {
                         e.stopPropagation();
@@ -2348,10 +2855,72 @@ export default function Home() {
                   {/* Header: label + layer tabs */}
                   <div className="flex items-center justify-between px-4 py-3"
                     style={{ background: '#111118', borderBottom: '1px solid #1A1A2E' }}>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.5)', letterSpacing: '0.06em' }}>
-                      PIANO ROLL
-                    </span>
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.5)', letterSpacing: '0.06em' }}>
+                        EDITOR
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditorView('piano')}
+                          className="px-3 h-7 rounded-md transition-all"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: editorView === 'piano' ? '#FF6D3F' : '#8A8A9A',
+                            background: editorView === 'piano' ? 'rgba(255,109,63,0.14)' : 'transparent',
+                            border: editorView === 'piano' ? '1px solid rgba(255,109,63,0.35)' : '1px solid transparent',
+                          }}
+                        >
+                          Piano Roll
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditorView('sheet')}
+                          className="px-3 h-7 rounded-md transition-all"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: editorView === 'sheet' ? '#FF6D3F' : '#8A8A9A',
+                            background: editorView === 'sheet' ? 'rgba(255,109,63,0.14)' : 'transparent',
+                            border: editorView === 'sheet' ? '1px solid rgba(255,109,63,0.35)' : '1px solid transparent',
+                          }}
+                        >
+                          Sheet Music
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {editorView === 'sheet' && (
+                        <button
+                          type="button"
+                          className="px-3 h-7 rounded-md transition-all"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: '#F0F0FF',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            background: 'transparent',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                          onClick={() => {
+                            const c = sheetCanvasRef.current;
+                            if (!c) return;
+                            const url = c.toDataURL('image/png');
+                            const w = window.open('', '_blank');
+                            if (!w) return;
+                            w.document.write(`<!doctype html><html><head><title>Print Sheet</title></head><body style="margin:0;background:#09090B;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%;height:auto;" /></body></html>`);
+                            w.document.close();
+                            w.focus();
+                            w.print();
+                          }}
+                        >
+                          Print
+                        </button>
+                      )}
+                      <div className="flex gap-1">
                       {LAYERS.map(layer => (
                         <button
                           key={layer}
@@ -2369,23 +2938,35 @@ export default function Home() {
                         </button>
                       ))}
                     </div>
+                    </div>
                   </div>
 
                   {/* Hint bar */}
                   <div className="px-4 py-1.5" style={{ background: '#0D0D12', borderBottom: '1px solid #1A1A2E' }}>
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.35)' }}>
-                      click note to delete · click empty to add (snaps to 1/16)
+                      {editorView === 'piano'
+                        ? 'click note to delete · click empty to add (snaps to 1/16)'
+                        : 'basic canvas score · durations are approximate'}
                     </span>
                   </div>
 
                   {/* Canvas */}
-                  <PianoRollEditor
-                    key={`${selectedVariation}-${editorLayer}`}
-                    notes={result?.[editorLayer] ?? []}
-                    color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
-                    bars={variations[selectedVariation]?.params.bars ?? params.bars}
-                    onNotesChange={newNotes => handleEditorNotesChange(editorLayer, newNotes)}
-                  />
+                  {editorView === 'piano' ? (
+                    <PianoRollEditor
+                      key={`${selectedVariation}-${editorLayer}`}
+                      notes={result?.[editorLayer] ?? []}
+                      color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
+                      bars={variations[selectedVariation]?.params.bars ?? params.bars}
+                      onNotesChange={newNotes => handleEditorNotesChange(editorLayer, newNotes)}
+                    />
+                  ) : (
+                    <div style={{ padding: 12, background: '#0D0D12' }}>
+                      <canvas
+                        ref={sheetCanvasRef}
+                        style={{ width: '100%', height: 320, borderRadius: 10, border: '1px solid #1A1A2E', background: '#0D0D12' }}
+                      />
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
