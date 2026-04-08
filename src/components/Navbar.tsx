@@ -131,7 +131,7 @@ export function Navbar({
         backdropFilter: 'blur(12px)',
       }}
     >
-      <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between">
+      <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between gap-4">
         <Link
           href="/"
           className="font-extrabold text-xl"
@@ -144,7 +144,7 @@ export function Navbar({
           {isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           <WhatsNew />
           <button
             type="button"
