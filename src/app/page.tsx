@@ -3210,7 +3210,7 @@ export default function Home() {
       </div>
 
       {/* ── HERO ── */}
-      <section className="hero-noise pt-32 pb-24 px-8">
+      <section className="hero-noise min-h-screen px-8 flex flex-col justify-center">
         <div className="max-w-[1280px] mx-auto">
 
           {/* Staggered headline + subtitle */}
