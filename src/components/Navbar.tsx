@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useAuth, SignInButton, UserButton } from '@clerk/nextjs';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { WhatsNew } from '@/components/WhatsNew';
 
 export function Navbar({
   active,
@@ -99,26 +101,76 @@ export function Navbar({
           {isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks}
         </div>
 
-        {isLoaded && (
-          isSignedIn ? (
-            <UserButton />
-          ) : (
-            <SignInButton mode="modal">
-              <button
-                className="text-sm h-9 px-4 rounded-lg transition-all"
-                style={{
-                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
-                  color: 'var(--text)',
-                  background: 'transparent',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text) 6%, transparent)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                Sign in
-              </button>
-            </SignInButton>
-          )
-        )}
+        <div className="flex items-center gap-2">
+          {/* 1) Command bar button (⌘K) */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event('pulp:open-command-bar'))}
+            className="h-9 px-3 rounded-lg flex items-center justify-center transition-all"
+            style={{
+              border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+              background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
+              color: 'var(--text)',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 12,
+              whiteSpace: 'nowrap',
+            }}
+            aria-label="Open command bar"
+            title="Command bar (⌘K)"
+          >
+            ⌘K
+          </button>
+
+          {/* 2) Version tag (v1.0) — hide < lg */}
+          <span
+            className="hidden lg:inline-flex h-9 items-center px-3 rounded-lg"
+            style={{
+              border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+              background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
+              color: 'var(--muted)',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 12,
+              whiteSpace: 'nowrap',
+            }}
+            aria-label="Version"
+            title="Version"
+          >
+            v1.0
+          </span>
+
+          {/* 3) What's new — hide < lg */}
+          <div className="hidden lg:block">
+            <WhatsNew />
+          </div>
+
+          {/* 4) Theme toggle */}
+          <ThemeToggle />
+
+          {/* 5) Sign In button OR user avatar (always last) */}
+          <div className="flex-shrink-0">
+            {isLoaded && (
+              isSignedIn ? (
+                <UserButton />
+              ) : (
+                <SignInButton mode="modal">
+                  <button
+                    className="text-sm h-9 px-4 rounded-lg transition-all"
+                    style={{
+                      border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+                      color: 'var(--text)',
+                      background: 'transparent',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text) 6%, transparent)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    Sign in
+                  </button>
+                </SignInButton>
+              )
+            )}
+          </div>
+        </div>
       </div>
     </nav>
   );

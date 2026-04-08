@@ -3,8 +3,6 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ToastProvider } from '@/components/toast/ToastProvider';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { WhatsNew } from '@/components/WhatsNew';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import './globals.css';
 
@@ -61,10 +59,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               `,
             }}
           />
-          <div className="fixed top-2 right-3 z-[60] flex items-center gap-2">
-            <WhatsNew />
-            <ThemeToggle />
-          </div>
           <ServiceWorkerRegister />
           <ToastProvider>{children}</ToastProvider>
           <Analytics />

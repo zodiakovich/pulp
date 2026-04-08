@@ -2933,6 +2933,13 @@ export default function Home() {
     variations,
   ]);
 
+  // Navbar command button (⌘K)
+  useEffect(() => {
+    const onOpen = () => setShowCommandBar(true);
+    window.addEventListener('pulp:open-command-bar', onOpen as EventListener);
+    return () => window.removeEventListener('pulp:open-command-bar', onOpen as EventListener);
+  }, []);
+
   // ── RENDER ────────────────────────────────────────────────
   return (
     <div className="min-h-screen">
@@ -4154,37 +4161,22 @@ export default function Home() {
       </section>
 
       {/* ── HOW IT WORKS ── */}
-      <motion.section
+      <section
         className="py-24 px-8"
         style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.05 }}
-        transition={{ duration: 0.5 }}
       >
         <div className="max-w-[1280px] mx-auto">
-          <motion.h2
+          <h2
             className="font-extrabold mb-16"
             style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             3 steps.<br />0 fuss.
-          </motion.h2>
-          <motion.div
+          </h2>
+          <div
             className="grid grid-cols-1 md:grid-cols-3 gap-8"
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             {HOW_IT_WORKS.map(step => (
-              <motion.div
-                key={step.num}
-                initial={{ opacity: 1 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true, amount: 0 }}
-              >
+              <div key={step.num}>
                 <div className="text-gradient font-extrabold mb-5"
                   style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.02em', lineHeight: 1 }}>
                   {step.num}
@@ -4194,51 +4186,35 @@ export default function Home() {
                   {step.title}
                 </h3>
                 <p style={{ fontSize: 14, color: '#8A8A9A', lineHeight: 1.7 }}>{step.body}</p>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         </div>
-      </motion.section>
+      </section>
 
       {/* ── GENRE GRID ── */}
-      <motion.section
+      <section
         className="py-24 px-8"
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.05 }}
-        transition={{ duration: 0.5 }}
       >
         <div className="max-w-[1280px] mx-auto">
-          <motion.h2
+          <h2
             className="font-extrabold mb-3"
             style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             20 genres, built in.
-          </motion.h2>
-          <motion.p
+          </h2>
+          <p
             className="mb-12 text-sm"
             style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             Click any genre to load it into the generator.
-          </motion.p>
-          <motion.div
+          </p>
+          <div
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             {GENRE_LIST.map(g => (
-              <motion.button
+              <button
                 key={g.key}
-                initial={{ opacity: 1 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true, amount: 0 }}
                 onClick={() => { setParams(p => ({ ...p, genre: g.key })); setActiveStyleTag(null); scrollToTool(); }}
                 className="genre-card text-left"
               >
@@ -4246,53 +4222,37 @@ export default function Home() {
                   style={{ fontFamily: 'Syne, sans-serif', color: 'rgba(240,240,255,0.75)' }}>
                   {g.name}
                 </span>
-              </motion.button>
+              </button>
             ))}
-          </motion.div>
+          </div>
         </div>
-      </motion.section>
+      </section>
 
       {/* ── LAYER SYSTEM ── */}
-      <motion.section
+      <section
         className="py-24 px-8"
         style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.05 }}
-        transition={{ duration: 0.5 }}
       >
         <div className="max-w-[1280px] mx-auto">
-          <motion.h2
+          <h2
             className="font-extrabold mb-3"
             style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             4 independent tracks.
-          </motion.h2>
-          <motion.p
+          </h2>
+          <p
             className="mb-12"
             style={{ fontSize: 15, color: '#8A8A9A', maxWidth: 560, lineHeight: 1.7 }}
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             Each track has its own voice, rhythm, and range. Toggle any layer on or off. Download each one separately or all at once.
-          </motion.p>
-          <motion.div
+          </p>
+          <div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-            initial={{ opacity: 1 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true, amount: 0 }}
           >
             {LAYER_EXPLAINER.map(layer => (
-              <motion.div
+              <div
                 key={layer.key}
                 className={`layer-card active-${layer.key}`}
-                initial={{ opacity: 1 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true, amount: 0 }}
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: layer.color }} />
@@ -4300,11 +4260,11 @@ export default function Home() {
                   <span className="ml-auto text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>{layer.range}</span>
                 </div>
                 <p className="text-xs leading-relaxed" style={{ color: '#8A8A9A', lineHeight: 1.7 }}>{layer.body}</p>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         </div>
-      </motion.section>
+      </section>
 
       {/* ── FOOTER ── */}
       <footer className="px-8 py-16" style={{ borderTop: '1px solid #1A1A2E' }}>
