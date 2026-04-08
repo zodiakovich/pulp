@@ -47,6 +47,13 @@ body {
   background-clip: text;
 }
 
+/* In light mode, force brand-orange text for gradient text. */
+[data-theme="light"] .text-gradient {
+  background: none;
+  -webkit-text-fill-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ─── GLASS NAV ─── */
 .glass {
   background: color-mix(in srgb, var(--bg) 88%, transparent);
