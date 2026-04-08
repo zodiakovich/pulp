@@ -91,8 +91,8 @@ export function Navbar({
       <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between">
         <Link
           href="/"
-          className="text-gradient font-extrabold text-xl"
-          style={{ fontFamily: 'Syne, sans-serif', textDecoration: 'none' }}
+          className="font-extrabold text-xl"
+          style={{ fontFamily: 'Syne, sans-serif', textDecoration: 'none', color: 'var(--accent)' }}
         >
           pulp
         </Link>

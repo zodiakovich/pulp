@@ -24,7 +24,7 @@
   --surface: #FFFFFF;
   --border: #E5E5E5;
   --text: #09090B;
-  --muted: #6B6B7A;
+  --muted: #52525B;
 }
 
 /* ─── BASE ─── */
@@ -277,7 +277,7 @@ body {
   font-family: 'DM Sans', sans-serif;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.08);
-  color: #8A8A9A;
+  color: var(--muted);
   background: transparent;
   cursor: pointer;
   white-space: nowrap;
@@ -287,7 +287,7 @@ body {
 }
 .style-pill:hover {
   border-color: rgba(255,109,63,0.4);
-  color: #F0F0FF;
+  color: var(--text);
   background: rgba(255,109,63,0.06);
 }
 .style-pill.active {
@@ -316,7 +316,7 @@ body {
 }
 .layer-toggle.off {
   border-color: rgba(255,255,255,0.08);
-  color: #8A8A9A;
+  color: var(--muted);
   opacity: 0.55;
 }
 .layer-toggle.off:hover { opacity: 0.85; }

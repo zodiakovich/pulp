@@ -3210,12 +3210,12 @@ export default function Home() {
       </div>
 
       {/* ── HERO ── */}
-      <section className="hero-noise min-h-screen px-8 flex flex-col justify-center">
-        <div className="max-w-[1280px] mx-auto">
+      <section className="hero-noise px-8 pt-16 pb-10">
+        <div className="max-w-[1280px] mx-auto min-h-[100svh] flex flex-col justify-center gap-6">
 
           {/* Staggered headline + subtitle */}
           <motion.div
-            className="text-center mb-12"
+            className="text-center"
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
@@ -3223,14 +3223,14 @@ export default function Home() {
             <motion.h1
               variants={fadeUp}
               className="text-gradient font-extrabold leading-[1.1]"
-              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(40px, 6vw, 64px)', letterSpacing: '-0.02em' }}
+              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(2.5rem, 6vw, 5rem)', letterSpacing: '-0.02em' }}
             >
               Generate MIDI.<br />Instantly.
             </motion.h1>
             <motion.p
               variants={fadeUp}
-              className="mt-6 mx-auto leading-relaxed"
-              style={{ fontSize: 16, color: '#8A8A9A', maxWidth: 560 }}
+              className="mt-3 mx-auto leading-relaxed"
+              style={{ fontSize: 16, color: 'var(--muted)', maxWidth: 560 }}
             >
               Describe a track. Get 4 independent MIDI tracks — melody, chords, bass, and drums —
               tuned to genre, key, and tempo. Download directly into your DAW.
@@ -3417,8 +3417,8 @@ export default function Home() {
 
             {/* Credits indicator */}
             {effectiveIsSignedIn && credits !== null && !credits.isPro && (
-              <p className="text-xs mb-3 mt-1" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
-                <span style={{ color: credits.used >= 10 ? '#E94560' : '#8A8A9A' }}>
+              <p className="text-xs mb-3 mt-1" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}>
+                <span style={{ color: credits.used >= 10 ? '#E94560' : 'var(--muted)' }}>
                   {Math.max(0, 10 - credits.used)} / 10
                 </span>
                 {' '}generations remaining ·{' '}
@@ -3455,9 +3455,9 @@ export default function Home() {
               <button
                 onClick={() => setShowManual(!showManual)}
                 className="w-full px-5 py-3 flex items-center justify-between transition-colors"
-                style={{ color: '#8A8A9A', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}
+                style={{ color: 'var(--muted)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#8A8A9A')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
               >
                 <span className="flex items-center gap-2"><span>⚙</span> Manual controls</span>
                 <span className={`transform transition-transform text-xs ${showManual ? 'rotate-180' : ''}`}>▾</span>
@@ -3476,7 +3476,7 @@ export default function Home() {
                       style={{ borderTop: '1px solid #1A1A2E' }}>
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wider"
-                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
+                          style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
                         <select
                           ref={genreSelectRef}
                           className="w-full"
@@ -3489,7 +3489,7 @@ export default function Home() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wider"
-                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
+                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
                           <select
                             className="w-full"
                             value={params.key}
@@ -3500,7 +3500,7 @@ export default function Home() {
                         </div>
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wider"
-                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
+                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
                           <select
                             className="w-full"
                             value={MANUAL_SCALE_OPTIONS.some(o => o.value === params.scale) ? params.scale : 'minor'}
@@ -3515,7 +3515,7 @@ export default function Home() {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-xs uppercase tracking-wider"
-                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Feel</label>
+                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Feel</label>
                           <span
                             className="text-xs tabular-nums"
                             style={{ color: '#F0F0FF', fontFamily: 'JetBrains Mono, monospace' }}
@@ -3539,7 +3539,7 @@ export default function Home() {
                       <div className="col-span-2 md:col-span-3">
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-xs uppercase tracking-wider"
-                            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
+                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
                           <div className="flex items-center gap-2 flex-wrap justify-end">
                             {detectedBpm !== null && (
                               <span
@@ -4145,10 +4145,8 @@ export default function Home() {
           </motion.div>
 
           {/* Social proof */}
-          <motion.div
+          <div
             className="text-center mt-12 space-y-2"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ delay: 0.4, duration: 0.4 }}
           >
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A', letterSpacing: '0.04em' }}>
               20 genres · 15 styles · 4 independent tracks · .mid export
@@ -4156,7 +4154,7 @@ export default function Home() {
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
               No account required to generate
             </p>
-          </motion.div>
+          </div>
         </div>
       </section>
 
