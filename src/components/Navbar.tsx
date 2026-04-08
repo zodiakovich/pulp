@@ -1,9 +1,42 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsNew } from '@/components/WhatsNew';
+
+const STORAGE_KEY = 'pulp_theme';
+
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M12 2.5v2.2M12 19.3v2.2M4.7 4.7l1.6 1.6M17.7 17.7l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.7 19.3l1.6-1.6M17.7 6.3l1.6-1.6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M21 14.6A8.5 8.5 0 0 1 9.4 3a7 7 0 1 0 11.6 11.6Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export function Navbar({
   active,
@@ -15,6 +48,18 @@ export function Navbar({
   historyCount?: number;
 }) {
   const { isLoaded, isSignedIn } = useAuth();
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
+
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem(STORAGE_KEY);
+      const resolved: 'dark' | 'light' = t === 'dark' ? 'dark' : 'light';
+      setTheme(resolved);
+      document.documentElement.classList.toggle('dark', resolved === 'dark');
+    } catch {
+      setTheme('light');
+    }
+  }, []);
 
   const navClass = (isActive: boolean) =>
     `nav-link ${isActive ? 'nav-link--active' : ''}`;
@@ -101,25 +146,33 @@ export function Navbar({
 
         <div className="flex items-center gap-2">
           <WhatsNew />
-          <ThemeToggle />
+          <button
+            type="button"
+            aria-label="Toggle theme"
+            className="h-9 w-9 rounded-lg flex items-center justify-center transition-all text-foreground"
+            onClick={() => {
+              const html = document.documentElement;
+              const nextIsDark = !html.classList.contains('dark');
+              html.classList.toggle('dark', nextIsDark);
+              const next: 'dark' | 'light' = nextIsDark ? 'dark' : 'light';
+              setTheme(next);
+              try {
+                localStorage.setItem(STORAGE_KEY, next);
+              } catch {
+                // ignore
+              }
+            }}
+          >
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </button>
           <SignedIn>
-            <div className="flex-shrink-0">
-              <UserButton />
-            </div>
+            <UserButton />
           </SignedIn>
           <SignedOut>
             <SignInButton mode="modal">
               <button
                 type="button"
-                className="text-sm h-9 px-4 rounded-lg transition-all flex items-center"
-                style={{
-                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
-                  color: 'var(--button-text)',
-                  background: 'transparent',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--foreground) 6%, transparent)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                className="h-9 px-4 rounded-lg text-sm font-medium bg-[#FF6D3F] text-white hover:bg-[#e85a2a] transition-colors"
               >
                 Sign in
               </button>

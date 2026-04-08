@@ -4,20 +4,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── THEME TOKENS (light = :root, dark = html.dark) ─── */
+/* ─── THEME TOKENS (light = :root, dark = .dark on html) ─── */
 :root {
   --foreground: #09090B;
   --foreground-muted: #52525B;
   --background: #FAFAFA;
   --surface: #F4F4F5;
   --border: #E4E4E7;
+  --color-muted: #52525B;
+
   --button-text: #09090B;
   --button-text-muted: #3F3F46;
 
   /* legacy aliases (used across app) */
   --bg: var(--background);
   --text: var(--foreground);
-  --muted: #52525B;
+  --muted: var(--color-muted);
 
   /* accents (unchanged across themes) */
   --accent: #FF6D3F;
@@ -26,18 +28,20 @@
   --purple: #A78BFA;
 }
 
-html.dark {
+.dark {
   --foreground: #F0F0FF;
   --foreground-muted: #8A8A9A;
   --background: #09090B;
   --surface: #111118;
   --border: #1A1A2E;
+  --color-muted: #8A8A9A;
+
   --button-text: #F0F0FF;
   --button-text-muted: #8A8A9A;
 
   --bg: var(--background);
   --text: var(--foreground);
-  --muted: var(--foreground-muted);
+  --muted: var(--color-muted);
 }
 
 /* Inverted full-width bands (dark panels on light pages) */
@@ -113,14 +117,8 @@ body {
   background-clip: text;
 }
 
-/* Light mode / non-dark: solid brand orange (gradient clip is illegible on white). */
-html:not(.dark) .text-gradient {
-  background: none !important;
-  -webkit-text-fill-color: #FF6D3F !important;
-  color: #FF6D3F !important;
-}
-
-html.dark .text-gradient {
+/* Dark mode: gradient logo/headlines */
+.dark .text-gradient {
   background: linear-gradient(135deg, #FF6D3F 0%, #FF8A65 50%, #FFAB91 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -543,4 +541,29 @@ kbd {
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* Light mode text fixes */
+html:not(.dark) button {
+  color: #09090B;
+}
+html:not(.dark) .text-gradient {
+  background: none !important;
+  -webkit-text-fill-color: #FF6D3F !important;
+  color: #FF6D3F !important;
+}
+html:not(.dark) nav a,
+html:not(.dark) nav button {
+  color: #52525B;
+}
+html:not(.dark) nav a:hover,
+html:not(.dark) nav button:hover {
+  color: #09090B;
+}
+
+/* Keep white text on colored backgrounds */
+html:not(.dark) button[style*="background"],
+html:not(.dark) .bg-\[\#FF6D3F\],
+html:not(.dark) button.bg-primary {
+  color: #ffffff !important;
 }

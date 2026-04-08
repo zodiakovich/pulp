@@ -47,7 +47,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <html lang="en">
         <body className="min-h-screen font-body antialiased" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
           <script
-            // Set theme before hydration to avoid flash.
             dangerouslySetInnerHTML={{
               __html: `
                 (function () {

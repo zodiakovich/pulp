@@ -43,17 +43,10 @@ export function WhatsNew() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="h-9 px-3 rounded-lg flex items-center gap-2 transition-all"
-        style={{
-          border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
-          background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
-          color: 'var(--text)',
-          fontFamily: 'JetBrains Mono, monospace',
-          fontSize: 12,
-          position: 'relative',
-        }}
-        title="What's new"
         aria-label="What's new"
+        className="h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm"
+        style={{ background: 'rgba(255,109,63,0.1)', color: '#FF6D3F', position: 'relative' }}
+        title="What's new"
       >
         What’s new
         {hasNew && (
