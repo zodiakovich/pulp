@@ -144,7 +144,7 @@ export function Navbar({
           {isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks}
         </div>
 
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-2" style={{marginLeft: 'auto', flexShrink: 0}}>
           <WhatsNew />
           <button
             type="button"
