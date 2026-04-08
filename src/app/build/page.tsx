@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Navbar } from '@/components/Navbar';
 import { GENRES } from '@/lib/music-engine';
 
 type LayerKey = 'melody' | 'chords' | 'bass' | 'drums';
@@ -120,35 +121,7 @@ export default function BuildMyTrackPage() {
 
   return (
     <div className="min-h-screen" style={{ background: '#0A0A0F' }}>
-      {/* Nav */}
-      <nav
-        className="fixed top-0 left-0 right-0 z-50"
-        style={{ borderBottom: '1px solid #1A1A2E', background: 'rgba(10,10,15,0.85)', backdropFilter: 'blur(12px)' }}
-      >
-        <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between">
-          <Link
-            href="/"
-            className="text-gradient font-extrabold text-xl"
-            style={{ fontFamily: 'Syne, sans-serif', textDecoration: 'none' }}
-          >
-            pulp
-          </Link>
-          <div className="flex items-center gap-8 text-sm" style={{ color: '#8A8A9A' }}>
-            <Link href="/" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
-              Create
-            </Link>
-            <Link href="/explore" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
-              Explore
-            </Link>
-            <Link href="/build" className="transition-colors" style={{ color: '#F0F0FF', textDecoration: 'none' }}>
-              Build
-            </Link>
-            <Link href="/pricing" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
-              Pricing
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navbar active="build" />
 
       {/* Header */}
       <section className="pt-36 pb-12 px-8">

@@ -14,6 +14,7 @@ import { track } from '@vercel/analytics';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
 import { generateAbletonAlsBlob } from '@/lib/ableton-export';
+import { Navbar } from '@/components/Navbar';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 const EASE_OUT = [0, 0, 0.2, 1] as const;
@@ -1753,6 +1754,18 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Open history from other pages via /?history=1
+  useEffect(() => {
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get('history') === '1') {
+        setShowHistory(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Cmd+K / Ctrl+K
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -2009,6 +2022,13 @@ export default function Home() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: promptText }),
         });
+        if (res.status === 429) {
+          const d = await res.json().catch(() => null) as any;
+          const after = typeof d?.retryAfter === 'number' ? d.retryAfter : null;
+          toast.toast(`Rate limit exceeded${after ? ` — try again in ${after}s` : ''}`, 'danger');
+          // Fall back to rule-based parser.
+          throw new Error('rate-limited');
+        }
         if (res.ok) {
           const data = await res.json() as { genre?: string; bpm?: number; scale?: string };
           if (data.genre) {
@@ -2426,6 +2446,12 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inspiration }),
       });
+      if (res.status === 429) {
+        const d = await res.json().catch(() => null) as any;
+        const after = typeof d?.retryAfter === 'number' ? d.retryAfter : null;
+        toast.toast(`Rate limit exceeded${after ? ` — try again in ${after}s` : ''}`, 'danger');
+        return;
+      }
       if (!res.ok) throw new Error('Failed to inspire');
 
       const data = await res.json() as {
@@ -3122,71 +3148,13 @@ export default function Home() {
       </AnimatePresence>
 
       {/* ── NAV ── */}
-      <nav
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'glass' : 'bg-transparent'}`}
-        style={scrolled ? { borderBottom: '1px solid #1A1A2E' } : {}}
-      >
-        <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between">
-          <span className="text-gradient font-extrabold text-xl" style={{ fontFamily: 'Syne, sans-serif' }}>
-            pulp
-          </span>
-
-          <div className="hidden md:flex items-center gap-8 text-sm" style={{ color: '#8A8A9A' }}>
-            <button onClick={scrollToTool} className="transition-colors hover:text-white">Create</button>
-            <a href="/explore" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
-              Explore
-            </a>
-            <a href="/build" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
-              Build
-            </a>
-            <button
-              onClick={() => setShowHistory(true)}
-              className="transition-colors hover:text-white flex items-center gap-2"
-            >
-              History
-              {history.length > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'rgba(255,109,63,0.15)', color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace' }}>
-                  {history.length}
-                </span>
-              )}
-            </button>
-            {effectiveIsSignedIn && (
-              <a href="/profile" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
-                Profile
-              </a>
-            )}
-            <a href="/pricing" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
-              Pricing
-            </a>
-            <button
-              onClick={() => setShowCommandBar(true)}
-              className="transition-colors hover:text-white flex items-center gap-1.5"
-              title="Open command bar (⌘K)"
-            >
-              <kbd style={{ fontSize: 10 }}>⌘K</kbd>
-            </button>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.4)' }}>v1.0</span>
-          </div>
-
-          {isLoaded && (
-            effectiveIsSignedIn
-              ? <UserButton />
-              : (
-                <SignInButton mode="modal">
-                  <button
-                    className="text-sm h-9 px-4 rounded-lg transition-all"
-                    style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#F0F0FF' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    Sign in
-                  </button>
-                </SignInButton>
-              )
-          )}
-        </div>
-      </nav>
+      <div className={`transition-all duration-300 ${scrolled ? 'glass' : 'bg-transparent'}`}>
+        <Navbar
+          active="create"
+          onHistory={() => setShowHistory(true)}
+          historyCount={history.length}
+        />
+      </div>
 
       {/* ── HERO ── */}
       <section className="hero-noise pt-32 pb-24 px-8">
@@ -4140,27 +4108,37 @@ export default function Home() {
       </section>
 
       {/* ── HOW IT WORKS ── */}
-      <section className="py-24 px-8" style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}>
+      <motion.section
+        className="py-24 px-8"
+        style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="max-w-[1280px] mx-auto">
           <motion.h2
             className="font-extrabold mb-16"
             style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-            variants={reveal}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             3 steps.<br />0 fuss.
           </motion.h2>
           <motion.div
             className="grid grid-cols-1 md:grid-cols-3 gap-8"
-            variants={revealContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.15 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             {HOW_IT_WORKS.map(step => (
-              <motion.div key={step.num} variants={reveal}>
+              <motion.div
+                key={step.num}
+                initial={{ opacity: 1 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true, amount: 0 }}
+              >
                 <div className="text-gradient font-extrabold mb-5"
                   style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.02em', lineHeight: 1 }}>
                   {step.num}
@@ -4174,42 +4152,47 @@ export default function Home() {
             ))}
           </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ── GENRE GRID ── */}
-      <section className="py-24 px-8">
+      <motion.section
+        className="py-24 px-8"
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="max-w-[1280px] mx-auto">
           <motion.h2
             className="font-extrabold mb-3"
             style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-            variants={reveal}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             20 genres, built in.
           </motion.h2>
           <motion.p
             className="mb-12 text-sm"
             style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}
-            variants={reveal}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             Click any genre to load it into the generator.
           </motion.p>
           <motion.div
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
-            variants={revealContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.1 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             {GENRE_LIST.map(g => (
               <motion.button
                 key={g.key}
-                variants={reveal}
+                initial={{ opacity: 1 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true, amount: 0 }}
                 onClick={() => { setParams(p => ({ ...p, genre: g.key })); setActiveStyleTag(null); scrollToTool(); }}
                 className="genre-card text-left"
               >
@@ -4221,40 +4204,50 @@ export default function Home() {
             ))}
           </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ── LAYER SYSTEM ── */}
-      <section className="py-24 px-8" style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}>
+      <motion.section
+        className="py-24 px-8"
+        style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="max-w-[1280px] mx-auto">
           <motion.h2
             className="font-extrabold mb-3"
             style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-            variants={reveal}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             4 independent tracks.
           </motion.h2>
           <motion.p
             className="mb-12"
             style={{ fontSize: 15, color: '#8A8A9A', maxWidth: 560, lineHeight: 1.7 }}
-            variants={reveal}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             Each track has its own voice, rhythm, and range. Toggle any layer on or off. Download each one separately or all at once.
           </motion.p>
           <motion.div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-            variants={revealContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.1 }}
+            initial={{ opacity: 1 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0 }}
           >
             {LAYER_EXPLAINER.map(layer => (
-              <motion.div key={layer.key} variants={reveal} className={`layer-card active-${layer.key}`}>
+              <motion.div
+                key={layer.key}
+                className={`layer-card active-${layer.key}`}
+                initial={{ opacity: 1 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true, amount: 0 }}
+              >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: layer.color }} />
                   <span className="font-bold text-sm" style={{ fontFamily: 'Syne, sans-serif' }}>{layer.name}</span>
@@ -4265,7 +4258,7 @@ export default function Home() {
             ))}
           </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ── FOOTER ── */}
       <footer className="px-8 py-16" style={{ borderTop: '1px solid #1A1A2E' }}>

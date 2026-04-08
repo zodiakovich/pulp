@@ -5,12 +5,15 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ToastProvider } from '@/components/toast/ToastProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsNew } from '@/components/WhatsNew';
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://pulp-4ubq.vercel.app'),
   title: 'pulp — AI MIDI Generator',
   description: 'Generate professional MIDI in seconds. Free.',
+  manifest: '/manifest.json',
+  themeColor: '#FF6D3F',
   openGraph: {
     title: 'pulp — AI MIDI Generator',
     description: 'Generate professional MIDI in seconds. Free.',
@@ -62,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <WhatsNew />
             <ThemeToggle />
           </div>
+          <ServiceWorkerRegister />
           <ToastProvider>{children}</ToastProvider>
           <Analytics />
           <SpeedInsights />

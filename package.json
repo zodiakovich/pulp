@@ -13,12 +13,17 @@
     "@fontsource/syne": "^5.2.7",
     "@stripe/stripe-js": "^9.1.0",
     "@supabase/supabase-js": "^2.102.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.37.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
+    "dotenv": "^17.4.1",
     "framer-motion": "^12.38.0",
     "next": "^15.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "stripe": "^22.0.0"
   },
   "devDependencies": {

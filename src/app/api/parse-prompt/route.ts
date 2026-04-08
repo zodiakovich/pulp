@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { auth } from '@clerk/nextjs/server';
+import { enforceRateLimit } from '@/lib/ratelimit';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
+    const { userId } = await auth();
+    const rl = await enforceRateLimit({ req, userId: userId ?? null });
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retryAfter: rl.retryAfter }, { status: 429 });
+    }
+
     const { prompt } = await req.json() as { prompt: string };
 
     if (!prompt?.trim()) {
