@@ -1647,7 +1647,6 @@ export default function Home() {
   const [compareIndex, setCompareIndex] = useState(0);
   const [liveMode, setLiveMode] = useState(false);
   const [showManual, setShowManual] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -1746,13 +1745,6 @@ export default function Home() {
   const styleTagsRef = useRef<HTMLDivElement>(null);
   const genreSelectRef = useRef<HTMLSelectElement>(null);
   const layerCardsRef = useRef<HTMLDivElement>(null);
-
-  // Scroll detection
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   // Open history from other pages via /?history=1
   useEffect(() => {
@@ -3201,13 +3193,11 @@ export default function Home() {
       </AnimatePresence>
 
       {/* ── NAV ── */}
-      <div className={`transition-all duration-300 ${scrolled ? 'glass' : 'bg-transparent'}`}>
-        <Navbar
-          active="create"
-          onHistory={() => setShowHistory(true)}
-          historyCount={history.length}
-        />
-      </div>
+      <Navbar
+        active="create"
+        onHistory={() => setShowHistory(true)}
+        historyCount={history.length}
+      />
 
       {/* ── HERO ── */}
       <section className="hero-noise px-8 pt-16 pb-10">

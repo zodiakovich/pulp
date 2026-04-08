@@ -7,7 +7,7 @@
 /* ─── THEME TOKENS (light = :root, dark = .dark on html) ─── */
 :root {
   --foreground: #09090B;
-  --foreground-muted: #52525B;
+  --foreground-muted: #3F3F46;
   --background: #FAFAFA;
   --surface: #F4F4F5;
   --border: #E4E4E7;
@@ -19,7 +19,7 @@
   /* legacy aliases (used across app) */
   --bg: var(--background);
   --text: var(--foreground);
-  --muted: var(--color-muted);
+  --muted: #52525B;
 
   /* accents (unchanged across themes) */
   --accent: #FF6D3F;
@@ -566,4 +566,23 @@ html:not(.dark) button[style*="background"],
 html:not(.dark) .bg-\[\#FF6D3F\],
 html:not(.dark) button.bg-primary {
   color: #ffffff !important;
+}
+
+html:not(.dark) .genre-card span,
+html:not(.dark) .genre-card {
+  color: #09090B !important;
+}
+
+html:not(.dark) button:not([style*="background"]):not(.btn-primary):not(.btn-download) {
+  color: #3F3F46;
+}
+
+html:not(.dark) .layer-toggle {
+  color: #3F3F46;
+  border-color: #D4D4D8;
+}
+
+html:not(.dark) .style-pill {
+  color: #52525B;
+  border-color: #D4D4D8;
 }
