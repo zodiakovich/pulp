@@ -5,6 +5,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        foreground: 'var(--foreground)',
+        'foreground-muted': 'var(--foreground-muted)',
         bg: { DEFAULT: '#09090B', surface: '#111118', elevated: '#1A1A2E' },
         papaya: { DEFAULT: '#FF6D3F', coral: '#FF8A65', peach: '#FFAB91' },
         tropical: '#00B894',

@@ -17,7 +17,7 @@
   /* legacy aliases (used across app) */
   --bg: var(--background);
   --text: var(--foreground);
-  --muted: var(--foreground-muted);
+  --muted: #52525B;
 
   /* accents (unchanged across themes) */
   --accent: #FF6D3F;
