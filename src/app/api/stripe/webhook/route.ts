@@ -2,8 +2,10 @@ import Stripe from 'stripe';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
+export const runtime = 'nodejs';
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
+  apiVersion: '2024-06-20',
 });
 
 export async function POST(req: Request) {
@@ -15,11 +17,12 @@ export async function POST(req: Request) {
   const sig = req.headers.get('stripe-signature');
   if (!sig) return NextResponse.json({ error: 'Missing stripe-signature' }, { status: 400 });
 
-  const body = await req.text();
+  // IMPORTANT: must read raw body for signature verification.
+  const rawBody = await req.text();
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, secret);
+    event = stripe.webhooks.constructEvent(rawBody, sig, secret);
   } catch {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }

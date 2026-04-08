@@ -76,6 +76,32 @@ export function ExploreGallery({
 
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
+        {filtered.length === 0 && (
+          <div
+            className="rounded-2xl p-8 lg:col-span-3"
+            style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+          >
+            <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, color: 'rgba(240,240,255,0.92)' }}>
+              No generations yet. Be the first to create one.
+            </div>
+            <p className="mt-2" style={{ color: '#8A8A9A', lineHeight: 1.7 }}>
+              Start from a simple prompt like “tech house, 128bpm, Am” and generate three variations instantly.
+            </p>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center mt-5 h-10 px-4 rounded-xl text-sm font-semibold transition-all"
+              style={{
+                background: '#FF6D3F',
+                border: '1px solid rgba(255,109,63,0.45)',
+                color: '#fff',
+                textDecoration: 'none',
+                width: 'fit-content',
+              }}
+            >
+              Start generating →
+            </Link>
+          </div>
+        )}
         {filtered.map(item => {
           const prompt = (item.prompt ?? '').trim();
           const promptShort =

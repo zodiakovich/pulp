@@ -2051,9 +2051,55 @@ export default function Home() {
       const p1 = finalParams;
       const p2 = { ...finalParams, bpm: Math.min(200, finalParams.bpm + 4) };
       const p3 = { ...finalParams, bpm: Math.max(60, finalParams.bpm - 4) };
-      const gen1 = generateTrack(p1);
-      const gen2 = generateTrack(p2);
-      const gen3 = generateTrack(p3);
+
+      const generateViaApi = async (p: GenerationParams) => {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bpm: p.bpm,
+            genre: p.genre,
+            key: p.key,
+            bars: p.bars,
+            prompt: promptText ?? '',
+          }),
+        });
+
+        if (res.status === 429) {
+          const d = await res.json().catch(() => null) as any;
+          const after = typeof d?.retryAfter === 'number' ? d.retryAfter : null;
+          toast.toast(`Rate limit exceeded${after ? ` — try again in ${after}s` : ''}`, 'danger');
+          throw new Error('rate-limited');
+        }
+
+        if (res.status === 400) {
+          const d = await res.json().catch(() => null) as any;
+          toast.toast('Invalid input', 'danger');
+          throw new Error(d?.error || 'invalid input');
+        }
+
+        if (!res.ok) throw new Error('generate failed');
+        const data = await res.json() as { result: GenerationResult };
+        return data.result;
+      };
+
+      let gen1: GenerationResult;
+      let gen2: GenerationResult;
+      let gen3: GenerationResult;
+      if (e2eBypass) {
+        gen1 = generateTrack(p1);
+        gen2 = generateTrack(p2);
+        gen3 = generateTrack(p3);
+      } else {
+        try {
+          [gen1, gen2, gen3] = await Promise.all([generateViaApi(p1), generateViaApi(p2), generateViaApi(p3)]);
+        } catch {
+          // Fallback to local generation (keeps app usable if API is misconfigured).
+          gen1 = generateTrack(p1);
+          gen2 = generateTrack(p2);
+          gen3 = generateTrack(p3);
+        }
+      }
       setVariations([
         { result: gen1, params: p1 },
         { result: gen2, params: p2 },
