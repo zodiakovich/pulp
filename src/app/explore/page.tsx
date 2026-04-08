@@ -40,7 +40,7 @@ export default async function ExplorePage() {
   const genres = Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name }));
 
   return (
-    <div className="min-h-screen" style={{ background: '#0A0A0F' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <Navbar active="explore" />
 
       <ExploreGallery items={items} genres={genres} />

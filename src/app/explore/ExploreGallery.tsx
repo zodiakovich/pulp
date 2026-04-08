@@ -32,7 +32,7 @@ export function ExploreGallery({
       {/* Filter bar */}
       <div
         className="mt-20 mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
-        style={{ borderBottom: '1px solid #1A1A2E', paddingBottom: 16 }}
+        style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}
       >
         <div>
           <h1
@@ -41,7 +41,7 @@ export function ExploreGallery({
           >
             Explore
           </h1>
-          <p style={{ color: '#8A8A9A', fontSize: 14, marginTop: 8 }}>
+          <p style={{ color: 'var(--foreground-muted)', fontSize: 14, marginTop: 8 }}>
             A public gallery of recent generations.
           </p>
         </div>
@@ -58,9 +58,9 @@ export function ExploreGallery({
             onChange={e => setGenreFilter(e.target.value)}
             className="h-10 rounded-xl px-3 text-sm"
             style={{
-              background: '#111118',
-              border: '1px solid #1A1A2E',
-              color: '#F0F0FF',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              color: 'var(--foreground)',
               fontFamily: 'JetBrains Mono, monospace',
             }}
           >
@@ -118,7 +118,7 @@ export function ExploreGallery({
                 textDecoration: 'none',
               }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = '#1A1A2E')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">

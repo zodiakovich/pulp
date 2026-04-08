@@ -4148,7 +4148,7 @@ export default function Home() {
           <div
             className="text-center mt-12 space-y-2"
           >
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A', letterSpacing: '0.04em' }}>
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)', letterSpacing: '0.04em' }}>
               20 genres · 15 styles · 4 independent tracks · .mid export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
@@ -4160,8 +4160,8 @@ export default function Home() {
 
       {/* ── HOW IT WORKS ── */}
       <section
-        className="py-24 px-8"
-        style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
+        className="dark-band py-24 px-8"
+        style={{ borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
       >
         <div className="max-w-[1280px] mx-auto">
           <h2
@@ -4183,7 +4183,7 @@ export default function Home() {
                   style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, letterSpacing: '-0.005em', lineHeight: 1.3 }}>
                   {step.title}
                 </h3>
-                <p style={{ fontSize: 14, color: '#8A8A9A', lineHeight: 1.7 }}>{step.body}</p>
+                <p style={{ fontSize: 14, color: 'var(--foreground-muted)', lineHeight: 1.7 }}>{step.body}</p>
               </div>
             ))}
           </div>
@@ -4203,7 +4203,7 @@ export default function Home() {
           </h2>
           <p
             className="mb-12 text-sm"
-            style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}
+            style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}
           >
             Click any genre to load it into the generator.
           </p>
@@ -4217,7 +4217,7 @@ export default function Home() {
                 className="genre-card text-left"
               >
                 <span className="block font-bold text-sm leading-tight"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'rgba(240,240,255,0.75)' }}>
+                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--foreground)' }}>
                   {g.name}
                 </span>
               </button>
@@ -4228,8 +4228,8 @@ export default function Home() {
 
       {/* ── LAYER SYSTEM ── */}
       <section
-        className="py-24 px-8"
-        style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
+        className="dark-band py-24 px-8"
+        style={{ borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
       >
         <div className="max-w-[1280px] mx-auto">
           <h2
@@ -4240,7 +4240,7 @@ export default function Home() {
           </h2>
           <p
             className="mb-12"
-            style={{ fontSize: 15, color: '#8A8A9A', maxWidth: 560, lineHeight: 1.7 }}
+            style={{ fontSize: 15, color: 'var(--foreground-muted)', maxWidth: 560, lineHeight: 1.7 }}
           >
             Each track has its own voice, rhythm, and range. Toggle any layer on or off. Download each one separately or all at once.
           </p>
@@ -4255,9 +4255,9 @@ export default function Home() {
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: layer.color }} />
                   <span className="font-bold text-sm" style={{ fontFamily: 'Syne, sans-serif' }}>{layer.name}</span>
-                  <span className="ml-auto text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>{layer.range}</span>
+                  <span className="ml-auto text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--foreground-muted)' }}>{layer.range}</span>
                 </div>
-                <p className="text-xs leading-relaxed" style={{ color: '#8A8A9A', lineHeight: 1.7 }}>{layer.body}</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--foreground-muted)', lineHeight: 1.7 }}>{layer.body}</p>
               </div>
             ))}
           </div>
@@ -4265,20 +4265,20 @@ export default function Home() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="px-8 py-16" style={{ borderTop: '1px solid #1A1A2E' }}>
+      <footer className="px-8 py-16" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="max-w-[1280px] mx-auto">
 
           {/* Top row */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 mb-8"
-            style={{ borderBottom: '1px solid #1A1A2E' }}>
+            style={{ borderBottom: '1px solid var(--border)' }}>
             <span className="text-gradient font-extrabold text-2xl" style={{ fontFamily: 'Syne, sans-serif' }}>
               pulp
             </span>
-            <nav className="flex items-center gap-8 text-sm" style={{ color: '#8A8A9A' }}>
-              <button onClick={scrollToTool} className="transition-colors hover:text-white">Create</button>
-              <button onClick={() => setShowHistory(true)} className="transition-colors hover:text-white">History</button>
+            <nav className="flex items-center gap-8 text-sm">
+              <button type="button" onClick={scrollToTool} className="nav-link">Create</button>
+              <button type="button" onClick={() => setShowHistory(true)} className="nav-link">History</button>
             </nav>
-            <span className="text-sm" style={{ color: '#8A8A9A' }}>
+            <span className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
               a{' '}
               <span className="font-extrabold text-gradient" style={{ fontFamily: 'Syne, sans-serif' }}>papaya</span>
               <span style={{ color: '#00B894' }}>●</span>
@@ -4293,13 +4293,13 @@ export default function Home() {
             </span>
 
             <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
-              <a href="/legal/terms" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+              <a href="/legal/terms" className="footer-link">
                 Terms
               </a>
-              <a href="/legal/privacy" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+              <a href="/legal/privacy" className="footer-link">
                 Privacy
               </a>
-              <a href="/legal/license" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+              <a href="/legal/license" className="footer-link">
                 License
               </a>
             </div>
@@ -4307,7 +4307,7 @@ export default function Home() {
             {/* Live status */}
             <div className="flex items-center gap-2">
               <span className="status-dot" />
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A' }}>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)' }}>
                 All systems operational
               </span>
             </div>

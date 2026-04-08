@@ -8,8 +8,8 @@ const STORAGE_KEY = 'pulp_theme';
 
 function setThemeAttr(theme: Theme) {
   if (typeof document === 'undefined') return;
-  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  else document.documentElement.removeAttribute('data-theme');
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+  document.documentElement.removeAttribute('data-theme');
 }
 
 function getStoredTheme(): Theme | null {
@@ -65,7 +65,7 @@ export function ThemeToggle() {
 
   useEffect(() => {
     const stored = getStoredTheme();
-    const t = stored ?? 'dark';
+    const t = stored ?? 'light';
     setTheme(t);
     setThemeAttr(t);
   }, []);

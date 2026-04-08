@@ -37,20 +37,20 @@ export default async function ProfilePage() {
           >
             pulp
           </Link>
-          <div className="flex items-center gap-8 text-sm" style={{ color: 'var(--muted)' }}>
-            <Link href="/" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
+          <div className="flex items-center gap-8 text-sm">
+            <Link href="/" className="nav-link">
               Create
             </Link>
-            <Link href="/explore" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
+            <Link href="/explore" className="nav-link">
               Explore
             </Link>
-            <Link href="/build" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
+            <Link href="/build" className="nav-link">
               Build
             </Link>
-            <Link href="/pricing" className="transition-colors hover:text-white" style={{ textDecoration: 'none' }}>
+            <Link href="/pricing" className="nav-link">
               Pricing
             </Link>
-            <Link href="/profile" className="transition-colors" style={{ color: 'var(--text)', textDecoration: 'none' }}>
+            <Link href="/profile" className="nav-link nav-link--active">
               Profile
             </Link>
           </div>

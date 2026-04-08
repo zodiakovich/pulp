@@ -26,7 +26,7 @@ const PRO_FEATURES = [
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen" style={{ background: '#0A0A0F' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <Navbar active="pricing" />
 
       {/* Hero */}
@@ -42,7 +42,7 @@ export default function PricingPage() {
         >
           Simple pricing.
         </h1>
-        <p style={{ fontSize: 16, color: '#8A8A9A', maxWidth: 480, margin: '0 auto' }}>
+        <p style={{ fontSize: 16, color: 'var(--foreground-muted)', maxWidth: 480, margin: '0 auto' }}>
           Start free, upgrade when you need more.
         </p>
       </section>
@@ -136,16 +136,16 @@ export default function PricingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="px-8 py-10 text-center" style={{ borderTop: '1px solid #1A1A2E' }}>
+      <footer className="px-8 py-10 text-center" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="flex items-center justify-center gap-4 mb-3 text-xs"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
-          <Link href="/legal/terms" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+          <Link href="/legal/terms" className="footer-link">
             Terms
           </Link>
-          <Link href="/legal/privacy" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+          <Link href="/legal/privacy" className="footer-link">
             Privacy
           </Link>
-          <Link href="/legal/license" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+          <Link href="/legal/license" className="footer-link">
             License
           </Link>
         </div>

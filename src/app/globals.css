@@ -4,13 +4,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── THEME TOKENS ─── */
+/* ─── THEME TOKENS (light = :root, dark = html.dark) ─── */
 :root {
-  --bg: #09090B;
-  --surface: #111118;
-  --border: #1A1A2E;
-  --text: #F0F0FF;
-  --muted: #8A8A9A;
+  --foreground: #09090B;
+  --foreground-muted: #52525B;
+  --background: #FAFAFA;
+  --surface: #F4F4F5;
+  --border: #E4E4E7;
+  --button-text: #09090B;
+  --button-text-muted: #3F3F46;
+
+  /* legacy aliases (used across app) */
+  --bg: var(--background);
+  --text: var(--foreground);
+  --muted: var(--foreground-muted);
 
   /* accents (unchanged across themes) */
   --accent: #FF6D3F;
@@ -19,12 +26,71 @@
   --purple: #A78BFA;
 }
 
-[data-theme="light"] {
-  --bg: #FAFAFA;
-  --surface: #FFFFFF;
-  --border: #E5E5E5;
-  --text: #09090B;
-  --muted: #52525B;
+html.dark {
+  --foreground: #F0F0FF;
+  --foreground-muted: #8A8A9A;
+  --background: #09090B;
+  --surface: #111118;
+  --border: #1A1A2E;
+  --button-text: #F0F0FF;
+  --button-text-muted: #8A8A9A;
+
+  --bg: var(--background);
+  --text: var(--foreground);
+  --muted: var(--foreground-muted);
+}
+
+/* Inverted full-width bands (dark panels on light pages) */
+.dark-band {
+  --foreground: #F0F0FF;
+  --foreground-muted: #8A8A9A;
+  --text: #F0F0FF;
+  --muted: #8A8A9A;
+  --background: #111118;
+  --surface: #14141c;
+  --border: #1A1A2E;
+  background: #111118;
+  color: var(--foreground-muted);
+}
+.dark-band h1,
+.dark-band h2,
+.dark-band h3,
+.dark-band .font-extrabold {
+  color: var(--foreground);
+}
+
+/* ─── NAV / FOOTER LINKS (theme-aware, no inline color needed) ─── */
+.nav-link {
+  color: var(--foreground-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 150ms ease-out;
+}
+.nav-link:hover,
+.nav-link:focus-visible {
+  color: var(--foreground);
+}
+.nav-link--active {
+  color: var(--foreground);
+}
+button.nav-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* Footer / legal row */
+.footer-link {
+  color: var(--foreground-muted);
+  text-decoration: none;
+  transition: color 150ms ease-out;
+  font-size: inherit;
+}
+.footer-link:hover,
+.footer-link:focus-visible {
+  color: var(--foreground);
 }
 
 /* ─── BASE ─── */
@@ -47,11 +113,19 @@ body {
   background-clip: text;
 }
 
-/* In light mode, force brand-orange text for gradient text. */
-[data-theme="light"] .text-gradient {
-  background: none;
-  -webkit-text-fill-color: var(--accent);
-  color: var(--accent);
+/* Light mode / non-dark: solid brand orange (gradient clip is illegible on white). */
+html:not(.dark) .text-gradient {
+  background: none !important;
+  -webkit-text-fill-color: #FF6D3F !important;
+  color: #FF6D3F !important;
+}
+
+html.dark .text-gradient {
+  background: linear-gradient(135deg, #FF6D3F 0%, #FF8A65 50%, #FFAB91 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
 }
 
 /* ─── GLASS NAV ─── */
@@ -247,8 +321,8 @@ body {
 
 /* ─── LAYER CARDS ─── */
 .layer-card {
-  background: #111118;
-  border: 1px solid #1A1A2E;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
   transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
@@ -283,8 +357,8 @@ body {
   font-size: 13px;
   font-family: 'DM Sans', sans-serif;
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.08);
-  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  color: var(--foreground-muted);
   background: transparent;
   cursor: pointer;
   white-space: nowrap;
@@ -294,7 +368,7 @@ body {
 }
 .style-pill:hover {
   border-color: rgba(255,109,63,0.4);
-  color: var(--text);
+  color: var(--foreground);
   background: rgba(255,109,63,0.06);
 }
 .style-pill.active {
@@ -322,11 +396,11 @@ body {
   background-color: color-mix(in srgb, currentColor 10%, transparent);
 }
 .layer-toggle.off {
-  border-color: rgba(255,255,255,0.08);
-  color: var(--muted);
-  opacity: 0.55;
+  border-color: color-mix(in srgb, var(--border) 90%, transparent);
+  color: var(--foreground-muted);
+  opacity: 0.85;
 }
-.layer-toggle.off:hover { opacity: 0.85; }
+.layer-toggle.off:hover { opacity: 1; }
 
 /* ─── SELECT OVERRIDES ─── */
 select {
@@ -381,16 +455,17 @@ input[type="range"]::-moz-range-thumb {
 /* ─── GENRE CARD ─── */
 .genre-card {
   padding: 16px;
-  border: 1px solid #1A1A2E;
+  border: 1px solid var(--border);
   border-radius: 10px;
   text-align: left;
   background: transparent;
+  color: var(--foreground);
   cursor: pointer;
   transition: all 180ms ease-out;
 }
 .genre-card:hover {
   border-color: rgba(255,109,63,0.35);
-  background: rgba(255,109,63,0.04);
+  background: var(--surface);
   transform: translateY(-1px);
 }
 

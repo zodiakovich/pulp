@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuth, UserButton } from '@clerk/nextjs';
+import { useAuth, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsNew } from '@/components/WhatsNew';
 
@@ -16,20 +16,18 @@ export function Navbar({
 }) {
   const { isLoaded, isSignedIn } = useAuth();
 
-  const linkStyle = (isActive: boolean) => ({
-    textDecoration: 'none',
-    color: isActive ? 'var(--text)' : 'var(--muted)',
-  });
+  const navClass = (isActive: boolean) =>
+    `nav-link ${isActive ? 'nav-link--active' : ''}`;
 
   const loggedOutLinks = (
     <>
-      <Link href="/" className="transition-colors hover:text-white" style={linkStyle(active === 'create')}>
+      <Link href="/" className={navClass(active === 'create')}>
         Create
       </Link>
-      <Link href="/explore" className="transition-colors hover:text-white" style={linkStyle(active === 'explore')}>
+      <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
-      <Link href="/pricing" className="transition-colors hover:text-white" style={linkStyle(active === 'pricing')}>
+      <Link href="/pricing" className={navClass(active === 'pricing')}>
         Pricing
       </Link>
     </>
@@ -37,13 +35,13 @@ export function Navbar({
 
   const loggedInLinks = (
     <>
-      <Link href="/" className="transition-colors hover:text-white" style={linkStyle(active === 'create')}>
+      <Link href="/" className={navClass(active === 'create')}>
         Create
       </Link>
-      <Link href="/explore" className="transition-colors hover:text-white" style={linkStyle(active === 'explore')}>
+      <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
-      <Link href="/build" className="transition-colors hover:text-white" style={linkStyle(active === 'build')}>
+      <Link href="/build" className={navClass(active === 'build')}>
         Build
       </Link>
 
@@ -51,8 +49,8 @@ export function Navbar({
         <button
           type="button"
           onClick={onHistory}
-          className="transition-colors hover:text-white flex items-center gap-2"
-          style={{ color: 'var(--muted)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+          className="nav-link flex items-center gap-2"
+          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
         >
           History
           {(historyCount ?? 0) > 0 && (
@@ -65,15 +63,15 @@ export function Navbar({
           )}
         </button>
       ) : (
-        <Link href="/?history=1" className="transition-colors hover:text-white" style={linkStyle(false)}>
+        <Link href="/?history=1" className={navClass(false)}>
           History
         </Link>
       )}
 
-      <Link href="/profile" className="transition-colors hover:text-white" style={linkStyle(active === 'profile')}>
+      <Link href="/profile" className={navClass(active === 'profile')}>
         Profile
       </Link>
-      <Link href="/pricing" className="transition-colors hover:text-white" style={linkStyle(active === 'pricing')}>
+      <Link href="/pricing" className={navClass(active === 'pricing')}>
         Pricing
       </Link>
     </>
@@ -97,81 +95,38 @@ export function Navbar({
           pulp
         </Link>
 
-        <div className="hidden md:flex items-center gap-8 text-sm" style={{ color: 'var(--muted)' }}>
+        <div className="hidden md:flex items-center gap-8">
           {isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks}
         </div>
 
         <div className="flex items-center gap-2">
-          {isLoaded && isSignedIn ? (
-            <>
-              {/* signed-in order: ⌘K → v1.0 → What's new → theme → avatar */}
+          <WhatsNew />
+          <ThemeToggle />
+          <SignedIn>
+            <div className="flex-shrink-0">
+              <UserButton />
+            </div>
+          </SignedIn>
+          <SignedOut>
+            <SignInButton mode="modal">
               <button
                 type="button"
-                onClick={() => window.dispatchEvent(new Event('pulp:open-command-bar'))}
-                className="h-9 px-3 rounded-lg flex items-center justify-center transition-all"
-                style={{
-                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
-                  background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
-                  color: 'var(--text)',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                }}
-                aria-label="Open command bar"
-                title="Command bar (⌘K)"
-              >
-                ⌘K
-              </button>
-
-              <span
-                className="hidden lg:inline-flex h-9 items-center px-3 rounded-lg"
-                style={{
-                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
-                  background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
-                  color: 'var(--muted)',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                }}
-                aria-label="Version"
-                title="Version"
-              >
-                v1.0
-              </span>
-
-              <div className="hidden lg:block">
-                <WhatsNew />
-              </div>
-
-              <ThemeToggle />
-
-              <div className="flex-shrink-0">
-                <UserButton />
-              </div>
-            </>
-          ) : (
-            <>
-              {/* logged-out order: What's new → theme → Sign in */}
-              <WhatsNew />
-              <ThemeToggle />
-              <Link
-                href="/sign-in"
                 className="text-sm h-9 px-4 rounded-lg transition-all flex items-center"
                 style={{
                   border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
-                  color: 'var(--text)',
+                  color: 'var(--button-text)',
                   background: 'transparent',
                   whiteSpace: 'nowrap',
-                  textDecoration: 'none',
                 }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--foreground) 6%, transparent)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
                 Sign in
-              </Link>
-            </>
-          )}
+              </button>
+            </SignInButton>
+          </SignedOut>
         </div>
       </div>
     </nav>
   );
 }
-
