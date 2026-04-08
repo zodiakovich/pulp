@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { UpgradeButton } from './UpgradeButton';
 
 export const metadata: Metadata = {
   title: 'Pricing — Pulp',
@@ -129,19 +130,6 @@ export default function PricingPage() {
             className="rounded-2xl p-8 flex flex-col relative overflow-hidden"
             style={{ background: '#111118', border: '2px solid #FF6D3F' }}
           >
-            {/* Coming Soon badge */}
-            <div
-              className="absolute top-5 right-5 text-xs font-semibold px-3 py-1 rounded-full"
-              style={{
-                fontFamily: 'JetBrains Mono, monospace',
-                background: 'rgba(255,109,63,0.12)',
-                color: '#FF6D3F',
-                border: '1px solid rgba(255,109,63,0.3)',
-              }}
-            >
-              Coming Soon
-            </div>
-
             <div className="mb-6">
               <p
                 className="text-xs uppercase tracking-widest mb-3"
@@ -169,18 +157,7 @@ export default function PricingPage() {
                 </li>
               ))}
             </ul>
-
-            <button
-              disabled
-              className="w-full py-3 rounded-xl text-sm font-semibold cursor-not-allowed"
-              style={{
-                background: 'rgba(255,109,63,0.12)',
-                border: '1px solid rgba(255,109,63,0.3)',
-                color: 'rgba(255,109,63,0.5)',
-              }}
-            >
-              Coming Soon
-            </button>
+            <UpgradeButton />
           </div>
         </div>
       </section>

@@ -11,13 +11,15 @@
     "@anthropic-ai/sdk": "^0.82.0",
     "@clerk/nextjs": "^6.0.0",
     "@fontsource/syne": "^5.2.7",
+    "@stripe/stripe-js": "^9.1.0",
     "@supabase/supabase-js": "^2.102.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "framer-motion": "^12.38.0",
     "next": "^15.3.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "stripe": "^22.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
