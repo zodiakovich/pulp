@@ -3,6 +3,8 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ToastProvider } from '@/components/toast/ToastProvider';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { WhatsNew } from '@/components/WhatsNew';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -42,7 +44,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <ClerkProvider>
       <html lang="en">
-        <body className="min-h-screen bg-bg font-body text-[#F0F0FF] antialiased">
+        <body className="min-h-screen font-body antialiased" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+          <script
+            // Set theme before hydration to avoid flash.
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function () {
+                  try {
+                    var t = localStorage.getItem('pulp_theme');
+                    if (t === 'light') document.documentElement.setAttribute('data-theme','light');
+                  } catch (e) {}
+                })();
+              `,
+            }}
+          />
+          <div className="fixed top-2 right-3 z-[60] flex items-center gap-2">
+            <WhatsNew />
+            <ThemeToggle />
+          </div>
           <ToastProvider>{children}</ToastProvider>
           <Analytics />
           <SpeedInsights />

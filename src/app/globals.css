@@ -4,12 +4,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── THEME TOKENS ─── */
+:root {
+  --bg: #09090B;
+  --surface: #111118;
+  --border: #1A1A2E;
+  --text: #F0F0FF;
+  --muted: #8A8A9A;
+
+  /* accents (unchanged across themes) */
+  --accent: #FF6D3F;
+  --success: #00B894;
+  --hot: #E94560;
+  --purple: #A78BFA;
+}
+
+[data-theme="light"] {
+  --bg: #FAFAFA;
+  --surface: #FFFFFF;
+  --border: #E5E5E5;
+  --text: #09090B;
+  --muted: #6B6B7A;
+}
+
 /* ─── BASE ─── */
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
-  background: #09090B;
-  color: #F0F0FF;
+  background: var(--bg);
+  color: var(--text);
   font-family: 'DM Sans', sans-serif;
   font-size: 16px;
   line-height: 1.6;
@@ -26,7 +49,7 @@ body {
 
 /* ─── GLASS NAV ─── */
 .glass {
-  background: rgba(9, 9, 11, 0.88);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
@@ -148,17 +171,17 @@ body {
   padding: 0 28px;
   border-radius: 10px;
   background: transparent;
-  color: #F0F0FF;
+  color: var(--text);
   font-family: 'DM Sans', sans-serif;
   font-weight: 500;
   font-size: 15px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   cursor: pointer;
   transition: all 180ms ease-out;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
+.btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .btn-secondary:active:not(:disabled) { transform: scale(0.97); }
 .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -199,19 +222,19 @@ body {
 .input-field {
   width: 100%;
   height: 52px;
-  background: #111118;
-  border: 1px solid #1A1A2E;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #F0F0FF;
+  color: var(--text);
   font-family: 'DM Sans', sans-serif;
   font-size: 15px;
   padding: 0 16px;
   transition: border-color 180ms ease-out, box-shadow 180ms ease-out;
 }
-.input-field::placeholder { color: #8A8A9A; }
+.input-field::placeholder { color: var(--muted); }
 .input-field:focus {
   outline: none;
-  border-color: #FF6D3F;
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(255,109,63,0.15);
 }
 
@@ -300,9 +323,9 @@ body {
 
 /* ─── SELECT OVERRIDES ─── */
 select {
-  background: #111118;
-  border: 1px solid #1A1A2E;
-  color: #F0F0FF;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 13px;
@@ -315,14 +338,14 @@ select {
   padding-right: 28px;
 }
 select:focus { outline: none; border-color: rgba(255,109,63,0.5); }
-select option { background: #111118; }
+select option { background: var(--surface); }
 
 /* ─── RANGE SLIDER ─── */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
-  background: #1A1A2E;
+  background: var(--border);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
@@ -408,8 +431,8 @@ input[type="range"]::-moz-range-thumb {
   -webkit-backdrop-filter: blur(6px);
 }
 .cmd-modal {
-  background: #111118;
-  border: 1px solid #1A1A2E;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
@@ -426,16 +449,16 @@ input[type="range"]::-moz-range-thumb {
   transition: background 130ms ease-out;
   text-align: left;
   border: none;
-  color: #F0F0FF;
+  color: var(--text);
 }
-.cmd-action:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
+.cmd-action:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .cmd-action:disabled { opacity: 0.3; cursor: not-allowed; }
 kbd {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  color: #8A8A9A;
-  background: rgba(255,255,255,0.06);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
   padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
 }

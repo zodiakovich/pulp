@@ -187,6 +187,18 @@ export default function PricingPage() {
 
       {/* Footer */}
       <footer className="px-8 py-10 text-center" style={{ borderTop: '1px solid #1A1A2E' }}>
+        <div className="flex items-center justify-center gap-4 mb-3 text-xs"
+          style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
+          <Link href="/legal/terms" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+            Terms
+          </Link>
+          <Link href="/legal/privacy" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+            Privacy
+          </Link>
+          <Link href="/legal/license" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+            License
+          </Link>
+        </div>
         <span
           className="text-xs"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}

@@ -461,13 +461,20 @@ export type ContinuationContext = {
   lastMelodyPitch?: number | null;
   /** Beat offset to place generated continuation at (e.g. existingBars * 4). */
   startBeat?: number;
+  /** Seed notes from user (to infer rhythm + contour). */
+  seedNotes?: NoteEvent[];
 };
 
 // --- MELODY GENERATOR ---
 function generateMelody(
   params: GenerationParams,
   genre: GenreProfile,
-  opts?: { startBeat?: number; lastMelodyPitch?: number | null }
+  opts?: {
+    startBeat?: number;
+    lastMelodyPitch?: number | null;
+    seedDurations?: number[];
+    directionBias?: number; // -1..1
+  }
 ): NoteEvent[] {
   const notes: NoteEvent[] = [];
   if (!params.layers.melody) return notes;
@@ -501,17 +508,23 @@ function generateMelody(
       continue;
     }
     
-    // Choose note duration
-    const duration = pick(genre.melodyNoteLengths);
+    // Choose note duration (optionally biased by seed)
+    const durationPool = (opts?.seedDurations && opts.seedDurations.length > 0)
+      ? opts.seedDurations
+      : genre.melodyNoteLengths;
+    const duration = pick(durationPool);
     if (currentBeat + duration > totalBeats) break;
     
-    // Melodic motion: mostly stepwise, occasional leaps
+    // Melodic motion: mostly stepwise, occasional leaps (optionally biased by contour)
     const motion = Math.random();
     let step: number;
-    if (motion < 0.5) step = pick([-1, 1]);          // step
-    else if (motion < 0.75) step = pick([-2, 2]);     // third
-    else if (motion < 0.9) step = pick([-3, 3, -4, 4]); // leap
-    else step = 0;                                      // repeat
+    const dir = (opts?.directionBias ?? 0);
+    const stepChoices = dir > 0.25 ? [-1, 1, 1, 1] : dir < -0.25 ? [-1, -1, -1, 1] : [-1, 1];
+    const thirdChoices = dir > 0.25 ? [-2, 2, 2] : dir < -0.25 ? [-2, -2, 2] : [-2, 2];
+    if (motion < 0.5) step = pick(stepChoices);          // step
+    else if (motion < 0.75) step = pick(thirdChoices);   // third
+    else if (motion < 0.9) step = pick([-3, 3, -4, 4]);  // leap
+    else step = 0;                                       // repeat
     
     lastNoteIdx = Math.max(0, Math.min(scaleNotes.length - 1, lastNoteIdx + step));
     const pitch = scaleNotes[lastNoteIdx];
@@ -1069,7 +1082,20 @@ export function generateTrack(params: GenerationParams, continuation?: Continuat
 
   return {
     melody: humanizePattern(
-      generateMelody(params, genre, { startBeat, lastMelodyPitch: continuation?.lastMelodyPitch }),
+      generateMelody(params, genre, {
+        startBeat,
+        lastMelodyPitch: continuation?.lastMelodyPitch,
+        seedDurations: continuation?.seedNotes?.map(n => n.duration).filter(d => d > 0.05 && d <= 4) ?? undefined,
+        directionBias: (() => {
+          const seed = continuation?.seedNotes;
+          if (!seed || seed.length < 2) return 0;
+          const sorted = [...seed].sort((a, b) => a.startTime - b.startTime);
+          const first = sorted[0]?.pitch ?? 0;
+          const last = sorted.at(-1)?.pitch ?? first;
+          const diff = last - first;
+          return Math.max(-1, Math.min(1, diff / 24));
+        })(),
+      }),
       params.bpm,
       h
     ),

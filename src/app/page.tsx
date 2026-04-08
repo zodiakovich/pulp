@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useAuth, SignInButton, UserButton } from '@clerk/nextjs';
 import {
-  generateTrack, getDefaultParams, GENRES, STYLE_TAGS, parsePrompt, MANUAL_SCALE_OPTIONS,
+  generateTrack, getDefaultParams, GENRES, STYLE_TAGS, parsePrompt, MANUAL_SCALE_OPTIONS, SCALE_INTERVALS,
   type GenerationParams, type GenerationResult, type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { track } from '@vercel/analytics';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
+import { generateAbletonAlsBlob } from '@/lib/ableton-export';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 const EASE_OUT = [0, 0, 0.2, 1] as const;
@@ -303,9 +304,11 @@ const LAYER_COLORS: Record<string, string> = {
   chords: '#A78BFA',
   bass:   '#00B894',
   drums:  '#E94560',
+  imported: '#A78BFA',
 };
 
 const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
+const EDITOR_LAYERS = [...LAYERS, 'imported'] as const;
 
 // ─── PIANO ROLL EDITOR CONSTANTS ──────────────────────────────
 const EDITOR_MIDI_MIN = 36;   // C2
@@ -594,6 +597,15 @@ function downloadTextFile(content: string, filename: string, mimeType: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+async function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 function escapeXml(s: string): string {
@@ -911,16 +923,246 @@ function drawSheetMusic(
   }
 }
 
+// ─── AUDIO → MIDI (FFT) ────────────────────────────────────────
+function freqToMidi(freq: number): number {
+  return Math.round(69 + 12 * Math.log2(freq / 440));
+}
+
+function hann(i: number, n: number): number {
+  return 0.5 * (1 - Math.cos((2 * Math.PI * i) / (n - 1)));
+}
+
+// In-place radix-2 FFT (real/imag arrays). Minimal + sufficient for dominant bin detection.
+function fftRadix2(re: Float32Array, im: Float32Array) {
+  const n = re.length;
+  let j = 0;
+  for (let i = 1; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      const tr = re[i]; re[i] = re[j]; re[j] = tr;
+      const ti = im[i]; im[i] = im[j]; im[j] = ti;
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wlenCos = Math.cos(ang);
+    const wlenSin = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let wCos = 1;
+      let wSin = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const uRe = re[i + k]!;
+        const uIm = im[i + k]!;
+        const vRe = re[i + k + len / 2]!;
+        const vIm = im[i + k + len / 2]!;
+        const tRe = vRe * wCos - vIm * wSin;
+        const tIm = vRe * wSin + vIm * wCos;
+        re[i + k] = uRe + tRe;
+        im[i + k] = uIm + tIm;
+        re[i + k + len / 2] = uRe - tRe;
+        im[i + k + len / 2] = uIm - tIm;
+        const nextCos = wCos * wlenCos - wSin * wlenSin;
+        const nextSin = wCos * wlenSin + wSin * wlenCos;
+        wCos = nextCos;
+        wSin = nextSin;
+      }
+    }
+  }
+}
+
+function detectNotesFromAudio(buffer: AudioBuffer, bpm: number): NoteEvent[] {
+  const sr = buffer.sampleRate;
+  const ch0 = buffer.getChannelData(0);
+  const ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : null;
+
+  // Limit analysis length for UX
+  const maxSeconds = Math.min(45, buffer.duration);
+  const maxSamples = Math.min(ch0.length, Math.floor(sr * maxSeconds));
+
+  const fftSize = 2048;
+  const hop = 512;
+  const re = new Float32Array(fftSize);
+  const im = new Float32Array(fftSize);
+
+  type Frame = { tSec: number; midi: number | null; mag: number };
+  const frames: Frame[] = [];
+
+  const minHz = 55;
+  const maxHz = 1760; // ~A6
+  const minBin = Math.max(1, Math.floor((minHz * fftSize) / sr));
+  const maxBin = Math.min(fftSize / 2 - 1, Math.floor((maxHz * fftSize) / sr));
+
+  for (let pos = 0; pos + fftSize < maxSamples; pos += hop) {
+    for (let i = 0; i < fftSize; i++) {
+      const s0 = ch0[pos + i] ?? 0;
+      const s1 = ch1 ? (ch1[pos + i] ?? 0) : 0;
+      const s = ch1 ? (s0 + s1) * 0.5 : s0;
+      re[i] = s * hann(i, fftSize);
+      im[i] = 0;
+    }
+
+    fftRadix2(re, im);
+
+    let bestBin = -1;
+    let bestMag = 0;
+    for (let b = minBin; b <= maxBin; b++) {
+      const mag = re[b]! * re[b]! + im[b]! * im[b]!;
+      if (mag > bestMag) { bestMag = mag; bestBin = b; }
+    }
+
+    const tSec = pos / sr;
+    const mag = Math.sqrt(bestMag);
+    if (bestBin < 0) {
+      frames.push({ tSec, midi: null, mag: 0 });
+      continue;
+    }
+
+    const freq = (bestBin * sr) / fftSize;
+    const midi = freqToMidi(freq);
+    frames.push({ tSec, midi, mag });
+  }
+
+  if (frames.length === 0) return [];
+
+  const mags = frames.map(f => f.mag).sort((a, b) => a - b);
+  const p70 = mags[Math.floor(mags.length * 0.7)] ?? 0;
+  const p90 = mags[Math.floor(mags.length * 0.9)] ?? p70;
+  const threshold = p70 + (p90 - p70) * 0.25;
+
+  const secondsPerBeat = 60 / Math.max(60, Math.min(200, bpm));
+
+  let curMidi: number | null = null;
+  let curStartSec = 0;
+  let curLastSec = 0;
+  let curVel = 90;
+
+  const notes: NoteEvent[] = [];
+  const commit = () => {
+    if (curMidi === null) return;
+    const durSec = Math.max(0.08, curLastSec - curStartSec);
+    notes.push({
+      pitch: Math.max(24, Math.min(108, curMidi)),
+      startTime: curStartSec / secondsPerBeat,
+      duration: Math.max(0.125, durSec / secondsPerBeat),
+      velocity: Math.max(45, Math.min(120, curVel)),
+    });
+  };
+
+  for (const f of frames) {
+    const active = f.mag >= threshold && f.midi !== null;
+    const midi = active ? f.midi : null;
+
+    if (curMidi === null) {
+      if (midi !== null) {
+        curMidi = midi;
+        curStartSec = f.tSec;
+        curLastSec = f.tSec;
+        curVel = Math.round(70 + Math.min(50, (f.mag / Math.max(1e-6, p90)) * 50));
+      }
+      continue;
+    }
+
+    if (midi === null) {
+      commit();
+      curMidi = null;
+      continue;
+    }
+
+    if (Math.abs(midi - curMidi) <= 1) {
+      curLastSec = f.tSec;
+      curVel = Math.max(curVel, Math.round(70 + Math.min(50, (f.mag / Math.max(1e-6, p90)) * 50)));
+    } else {
+      commit();
+      curMidi = midi;
+      curStartSec = f.tSec;
+      curLastSec = f.tSec;
+      curVel = Math.round(70 + Math.min(50, (f.mag / Math.max(1e-6, p90)) * 50));
+    }
+  }
+  commit();
+
+  // Merge very short notes into neighbors
+  const merged: NoteEvent[] = [];
+  for (const n of notes) {
+    const prev = merged.at(-1);
+    if (prev && n.duration <= 0.15 && Math.abs(n.pitch - prev.pitch) <= 1) {
+      prev.duration = Math.max(prev.duration, (n.startTime + n.duration) - prev.startTime);
+      prev.velocity = Math.max(prev.velocity, n.velocity);
+    } else {
+      merged.push({ ...n });
+    }
+  }
+
+  return merged;
+}
+
+function midiToPitchClass(midi: number): number {
+  return ((midi % 12) + 12) % 12;
+}
+
+function detectKeyScaleFromSeed(seed: NoteEvent[]): { key: typeof KEYS[number]; scale: string } {
+  const pcs = seed.map(n => midiToPitchClass(n.pitch));
+  const pcSet = new Set(pcs);
+  if (pcSet.size === 0) return { key: 'A', scale: 'minor' };
+
+  const candidates = MANUAL_SCALE_OPTIONS.map(s => s.value);
+  let bestKey: typeof KEYS[number] = 'A';
+  let bestScale = 'minor';
+  let bestScore = -Infinity;
+
+  for (const key of KEYS) {
+    const rootPc = (KEYS as readonly string[]).indexOf(key);
+    for (const scale of candidates) {
+      const intervals = SCALE_INTERVALS[scale] ?? SCALE_INTERVALS.minor;
+      const allowed = new Set(intervals.map(i => (rootPc + i) % 12));
+      let inScale = 0;
+      for (const pc of pcSet) if (allowed.has(pc)) inScale++;
+      const out = pcSet.size - inScale;
+      const score = inScale * 2 - out * 3;
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = key;
+        bestScale = scale;
+      }
+    }
+  }
+  return { key: bestKey, scale: bestScale };
+}
+
+function detectDirectionBias(seed: NoteEvent[]): number {
+  const sorted = [...seed].sort((a, b) => a.startTime - b.startTime);
+  if (sorted.length < 2) return 0;
+  const first = sorted[0]!.pitch;
+  const last = sorted.at(-1)!.pitch;
+  return Math.max(-1, Math.min(1, (last - first) / 24));
+}
+
+function quantizeDurations(seed: NoteEvent[]): number[] {
+  const q = (v: number) => {
+    const step = 0.25; // 1/16 in 4/4 (1 beat = quarter)
+    const snapped = Math.round(v / step) * step;
+    return Math.max(step, Math.min(4, snapped));
+  };
+  const out = seed
+    .map(n => q(n.duration))
+    .filter(d => d >= 0.25 && d <= 4);
+  return out.length > 0 ? out : [0.25, 0.5, 1];
+}
+
 // ─── VARIATION CARD ───────────────────────────────────────────
 function VariationCard({
   label, result: vResult, variationParams, selected, isPlaying,
   onSelect, onPlayToggle, onDownload, onExtend,
+  compareHighlight,
 }: {
   label: string;
   result: GenerationResult;
   variationParams: GenerationParams;
   selected: boolean;
   isPlaying: boolean;
+  compareHighlight?: boolean;
   onSelect: () => void;
   onPlayToggle: (e: React.MouseEvent) => void;
   onDownload: (e: React.MouseEvent) => void;
@@ -930,8 +1172,10 @@ function VariationCard({
     <motion.div
       variants={fadeUp}
       onClick={onSelect}
+      animate={compareHighlight ? { boxShadow: ['0 0 0 0 rgba(255,109,63,0.00)', '0 0 0 6px rgba(255,109,63,0.22)', '0 0 0 0 rgba(255,109,63,0.00)'] } : { boxShadow: 'none' }}
+      transition={compareHighlight ? { duration: 1.1, repeat: Infinity, ease: 'easeOut' } : { duration: 0.15 }}
       style={{
-        border: selected ? '1.5px solid #FF6D3F' : '1px solid #1A1A2E',
+        border: compareHighlight ? '2px solid rgba(255,109,63,0.95)' : (selected ? '1.5px solid #FF6D3F' : '1px solid #1A1A2E'),
         borderRadius: 12,
         padding: 16,
         cursor: 'pointer',
@@ -1398,6 +1642,9 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [playingAll, setPlayingAll] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIndex, setCompareIndex] = useState(0);
+  const [liveMode, setLiveMode] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -1407,7 +1654,10 @@ export default function Home() {
   const [showCommandBar, setShowCommandBar] = useState(false);
   const [credits, setCredits] = useState<{ used: number; isPro: boolean } | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [editorLayer, setEditorLayer] = useState<typeof LAYERS[number]>('melody');
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showEmbedModal, setShowEmbedModal] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
+  const [editorLayer, setEditorLayer] = useState<typeof EDITOR_LAYERS[number]>('melody');
   const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
   const [copied, setCopied] = useState(false);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
@@ -1420,13 +1670,21 @@ export default function Home() {
   const [showInspire, setShowInspire] = useState(false);
   const [inspireText, setInspireText] = useState('');
   const [isInspiring, setIsInspiring] = useState(false);
+  const [inspirationChips, setInspirationChips] = useState<string[]>([]);
+  const lastInspirationSourceRef = useRef<string | null>(null);
   const [isExtending, setIsExtending] = useState(false);
   const [editorView, setEditorView] = useState<'piano' | 'sheet'>('piano');
+  const [importedNotes, setImportedNotes] = useState<NoteEvent[]>([]);
+  const [showAudioToMidi, setShowAudioToMidi] = useState(false);
+  const [isConvertingAudio, setIsConvertingAudio] = useState(false);
 
   const result = variations[selectedVariation]?.result ?? null;
 
   const selectedParams = useMemo(() => variations[selectedVariation]?.params ?? params, [variations, selectedVariation, params]);
-  const selectedLayerNotes = useMemo(() => result?.[editorLayer] ?? [], [result, editorLayer]);
+  const selectedLayerNotes = useMemo(() => {
+    if (editorLayer === 'imported') return importedNotes;
+    return result?.[editorLayer] ?? [];
+  }, [result, editorLayer, importedNotes]);
 
   const toolRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
@@ -1434,6 +1692,23 @@ export default function Home() {
   const tapResetTimerRef = useRef<number | null>(null);
   const bpmFileInputRef = useRef<HTMLInputElement>(null);
   const sheetCanvasRef = useRef<HTMLCanvasElement>(null);
+  const compareTimerRef = useRef<number | null>(null);
+
+  const closeAllModals = useCallback(() => {
+    setShowShortcuts(false);
+    setShowEmbedModal(false);
+    setShowCommandBar(false);
+    setShowUpgradeModal(false);
+    setShowHistory(false);
+    setShowInspire(false);
+    setShowBpmDetect(false);
+    setShowAudioToMidi(false);
+    setShowOnboarding(false);
+  }, []);
+  const liveTimerRef = useRef<number | null>(null);
+  const liveBarRef = useRef(0);
+  const livePendingParamsRef = useRef<GenerationParams | null>(null);
+  const livePendingResultRef = useRef<GenerationResult | null>(null);
 
   useEffect(() => {
     if (editorView !== 'sheet') return;
@@ -1441,6 +1716,31 @@ export default function Home() {
     if (!selectedLayerNotes) return;
     drawSheetMusic(sheetCanvasRef.current, selectedLayerNotes, selectedParams, editorLayer);
   }, [editorView, selectedLayerNotes, selectedParams, editorLayer]);
+
+  const audioToMidiInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAudioToMidiFile = useCallback(async (file: File | null) => {
+    if (!file) return;
+    setIsConvertingAudio(true);
+    try {
+      const arr = await file.arrayBuffer();
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audio = await ctx.decodeAudioData(arr.slice(0));
+      await ctx.close().catch(() => {});
+
+      const detected = detectNotesFromAudio(audio, params.bpm);
+      setImportedNotes(detected);
+      setEditorLayer('imported');
+      setEditorView('piano');
+
+      toast.toast(`Audio converted to MIDI — ${detected.length} notes detected`, 'success');
+    } catch {
+      toast.toast('Audio to MIDI failed', 'danger');
+    } finally {
+      setIsConvertingAudio(false);
+      if (audioToMidiInputRef.current) audioToMidiInputRef.current.value = '';
+    }
+  }, [params.bpm, toast]);
   const generateBtnWrapRef = useRef<HTMLDivElement>(null);
   const styleTagsRef = useRef<HTMLDivElement>(null);
   const genreSelectRef = useRef<HTMLSelectElement>(null);
@@ -1576,12 +1876,40 @@ export default function Home() {
     }
   }, []);
 
+  const loadInspirationChipsFromDb = useCallback(async (uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('generations')
+        .select('inspiration_source, created_at')
+        .eq('user_id', uid)
+        .not('inspiration_source', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error || !data) return;
+      const chips = (data as Array<{ inspiration_source: string | null }>)
+        .map(r => (r.inspiration_source ?? '').trim())
+        .filter(Boolean);
+
+      // Dedupe while preserving order, take last 5
+      const uniq: string[] = [];
+      for (const c of chips) {
+        if (!uniq.includes(c)) uniq.push(c);
+        if (uniq.length >= 5) break;
+      }
+      setInspirationChips(uniq);
+    } catch {
+      // Ignore
+    }
+  }, []);
+
   // Load credits + history when signed in
   useEffect(() => {
     if (!effectiveIsSignedIn || !effectiveUserId) return;
     loadUserCredits(effectiveUserId);
     loadHistoryFromDb(effectiveUserId);
-  }, [effectiveIsSignedIn, effectiveUserId, loadUserCredits, loadHistoryFromDb]);
+    if (!e2eBypass) loadInspirationChipsFromDb(effectiveUserId);
+  }, [effectiveIsSignedIn, effectiveUserId, loadUserCredits, loadHistoryFromDb, loadInspirationChipsFromDb, e2eBypass]);
 
   // First-time onboarding (only if 0 generations in Supabase)
   useEffect(() => {
@@ -1734,6 +2062,30 @@ export default function Home() {
             }).select('id').single();
           const [r1, r2, r3] = await Promise.all([ins(gen1, p1), ins(gen2, p2), ins(gen3, p3)]);
           setVariationIds([r1.data?.id ?? null, r2.data?.id ?? null, r3.data?.id ?? null]);
+
+          // Save last inspiration source (best-effort; won't break if column isn't migrated yet)
+          const inspirationSource = lastInspirationSourceRef.current;
+          if (inspirationSource) {
+            const ids = [r1.data?.id, r2.data?.id, r3.data?.id].filter(Boolean) as string[];
+            if (ids.length > 0) {
+              try {
+                await supabase
+                  .from('generations')
+                  .update({ inspiration_source: inspirationSource })
+                  .in('id', ids);
+              } catch {
+                // Ignore
+              }
+              // Update chips list from DB for canonical ordering/dedupe.
+              try {
+                await loadInspirationChipsFromDb(effectiveUserId);
+              } catch {
+                // Ignore
+              }
+            }
+            lastInspirationSourceRef.current = null;
+          }
+
           await incrementCredits(effectiveUserId);
           await loadUserCredits(effectiveUserId);
           await loadHistoryFromDb(effectiveUserId);
@@ -1742,7 +2094,7 @@ export default function Home() {
         }
       }
     }, 320);
-  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, checkCreditsAllowed, incrementCredits, loadUserCredits, loadHistoryFromDb]);
+  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, checkCreditsAllowed, incrementCredits, loadUserCredits, loadHistoryFromDb, loadInspirationChipsFromDb]);
 
   const handleStyleTag = (tag: string) => {
     const preset = STYLE_TAGS[tag];
@@ -1767,6 +2119,8 @@ export default function Home() {
   const handlePlayAll = () => {
     const sel = variations[selectedVariation];
     if (!sel) return;
+    if (liveMode) return;
+    if (compareMode) return;
     if (playingAll) { stopAllPlayback(); setPlayingAll(false); return; }
     setPlayingAll(true);
     playNotes({
@@ -1779,6 +2133,166 @@ export default function Home() {
       onComplete: () => setPlayingAll(false),
     });
   };
+
+  const stopCompare = useCallback((opts?: { stopAudio?: boolean }) => {
+    if (compareTimerRef.current !== null) window.clearTimeout(compareTimerRef.current);
+    compareTimerRef.current = null;
+    setCompareMode(false);
+    if (opts?.stopAudio) {
+      stopAllPlayback();
+      setPlayingVariationIndex(null);
+    }
+  }, []);
+
+  const startVariationPlayback = useCallback((i: number) => {
+    const v = variations[i];
+    if (!v) return;
+    stopAllPlayback();
+    setPlayingAll(false);
+    setPlayingVariationIndex(i);
+    playNotes({
+      melody: params.layers.melody ? v.result.melody : undefined,
+      chords: params.layers.chords ? v.result.chords : undefined,
+      bass:   params.layers.bass   ? v.result.bass   : undefined,
+      drums:  params.layers.drums  ? v.result.drums  : undefined,
+      bpm: v.params.bpm,
+      genre: v.params.genre,
+      onComplete: () => setPlayingVariationIndex(null),
+    });
+  }, [variations, params.layers]);
+
+  const startCompare = useCallback(() => {
+    if (variations.length === 0) return;
+    stopAllPlayback();
+    setPlayingAll(false);
+    setCompareMode(true);
+    setCompareIndex(0);
+    setSelectedVariation(0);
+    startVariationPlayback(0);
+
+    const tick = (idx: number) => {
+      const v = variations[idx];
+      const bpm = v?.params.bpm ?? params.bpm;
+      const msPerBeat = 60_000 / Math.max(30, bpm);
+      const ms4Bars = msPerBeat * 16;
+
+      compareTimerRef.current = window.setTimeout(() => {
+        const next = (idx + 1) % 3;
+        setCompareIndex(next);
+        setSelectedVariation(next);
+        startVariationPlayback(next);
+        tick(next);
+      }, ms4Bars);
+    };
+
+    tick(0);
+  }, [variations, params.bpm, startVariationPlayback]);
+
+  useEffect(() => {
+    return () => {
+      if (compareTimerRef.current !== null) window.clearTimeout(compareTimerRef.current);
+    };
+  }, []);
+
+  // Keyboard shortcuts effect is declared later (after handler declarations)
+
+  const sliceNotesToBar = useCallback((notes: NoteEvent[], barIndex: number) => {
+    const start = barIndex * 4;
+    const end = start + 4;
+    return notes
+      .filter(n => n.startTime >= start && n.startTime < end)
+      .map(n => ({ ...n, startTime: n.startTime - start }));
+  }, []);
+
+  const stopLive = useCallback(() => {
+    if (liveTimerRef.current !== null) window.clearTimeout(liveTimerRef.current);
+    liveTimerRef.current = null;
+    liveBarRef.current = 0;
+    livePendingParamsRef.current = null;
+    livePendingResultRef.current = null;
+    stopAllPlayback();
+    setPlayingAll(false);
+  }, []);
+
+  const tickLive = useCallback(() => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    if (!liveMode) return;
+
+    // Apply pending regeneration at bar boundary
+    if (livePendingResultRef.current && livePendingParamsRef.current) {
+      const nextRes = livePendingResultRef.current;
+      const nextParams = livePendingParamsRef.current;
+      livePendingResultRef.current = null;
+      livePendingParamsRef.current = null;
+
+      // Swap pattern in state; keep only the selected variation updated
+      setVariations(prev => prev.map((v, i) => (
+        i === selectedVariation ? { result: nextRes, params: nextParams } : v
+      )));
+
+      // “Crossfade” approximation without engine gain access: stop current and wait 200ms.
+      stopAllPlayback();
+    }
+
+    const current = variations[selectedVariation] ?? sel;
+    const barCount = current.params.bars ?? params.bars;
+    const barIndex = liveBarRef.current % Math.max(1, barCount);
+    liveBarRef.current = barIndex + 1;
+
+    const bpm = params.bpm; // take effect on next bar
+
+    playNotes({
+      melody: params.layers.melody ? sliceNotesToBar(current.result.melody, barIndex) : undefined,
+      chords: params.layers.chords ? sliceNotesToBar(current.result.chords, barIndex) : undefined,
+      bass:   params.layers.bass   ? sliceNotesToBar(current.result.bass, barIndex) : undefined,
+      drums:  params.layers.drums  ? sliceNotesToBar(current.result.drums, barIndex) : undefined,
+      bpm,
+      genre: params.genre,
+      onComplete: () => {},
+    });
+
+    const msPerBeat = 60_000 / Math.max(60, Math.min(200, bpm));
+    const nextMs = Math.max(250, Math.round(msPerBeat * 4));
+    liveTimerRef.current = window.setTimeout(() => tickLive(), nextMs);
+  }, [variations, selectedVariation, liveMode, params, sliceNotesToBar]);
+
+  // Live mode: regenerate on key changes and loop by bar.
+  useEffect(() => {
+    if (!liveMode) {
+      stopLive();
+      return;
+    }
+
+    // Start looping from bar 0
+    stopAllPlayback();
+    liveBarRef.current = 0;
+    window.setTimeout(() => tickLive(), 10);
+
+    return () => stopLive();
+  }, [liveMode, tickLive, stopLive]);
+
+  useEffect(() => {
+    if (!liveMode) return;
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+
+    // Regenerate with current params (same key/scale/bpm/genre etc.)
+    const nextParams: GenerationParams = { ...params };
+    const next = generateTrack(nextParams);
+    livePendingParamsRef.current = nextParams;
+    livePendingResultRef.current = next;
+  }, [
+    liveMode,
+    selectedVariation,
+    variations,
+    params.genre,
+    params.bpm,
+    params.key,
+    params.scale,
+    params.humanization,
+    activeStyleTag,
+  ]);
 
   const handleDownloadLayer = (name: string, notes: NoteEvent[]) => {
     track('midi_downloaded', {
@@ -1823,6 +2337,25 @@ export default function Home() {
     track('midi_downloaded', { genre: p.genre, layer: 'full' });
     downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
   };
+
+  const handleExportAbleton = useCallback(async () => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const { result: r, params: p } = sel;
+    const safeGenre = (GENRES[p.genre]?.name || p.genre).toLowerCase().replace(/\s/g, '-');
+    const filename = `${safeGenre}-${p.bpm}bpm.als`;
+    try {
+      const blob = await generateAbletonAlsBlob({
+        generation: r,
+        bpm: p.bpm,
+        projectName: `pulp ${safeGenre} ${p.bpm}bpm`,
+      });
+      await downloadBlob(blob, filename);
+      toast.toast('Ableton project exported', 'success');
+    } catch {
+      toast.toast('Ableton export failed', 'danger');
+    }
+  }, [variations, selectedVariation, toast]);
 
   const handleDownloadJson = useCallback(() => {
     const sel = variations[selectedVariation];
@@ -1927,6 +2460,11 @@ export default function Home() {
       setParams(p => ({ ...p, genre: genreKey, bpm, key, scale }));
       if (promptSuggestion) setPrompt(promptSuggestion);
       setActiveStyleTag(styleTag && STYLE_TAGS[styleTag] ? styleTag : null);
+      lastInspirationSourceRef.current = inspiration;
+      setInspirationChips(prev => {
+        const next = [inspiration, ...prev.filter(x => x !== inspiration)];
+        return next.slice(0, 5);
+      });
 
       toast.toast(`Inspired by ${inspiration}`, 'success');
       setShowInspire(false);
@@ -1995,6 +2533,54 @@ export default function Home() {
       setIsExtending(false);
     }
   }, [variations, selectedVariation, isGenerating, isExtending, toast]);
+
+  const handleCompletePattern = useCallback(() => {
+    const seed = selectedLayerNotes;
+    if (!seed || seed.length === 0) {
+      toast.toast('Draw a few notes first', 'info');
+      return;
+    }
+
+    const seedSorted = [...seed].sort((a, b) => a.startTime - b.startTime);
+    const lastPitch = seedSorted.at(-1)?.pitch ?? null;
+    const { key, scale } = detectKeyScaleFromSeed(seedSorted);
+
+    const currentBars = selectedParams.bars ?? 4;
+    const offset = currentBars * 4;
+
+    const targetLayer = (editorLayer === 'imported' ? 'melody' : editorLayer) as 'melody' | 'chords' | 'bass' | 'drums';
+
+    const layerParams: GenerationParams = {
+      ...selectedParams,
+      key,
+      scale,
+      bars: 8,
+      layers: { melody: false, chords: false, bass: false, drums: false, [targetLayer]: true } as GenerationParams['layers'],
+    };
+
+    // Use music-engine continuation seeded by user's notes (rhythm + contour) for melodic layers.
+    const cont = generateTrack(layerParams, {
+      lastMelodyPitch: lastPitch,
+      startBeat: offset,
+      seedNotes: seedSorted,
+    });
+
+    const newNotes = cont[targetLayer];
+
+    if (editorLayer === 'imported') {
+      setImportedNotes(prev => [...prev, ...newNotes]);
+    } else {
+      setVariations(prev => prev.map((v, i) => {
+        if (i !== selectedVariation) return v;
+        return {
+          params: { ...v.params, bars: (v.params.bars ?? 4) + 8 },
+          result: { ...v.result, [editorLayer]: [...(v.result as any)[editorLayer], ...newNotes] },
+        };
+      }));
+    }
+
+    toast.toast('Pattern completed — 8 bars added', 'success');
+  }, [selectedLayerNotes, selectedParams, editorLayer, selectedVariation, toast]);
 
   const handleCreateCollab = useCallback(() => {
     const sessionId = crypto.randomUUID();
@@ -2140,6 +2726,141 @@ export default function Home() {
     }
   }, [estimateBpmFromAudioBuffer, toast]);
 
+  // ── KEYBOARD SHORTCUTS ───────────────────────────────────────
+  useEffect(() => {
+    const isTypingTarget = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      if (!el) return false;
+      const tag = (el.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // ESC closes any open modal
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        stopCompare({ stopAudio: true });
+        stopAllPlayback();
+        setPlayingVariationIndex(null);
+        setPlayingAll(false);
+        closeAllModals();
+        return;
+      }
+
+      // '?' opens shortcuts
+      if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        e.preventDefault();
+        setShowShortcuts(true);
+        return;
+      }
+
+      // Don't steal keystrokes while typing (except cmd/ctrl combos and ESC/? handled above)
+      const isCombo = e.metaKey || e.ctrlKey;
+      if (!isCombo && isTypingTarget(e.target)) return;
+
+      // Cmd/Ctrl shortcuts
+      if (isCombo) {
+        const k = e.key.toLowerCase();
+        if (k === 'k') {
+          e.preventDefault();
+          setShowCommandBar(true);
+          return;
+        }
+        if (k === 'd') {
+          e.preventDefault();
+          handleDownloadAll();
+          return;
+        }
+        if (k === 's') {
+          e.preventDefault();
+          handleShare();
+          return;
+        }
+      }
+
+      // Single-key shortcuts
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (liveMode) return;
+        if (compareMode) {
+          // lock current compare variation
+          stopCompare();
+          startVariationPlayback(compareIndex);
+          return;
+        }
+        if (playingVariationIndex === selectedVariation) {
+          stopAllPlayback();
+          setPlayingVariationIndex(null);
+        } else {
+          startVariationPlayback(selectedVariation);
+        }
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (key === 'g') {
+        e.preventDefault();
+        void handleGenerate();
+        return;
+      }
+      if (key === 'l') {
+        e.preventDefault();
+        setLiveMode(v => {
+          const next = !v;
+          if (next) {
+            setPlayingAll(false);
+            stopCompare({ stopAudio: true });
+            stopAllPlayback();
+          } else {
+            stopAllPlayback();
+          }
+          return next;
+        });
+        return;
+      }
+      if (key === 'c') {
+        e.preventDefault();
+        if (compareMode) stopCompare({ stopAudio: true });
+        else startCompare();
+        return;
+      }
+      if (key === 'e') {
+        e.preventDefault();
+        void handleExtendSelected();
+        return;
+      }
+      if (key === '1' || key === '2' || key === '3') {
+        e.preventDefault();
+        const idx = Number(key) - 1;
+        if (!variations[idx]) return;
+        stopCompare({ stopAudio: true });
+        stopAllPlayback();
+        setPlayingVariationIndex(null);
+        setPlayingAll(false);
+        setSelectedVariation(idx);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    closeAllModals,
+    compareIndex,
+    compareMode,
+    handleExtendSelected,
+    handleGenerate,
+    handleShare,
+    liveMode,
+    playingVariationIndex,
+    selectedVariation,
+    startCompare,
+    startVariationPlayback,
+    stopCompare,
+    variations,
+  ]);
+
   // ── RENDER ────────────────────────────────────────────────
   return (
     <div className="min-h-screen">
@@ -2187,6 +2908,191 @@ export default function Home() {
         onDownloadAll={handleDownloadAll}
         hasResult={variations.length > 0}
       />
+
+      {/* ── SHORTCUTS MODAL ── */}
+      <AnimatePresence>
+        {showShortcuts && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={() => setShowShortcuts(false)}
+            />
+            <motion.div
+              className="fixed left-1/2 top-1/2 z-[41] w-[min(920px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6"
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                boxShadow: '0 32px 90px rgba(0,0,0,0.65)',
+              }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Keyboard shortcuts"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, color: 'var(--text)' }}>
+                    Keyboard shortcuts
+                  </div>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+                    Press <span style={{ color: 'var(--accent)' }}>Esc</span> to close · Press <span style={{ color: 'var(--accent)' }}>?</span> anytime to open
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowShortcuts(false)}
+                  className="h-9 px-3 rounded-lg text-xs transition-all"
+                  style={{
+                    border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+                    color: 'var(--text)',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    background: 'transparent',
+                  }}
+                >
+                  Esc
+                </button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[
+                  { k: 'Space', d: 'Play/Stop current variation' },
+                  { k: 'G', d: 'Generate' },
+                  { k: '1 / 2 / 3', d: 'Select variation 1, 2, 3' },
+                  { k: 'L', d: 'Toggle Live mode' },
+                  { k: 'C', d: 'Toggle Compare mode' },
+                  { k: 'E', d: 'Extend current variation' },
+                  { k: 'Ctrl/Cmd + D', d: 'Download MIDI (full)' },
+                  { k: 'Ctrl/Cmd + S', d: 'Share (copy URL)' },
+                  { k: 'Ctrl/Cmd + K', d: 'Open command bar' },
+                  { k: 'Esc', d: 'Close any open modal' },
+                  { k: '?', d: 'Open shortcuts' },
+                ].map((row) => (
+                  <div
+                    key={row.k}
+                    className="flex items-center justify-between gap-4 rounded-xl px-4 py-3"
+                    style={{ border: '1px solid var(--border)', background: 'color-mix(in srgb, var(--surface) 92%, transparent)' }}
+                  >
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
+                      {row.d}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: 12,
+                        color: 'var(--purple)',
+                        border: '1px solid rgba(167,139,250,0.35)',
+                        background: 'rgba(167,139,250,0.10)',
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.k}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── EMBED MODAL ── */}
+      <AnimatePresence>
+        {showEmbedModal && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={() => { setShowEmbedModal(false); setEmbedCopied(false); }}
+            />
+            <motion.div
+              className="fixed left-1/2 top-1/2 z-[41] w-[min(920px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6"
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                boxShadow: '0 32px 90px rgba(0,0,0,0.65)',
+              }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Embed"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, color: 'var(--text)' }}>
+                    Embed
+                  </div>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+                    Paste this iframe into your site.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowEmbedModal(false); setEmbedCopied(false); }}
+                  className="h-9 px-3 rounded-lg text-xs transition-all"
+                  style={{
+                    border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+                    color: 'var(--text)',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    background: 'transparent',
+                  }}
+                >
+                  Esc
+                </button>
+              </div>
+
+              <div
+                className="mt-5 rounded-xl p-4"
+                style={{ border: '1px solid var(--border)', background: 'color-mix(in srgb, var(--surface) 92%, transparent)' }}
+              >
+                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
+                  {'<iframe src="https://pulp-4ubq.vercel.app/embed" width="100%" height="400" frameborder="0"></iframe>'}
+                </code>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => { setShowEmbedModal(false); setEmbedCopied(false); }}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  className="btn-download btn-sm"
+                  onClick={async () => {
+                    const code = `<iframe src="https://pulp-4ubq.vercel.app/embed" width="100%" height="400" frameborder="0"></iframe>`;
+                    try {
+                      await navigator.clipboard.writeText(code);
+                      setEmbedCopied(true);
+                      window.setTimeout(() => setEmbedCopied(false), 1600);
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                >
+                  {embedCopied ? 'Copied!' : 'Copy code'}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ── UPGRADE MODAL ── */}
       <AnimatePresence>
@@ -2245,6 +3151,11 @@ export default function Home() {
                 </span>
               )}
             </button>
+            {effectiveIsSignedIn && (
+              <a href="/profile" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
+                Profile
+              </a>
+            )}
             <a href="/pricing" className="transition-colors hover:text-white" style={{ textDecoration: 'none', color: '#8A8A9A' }}>
               Pricing
             </a>
@@ -2370,7 +3281,7 @@ export default function Home() {
             <AnimatePresence>
               {showInspire && (
                 <motion.form
-                  className="mb-4 rounded-xl p-3 flex items-center gap-2"
+                  className="mb-4 rounded-xl p-3"
                   style={{ background: '#111118', border: '1px solid #1A1A2E' }}
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -2381,22 +3292,104 @@ export default function Home() {
                     void handleInspire();
                   }}
                 >
-                  <input
-                    value={inspireText}
-                    onChange={e => setInspireText(e.target.value)}
-                    placeholder="Inspire from a song or artist..."
-                    className="input-field"
-                    style={{ height: 40, paddingLeft: 14, paddingRight: 14 }}
-                    disabled={isInspiring}
-                  />
-                  <SpotlightButton
-                    type="submit"
-                    className="btn-primary"
-                    style={{ height: 40, padding: '0 14px', fontSize: 12, whiteSpace: 'nowrap' }}
-                    disabled={isInspiring || !inspireText.trim()}
-                  >
-                    {isInspiring ? '…' : 'Apply'}
-                  </SpotlightButton>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={inspireText}
+                      onChange={e => setInspireText(e.target.value)}
+                      placeholder="Inspire from a song or artist..."
+                      className="input-field"
+                      style={{ height: 40, paddingLeft: 14, paddingRight: 14 }}
+                      disabled={isInspiring}
+                    />
+                    <SpotlightButton
+                      type="submit"
+                      className="btn-primary"
+                      style={{ height: 40, padding: '0 14px', fontSize: 12, whiteSpace: 'nowrap' }}
+                      disabled={isInspiring || !inspireText.trim()}
+                    >
+                      {isInspiring ? '…' : 'Apply'}
+                    </SpotlightButton>
+                  </div>
+
+                  {effectiveIsSignedIn && inspirationChips.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {inspirationChips.slice(0, 5).map(chip => (
+                        <button
+                          key={chip}
+                          type="button"
+                          className="style-pill"
+                          style={{
+                            borderColor: 'rgba(167,139,250,0.45)',
+                            color: '#A78BFA',
+                          }}
+                          onClick={() => {
+                            // Apply instantly without showing the input.
+                            lastInspirationSourceRef.current = chip;
+                            setInspireText(chip);
+                            setShowInspire(false);
+                            setInspirationChips(prev => {
+                              const next = [chip, ...prev.filter(x => x !== chip)];
+                              return next.slice(0, 5);
+                            });
+                            // Reuse Inspire handler logic by calling API directly with this chip.
+                            // (Avoid relying on state timing.)
+                            void (async () => {
+                              setIsInspiring(true);
+                              try {
+                                const res = await fetch('/api/inspire', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ inspiration: chip }),
+                                });
+                                if (!res.ok) throw new Error('Failed to inspire');
+
+                                const data = await res.json() as {
+                                  genre?: string;
+                                  bpm?: number;
+                                  key?: string;
+                                  scale?: string;
+                                  mood?: string;
+                                  styleTag?: string | null;
+                                  promptSuggestion?: string;
+                                };
+
+                                const genreRaw = (data.genre ?? '').trim();
+                                const genreKey =
+                                  (genreRaw && GENRES[genreRaw]) ? genreRaw :
+                                    GENRE_NAME_MAP[genreRaw] ??
+                                    Object.entries(GENRES).find(([, g]) => g.name.toLowerCase() === genreRaw.toLowerCase())?.[0] ??
+                                    params.genre;
+
+                                const bpm = typeof data.bpm === 'number'
+                                  ? Math.max(60, Math.min(180, Math.round(data.bpm)))
+                                  : params.bpm;
+
+                                const keyRaw = (data.key ?? '').trim().toUpperCase();
+                                const key = (KEYS as readonly string[]).includes(keyRaw) ? keyRaw : params.key;
+
+                                const scale = normalizeScaleToEngine(String(data.scale ?? params.scale));
+                                const styleTag = (typeof data.styleTag === 'string' && data.styleTag.trim()) ? data.styleTag.trim() : null;
+                                const promptSuggestion = (data.promptSuggestion ?? '').trim();
+
+                                setParams(p => ({ ...p, genre: genreKey, bpm, key, scale }));
+                                if (promptSuggestion) setPrompt(promptSuggestion);
+                                setActiveStyleTag(styleTag && STYLE_TAGS[styleTag] ? styleTag : null);
+
+                                toast.toast(`Inspired by ${chip}`, 'success');
+                              } catch {
+                                toast.toast('Inspire failed', 'danger');
+                              } finally {
+                                setIsInspiring(false);
+                              }
+                            })();
+                          }}
+                          title={chip}
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </motion.form>
               )}
             </AnimatePresence>
@@ -2653,65 +3646,90 @@ export default function Home() {
             {/* Variation selector — 3 cards side by side */}
             <AnimatePresence>
               {variations.length > 0 && !isGenerating && (
-                <motion.div
-                  className="flex gap-3 mb-5"
-                  variants={staggerContainer}
-                  initial="hidden"
-                  animate="visible"
-                >
-                  {variations.map((v, i) => (
-                    <VariationCard
-                      key={i}
-                      label={`V${i + 1}`}
-                      result={v.result}
-                      variationParams={v.params}
-                      selected={selectedVariation === i}
-                      isPlaying={playingVariationIndex === i}
-                      onSelect={() => {
-                        stopAllPlayback();
-                        setPlayingVariationIndex(null);
-                        setPlayingAll(false);
-                        setSelectedVariation(i);
-                      }}
-                      onPlayToggle={e => {
-                        e.stopPropagation();
-                        if (playingVariationIndex === i) {
+                <div className="mb-5">
+                  <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {!compareMode ? (
+                        <SpotlightButton type="button" onClick={() => startCompare()} className="btn-secondary btn-sm">
+                          Compare
+                        </SpotlightButton>
+                      ) : (
+                        <SpotlightButton
+                          type="button"
+                          onClick={() => stopCompare({ stopAudio: true })}
+                          className="btn-secondary btn-sm"
+                          style={{ borderColor: 'rgba(255,109,63,0.45)' }}
+                        >
+                          ■ Stop
+                        </SpotlightButton>
+                      )}
+                      {compareMode && (
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A' }}>
+                          Comparing variations… <span style={{ color: '#FF6D3F' }}>V{compareIndex + 1}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <motion.div
+                    className="flex gap-3"
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    {variations.map((v, i) => (
+                      <VariationCard
+                        key={i}
+                        label={`V${i + 1}`}
+                        result={v.result}
+                        variationParams={v.params}
+                        selected={selectedVariation === i}
+                        isPlaying={playingVariationIndex === i}
+                        compareHighlight={compareMode && compareIndex === i}
+                        onSelect={() => {
+                          if (compareMode) {
+                            // Lock to clicked variation and stop comparing.
+                            stopCompare();
+                            setCompareIndex(i);
+                            setSelectedVariation(i);
+                            startVariationPlayback(i);
+                            return;
+                          }
                           stopAllPlayback();
                           setPlayingVariationIndex(null);
-                        } else {
-                          stopAllPlayback();
                           setPlayingAll(false);
-                          setPlayingVariationIndex(i);
-                          playNotes({
-                            melody: params.layers.melody ? v.result.melody : undefined,
-                            chords: params.layers.chords ? v.result.chords : undefined,
-                            bass:   params.layers.bass   ? v.result.bass   : undefined,
-                            drums:  params.layers.drums  ? v.result.drums  : undefined,
-                            bpm: v.params.bpm,
-                            genre: v.params.genre,
-                            onComplete: () => setPlayingVariationIndex(null),
-                          });
-                        }
-                      }}
-                      onExtend={() => {
-                        if (selectedVariation !== i) return;
-                        void handleExtendSelected();
-                      }}
-                      onDownload={e => {
-                        e.stopPropagation();
-                        track('midi_downloaded', { genre: v.params.genre, layer: 'full' });
-                        const tracks: { name: string; notes: NoteEvent[]; channel: number }[] = [];
-                        if (v.result.melody.length > 0) tracks.push({ name: 'Melody', notes: v.result.melody, channel: 0 });
-                        if (v.result.chords.length > 0) tracks.push({ name: 'Chords', notes: v.result.chords, channel: 1 });
-                        if (v.result.bass.length   > 0) tracks.push({ name: 'Bass',   notes: v.result.bass,   channel: 2 });
-                        if (v.result.drums.length  > 0) tracks.push({ name: 'Drums',  notes: v.result.drums,  channel: 9 });
-                        const midi = generateMidiFormat1(tracks, v.params.bpm);
-                        const genre = GENRES[v.params.genre]?.name || 'track';
-                        downloadMidi(midi, `pulp-v${i + 1}-${genre.toLowerCase().replace(/\s/g, '-')}-${v.params.key}${v.params.scale}.mid`);
-                      }}
-                    />
-                  ))}
-                </motion.div>
+                          setSelectedVariation(i);
+                        }}
+                        onPlayToggle={e => {
+                          e.stopPropagation();
+                          if (compareMode) stopCompare();
+                          if (playingVariationIndex === i) {
+                            stopAllPlayback();
+                            setPlayingVariationIndex(null);
+                          } else {
+                            startVariationPlayback(i);
+                          }
+                        }}
+                        onExtend={() => {
+                          if (selectedVariation !== i) return;
+                          void handleExtendSelected();
+                        }}
+                        onDownload={e => {
+                          e.stopPropagation();
+                          track('midi_downloaded', { genre: v.params.genre, layer: 'full' });
+                          const tracks: { name: string; notes: NoteEvent[]; channel: number }[] = [];
+                          if (v.result.melody.length > 0) tracks.push({ name: 'Melody', notes: v.result.melody, channel: 0 });
+                          if (v.result.chords.length > 0) tracks.push({ name: 'Chords', notes: v.result.chords, channel: 1 });
+                          if (v.result.bass.length   > 0) tracks.push({ name: 'Bass',   notes: v.result.bass,   channel: 2 });
+                          if (v.result.drums.length  > 0) tracks.push({ name: 'Drums',  notes: v.result.drums,  channel: 9 });
+                          const midi = generateMidiFormat1(tracks, v.params.bpm);
+                          const genre = GENRES[v.params.genre]?.name || 'track';
+                          downloadMidi(midi, `pulp-v${i + 1}-${genre.toLowerCase().replace(/\\s/g, '-')}-${v.params.key}${v.params.scale}.mid`);
+                        }}
+                      />
+                    ))}
+                  </motion.div>
+                </div>
               )}
             </AnimatePresence>
 
@@ -2728,8 +3746,59 @@ export default function Home() {
                   <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
                     {playingAll ? '■  Stop' : '▶  Play All'}
                   </SpotlightButton>
+                  <SpotlightButton
+                    type="button"
+                    onClick={() => {
+                      setLiveMode(v => {
+                        const next = !v;
+                        if (next) {
+                          setPlayingAll(false);
+                          stopAllPlayback();
+                        } else {
+                          stopAllPlayback();
+                        }
+                        return next;
+                      });
+                    }}
+                    className="btn-secondary btn-sm"
+                    style={liveMode ? { borderColor: 'rgba(233,69,96,0.45)' } : undefined}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 999,
+                          background: '#E94560',
+                          boxShadow: liveMode ? '0 0 0 4px rgba(233,69,96,0.20)' : 'none',
+                          animation: liveMode ? 'pulse-ring 1.2s ease-out infinite' : 'none',
+                        }}
+                      />
+                      <span style={{ color: liveMode ? '#E94560' : '#F0F0FF' }}>
+                        LIVE
+                      </span>
+                    </span>
+                  </SpotlightButton>
                   <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
                     ↓  Download MIDI
+                  </SpotlightButton>
+                  <SpotlightButton onClick={() => void handleExportAbleton()} className="btn-download btn-sm">
+                    ↓  Export to Ableton
+                  </SpotlightButton>
+                  <SpotlightButton
+                    type="button"
+                    onClick={() => {
+                      setShowAudioToMidi(v => {
+                        const next = !v;
+                        if (next) window.setTimeout(() => audioToMidiInputRef.current?.click(), 0);
+                        return next;
+                      });
+                    }}
+                    className="btn-secondary btn-sm"
+                    style={showAudioToMidi ? { borderColor: 'rgba(167,139,250,0.45)' } : undefined}
+                    disabled={isConvertingAudio}
+                  >
+                    Audio to MIDI
                   </SpotlightButton>
                   <SpotlightButton onClick={handleCreateCollab} className="btn-secondary btn-sm">
                     {collabCopied ? 'Copied!' : 'Collab'}
@@ -2744,10 +3813,70 @@ export default function Home() {
                     ↻  Regenerate
                   </SpotlightButton>
                   {variationIds[selectedVariation] && (
-                    <SpotlightButton onClick={handleShare} className="btn-secondary btn-sm">
-                      {copied ? 'Copied!' : 'Share'}
-                    </SpotlightButton>
+                    <>
+                      <SpotlightButton onClick={handleShare} className="btn-secondary btn-sm">
+                        {copied ? 'Copied!' : 'Share'}
+                      </SpotlightButton>
+                      <SpotlightButton onClick={() => setShowEmbedModal(true)} className="btn-secondary btn-sm">
+                        Embed
+                      </SpotlightButton>
+                    </>
                   )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {showAudioToMidi && (
+                <motion.div
+                  className="mb-5 rounded-xl p-3 flex items-center gap-3 flex-wrap"
+                  style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.6)', letterSpacing: '0.06em' }}>
+                      AUDIO → MIDI
+                    </span>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#A78BFA' }}>
+                      Imported layer
+                    </span>
+                  </div>
+
+                  <input
+                    ref={audioToMidiInputRef}
+                    type="file"
+                    accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/x-wav"
+                    onChange={e => void handleAudioToMidiFile(e.target.files?.[0] ?? null)}
+                    disabled={isConvertingAudio}
+                    className="block text-xs"
+                    style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}
+                  />
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    <SpotlightButton
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      style={{ borderColor: 'rgba(167,139,250,0.30)', color: '#A78BFA' }}
+                      disabled={importedNotes.length === 0}
+                      onClick={() => {
+                        if (importedNotes.length === 0) return;
+                        const midi = generateMidiFormat0(importedNotes, params.bpm, 'pulp-imported');
+                        downloadMidi(midi, `pulp-imported-${params.bpm}bpm.mid`);
+                      }}
+                    >
+                      ↓ Download Imported .mid
+                    </SpotlightButton>
+                    <SpotlightButton
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => setShowAudioToMidi(false)}
+                    >
+                      Close
+                    </SpotlightButton>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -2892,6 +4021,25 @@ export default function Home() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {editorView === 'piano' && (
+                        <button
+                          type="button"
+                          className="px-3 h-7 rounded-md transition-all"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: '#F0F0FF',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            background: 'transparent',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                          onClick={handleCompletePattern}
+                          title="Generate 8 bars continuing your pattern"
+                        >
+                          Complete Pattern
+                        </button>
+                      )}
                       {editorView === 'sheet' && (
                         <button
                           type="button"
@@ -2921,7 +4069,7 @@ export default function Home() {
                         </button>
                       )}
                       <div className="flex gap-1">
-                      {LAYERS.map(layer => (
+                      {EDITOR_LAYERS.map(layer => (
                         <button
                           key={layer}
                           onClick={() => setEditorLayer(layer)}
@@ -2934,7 +4082,7 @@ export default function Home() {
                             border: editorLayer === layer ? `1px solid ${LAYER_COLORS[layer]}40` : '1px solid transparent',
                           }}
                         >
-                          {layer}
+                          {layer === 'imported' ? 'imported' : layer}
                         </button>
                       ))}
                     </div>
@@ -2954,10 +4102,13 @@ export default function Home() {
                   {editorView === 'piano' ? (
                     <PianoRollEditor
                       key={`${selectedVariation}-${editorLayer}`}
-                      notes={result?.[editorLayer] ?? []}
+                      notes={editorLayer === 'imported' ? importedNotes : (result?.[editorLayer] ?? [])}
                       color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
                       bars={variations[selectedVariation]?.params.bars ?? params.bars}
-                      onNotesChange={newNotes => handleEditorNotesChange(editorLayer, newNotes)}
+                      onNotesChange={newNotes => {
+                        if (editorLayer === 'imported') setImportedNotes(newNotes);
+                        else handleEditorNotesChange(editorLayer, newNotes);
+                      }}
                     />
                   ) : (
                     <div style={{ padding: 12, background: '#0D0D12' }}>
@@ -3143,6 +4294,18 @@ export default function Home() {
             <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
               © 2026 PULP. MADE BY PAPAYA.
             </span>
+
+            <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
+              <a href="/legal/terms" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+                Terms
+              </a>
+              <a href="/legal/privacy" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+                Privacy
+              </a>
+              <a href="/legal/license" style={{ textDecoration: 'none', color: '#8A8A9A' }} className="transition-colors hover:text-white">
+                License
+              </a>
+            </div>
 
             {/* Live status */}
             <div className="flex items-center gap-2">
