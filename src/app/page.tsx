@@ -3251,18 +3251,16 @@ export default function Home() {
                 className="input-field"
                 style={{ paddingLeft: 40, paddingRight: 220 }}
               />
-              <div className="absolute right-[104px] top-1/2 -translate-y-1/2">
-                <SpotlightButton
-                  type="button"
-                  className="btn-secondary"
-                  style={{ height: 36, padding: '0 12px', fontSize: 12 }}
-                  onClick={() => setShowInspire(v => !v)}
-                >
-                  Inspire
-                </SpotlightButton>
-              </div>
-              {effectiveIsSignedIn ? (
-                <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
+              <SpotlightButton
+                type="button"
+                className="btn-secondary absolute right-[104px] top-1/2 -translate-y-1/2"
+                style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+                onClick={() => setShowInspire(v => !v)}
+              >
+                Inspire
+              </SpotlightButton>
+              <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
+                {effectiveIsSignedIn ? (
                   <SpotlightButton
                     className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
                     style={{ height: 36, padding: '0 16px', fontSize: 13 }}
@@ -3276,17 +3274,17 @@ export default function Home() {
                       </span>
                     ) : 'Generate'}
                   </SpotlightButton>
-                </div>
-              ) : (
-                <SignInButton mode="modal">
-                  <SpotlightButton
-                    className="btn-primary absolute right-2 top-1/2 -translate-y-1/2"
-                    style={{ height: 36, padding: '0 16px', fontSize: 13 }}
-                  >
-                    Generate
-                  </SpotlightButton>
-                </SignInButton>
-              )}
+                ) : (
+                  <SignInButton mode="modal">
+                    <SpotlightButton
+                      className="btn-primary"
+                      style={{ height: 36, padding: '0 16px', fontSize: 13 }}
+                    >
+                      Generate
+                    </SpotlightButton>
+                  </SignInButton>
+                )}
+              </div>
             </div>
 
             <AnimatePresence>
