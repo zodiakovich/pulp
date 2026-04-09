@@ -49,6 +49,7 @@ export function Navbar({
 }) {
   const { isLoaded, isSignedIn } = useAuth();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -128,6 +129,8 @@ export function Navbar({
     </>
   );
 
+  const mobileLinks = isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks;
+
   return (
     <nav
       className="fixed top-0 left-0 right-0 z-50"
@@ -151,6 +154,23 @@ export function Navbar({
         </div>
 
         <div className="flex items-center gap-2 relative z-[55]" style={{marginLeft: 'auto', flexShrink: 0}}>
+          <button
+            type="button"
+            className="md:hidden h-9 w-9 rounded-lg flex items-center justify-center transition-all"
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            onClick={() => setMobileMenuOpen(v => !v)}
+            style={{
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--foreground)',
+            }}
+          >
+            <div className="flex flex-col justify-center gap-[3px]">
+              <span style={{ width: 16, height: 2, background: 'currentColor', opacity: 0.9 }} />
+              <span style={{ width: 16, height: 2, background: 'currentColor', opacity: 0.9 }} />
+              <span style={{ width: 16, height: 2, background: 'currentColor', opacity: 0.9 }} />
+            </div>
+          </button>
           <WhatsNew />
           <button
             type="button"
@@ -186,6 +206,26 @@ export function Navbar({
           </SignedOut>
         </div>
       </div>
+
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden"
+          style={{
+            borderTop: '1px solid var(--border)',
+            background: 'color-mix(in srgb, var(--bg) 92%, transparent)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
+          <div className="max-w-[1280px] mx-auto px-8 py-4 flex flex-col gap-4">
+            <div
+              className="flex flex-col gap-3"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              {mobileLinks}
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

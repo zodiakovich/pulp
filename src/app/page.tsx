@@ -3376,7 +3376,7 @@ export default function Home() {
             <motion.h1
               variants={fadeUp}
               className="text-gradient font-extrabold leading-[1.1]"
-              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(2.5rem, 6vw, 5rem)', letterSpacing: '-0.02em' }}
+              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(2rem, 8vw, 5rem)', letterSpacing: '-0.02em' }}
             >
               Generate MIDI.<br />Instantly.
             </motion.h1>
@@ -3410,10 +3410,12 @@ export default function Home() {
                 onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
                 onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
                 placeholder="dark melodic techno, 128bpm, Am"
-                className="input-field"
-                style={{ paddingLeft: 40, paddingRight: 220 }}
+                className="input-field pr-4 sm:pr-[220px]"
+                style={{ paddingLeft: 40 }}
               />
-              <div className="absolute right-[104px] top-1/2 -translate-y-1/2">
+
+              {/* Desktop (sm+) absolute buttons */}
+              <div className="hidden sm:block absolute right-[104px] top-1/2 -translate-y-1/2">
                 <SpotlightButton
                   type="button"
                   className="btn-secondary"
@@ -3424,7 +3426,7 @@ export default function Home() {
                 </SpotlightButton>
               </div>
               {effectiveIsSignedIn ? (
-                <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
+                <div ref={generateBtnWrapRef} className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2">
                   <SpotlightButton
                     className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
                     style={{ height: 36, padding: '0 16px', fontSize: 13 }}
@@ -3440,7 +3442,7 @@ export default function Home() {
                   </SpotlightButton>
                 </div>
               ) : (
-                <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
+                <div ref={generateBtnWrapRef} className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2">
                   <SignInButton mode="modal">
                     <SpotlightButton
                       className="btn-primary"
@@ -3451,6 +3453,43 @@ export default function Home() {
                   </SignInButton>
                 </div>
               )}
+
+              {/* Mobile (<sm) stacked buttons */}
+              <div className="sm:hidden mt-2 flex flex-col gap-2">
+                <SpotlightButton
+                  type="button"
+                  className="btn-secondary"
+                  style={{ height: 40, padding: '0 14px', fontSize: 12, width: '100%' }}
+                  onClick={() => setShowInspire(v => !v)}
+                >
+                  Inspire
+                </SpotlightButton>
+
+                {effectiveIsSignedIn ? (
+                  <SpotlightButton
+                    className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
+                    style={{ height: 40, padding: '0 14px', fontSize: 13, width: '100%' }}
+                    onClick={() => void handleGenerate()}
+                    disabled={isGenerating}
+                  >
+                    {isGenerating ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="spinner" />
+                        {generatingStage || 'Generating…'}
+                      </span>
+                    ) : 'Generate'}
+                  </SpotlightButton>
+                ) : (
+                  <SignInButton mode="modal">
+                    <SpotlightButton
+                      className="btn-primary"
+                      style={{ height: 40, padding: '0 14px', fontSize: 13, width: '100%' }}
+                    >
+                      Generate
+                    </SpotlightButton>
+                  </SignInButton>
+                )}
+              </div>
             </div>
 
             <AnimatePresence>
@@ -3745,7 +3784,7 @@ export default function Home() {
                           {GENRE_LIST.map(g => <option key={g.key} value={g.key}>{g.name}</option>)}
                         </select>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wider"
                             style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
@@ -3916,7 +3955,7 @@ export default function Home() {
                     {generatingStage}
                   </p>
                   <motion.div
-                    className="grid grid-cols-2 gap-4"
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                     variants={staggerContainer}
                     initial="hidden"
                     animate="visible"
@@ -3957,7 +3996,7 @@ export default function Home() {
                   </div>
 
                   <motion.div
-                    className="flex gap-3"
+                    className="flex flex-col sm:flex-row gap-3"
                     variants={staggerContainer}
                     initial="hidden"
                     animate="visible"
