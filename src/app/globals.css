@@ -586,3 +586,16 @@ html:not(.dark) .style-pill {
   color: #52525B;
   border-color: #D4D4D8;
 }
+
+html:not(.dark) nav .flex.items-center button {
+  color: #09090B !important;
+}
+
+html:not(.dark) nav .flex.items-center button svg {
+  color: #09090B !important;
+  stroke: #09090B !important;
+}
+
+html:not(.dark) nav .flex.items-center button.text-white {
+  color: #ffffff !important;
+}
