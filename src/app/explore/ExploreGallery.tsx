@@ -6,11 +6,13 @@ import Link from 'next/link';
 type GalleryItem = {
   id: string;
   prompt: string | null;
-  genre: string;
+  genreKey: string;
+  genreLabel: string;
   bpm: number;
   style_tag: string | null;
   created_at: string;
   timeAgo: string;
+  isExample: boolean;
 };
 
 export function ExploreGallery({
@@ -26,7 +28,7 @@ export function ExploreGallery({
 
   const filtered = useMemo(() => {
     if (genreFilter === 'all') return items;
-    return items.filter(i => i.genre === genreFilter);
+    return items.filter(i => i.genreKey === genreFilter);
   }, [items, genreFilter]);
 
   return (
@@ -80,13 +82,14 @@ export function ExploreGallery({
         <p
           style={{
             fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 11,
-            color: 'rgba(138,138,154,0.4)',
+            fontSize: 10,
+            color: 'rgba(138,138,154,0.55)',
             marginBottom: 24,
-            letterSpacing: '0.06em',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
           }}
         >
-          EXAMPLE GENERATIONS
+          example generations
         </p>
       )}
 
@@ -122,7 +125,7 @@ export function ExploreGallery({
           const prompt = (item.prompt ?? '').trim();
           const promptShort =
             prompt.length > 40 ? `${prompt.slice(0, 40).trimEnd()}…` : (prompt || '—');
-          const href = seedMode ? '/' : `/g/${item.id}`;
+          const href = item.isExample ? '/' : `/g/${item.id}`;
 
           return (
             <Link
@@ -139,6 +142,22 @@ export function ExploreGallery({
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
+                  {item.isExample && (
+                    <span
+                      className="inline-flex px-2 py-0.5 rounded-md mb-2"
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: 9,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        color: 'rgba(138,138,154,0.65)',
+                        background: 'rgba(138,138,154,0.08)',
+                        border: '1px solid rgba(138,138,154,0.18)',
+                      }}
+                    >
+                      example
+                    </span>
+                  )}
                   <p
                     className="text-sm font-semibold mb-2"
                     style={{ fontFamily: 'Syne, sans-serif', color: 'rgba(240,240,255,0.92)' }}
@@ -156,7 +175,7 @@ export function ExploreGallery({
                         border: '1px solid #1A1A2E',
                       }}
                     >
-                      {item.genre}
+                      {item.genreLabel}
                     </span>
                     <span
                       className="px-2 py-1 rounded-md text-xs"

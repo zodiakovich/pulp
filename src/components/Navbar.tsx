@@ -43,7 +43,7 @@ export function Navbar({
   onHistory,
   historyCount,
 }: {
-  active?: 'create' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog';
+  active?: 'create' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog' | 'changelog';
   onHistory?: () => void;
   historyCount?: number;
 }) {
@@ -72,6 +72,9 @@ export function Navbar({
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
+      <Link href="/changelog" className={navClass(active === 'changelog')}>
+        Changelog
+      </Link>
       <Link href="/pricing" className={navClass(active === 'pricing')}>
         Pricing
       </Link>
@@ -88,6 +91,9 @@ export function Navbar({
       </Link>
       <Link href="/build" className={navClass(active === 'build')}>
         Build
+      </Link>
+      <Link href="/changelog" className={navClass(active === 'changelog')}>
+        Changelog
       </Link>
 
       {onHistory ? (

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type DragEvent } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useAuth, SignInButton, UserButton } from '@clerk/nextjs';
 import {
@@ -8,7 +9,8 @@ import {
   type GenerationParams, type GenerationResult, type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
-import { playNotes, playLayer, stopAllPlayback } from '@/lib/audio-engine';
+import { playNotes, stopAllPlayback } from '@/lib/audio-engine';
+import { playTonePreview, stopTonePreview } from '@/lib/tone-preview';
 import { supabase } from '@/lib/supabase';
 import { track } from '@vercel/analytics';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
@@ -317,6 +319,14 @@ const EDITOR_MIDI_MAX = 84;   // C6 (rows show 36–83, 48 semitones)
 const EDITOR_PITCH_COUNT = EDITOR_MIDI_MAX - EDITOR_MIDI_MIN;
 const EDITOR_HEIGHT = 240;
 
+function makeDraggableMidi(notes: NoteEvent[], bpm: number, filename: string) {
+  const midi = generateMidiFormat0(notes, bpm, filename);
+  const ab = new ArrayBuffer(midi.byteLength);
+  new Uint8Array(ab).set(midi);
+  const blob = new Blob([ab], { type: 'audio/midi' });
+  return { blob, filename };
+}
+
 // ─── LAYER CARD ───────────────────────────────────────────────
 function LayerCard({
   name, notes, bpm, genre, enabled, onDownload, onRegenerate,
@@ -327,16 +337,24 @@ function LayerCard({
   const [playing, setPlaying] = useState(false);
   const color = LAYER_COLORS[name] || '#FF6D3F';
 
-  const handlePlay = () => {
-    if (playing) { stopAllPlayback(); setPlaying(false); return; }
+  const handlePlay = async () => {
+    if (playing) { stopTonePreview(); setPlaying(false); return; }
     setPlaying(true);
-    playLayer(name as 'melody' | 'chords' | 'bass' | 'drums', notes, bpm, genre, () => setPlaying(false));
+    await playTonePreview(notes, bpm, color, () => setPlaying(false));
   };
 
   return (
     <motion.div
       variants={fadeUp}
       className={`layer-card active-${name}${!enabled ? ' opacity-40' : ''}`}
+      draggable
+      onDragStartCapture={(e: DragEvent<HTMLDivElement>) => {
+        const { blob, filename: fname } = makeDraggableMidi(notes, bpm, `pulp-${name}`);
+        const file = new File([blob], `${fname}.mid`, { type: 'audio/midi' });
+        const dt = e.dataTransfer;
+        dt.effectAllowed = 'copy';
+        dt.items.add(file);
+      }}
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -387,6 +405,16 @@ function LayerCard({
         </div>
       </div>
       <PianoRoll notes={notes} color={color} />
+      <p style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: 9,
+        color: 'rgba(138,138,154,0.35)',
+        textAlign: 'center',
+        marginTop: 8,
+        letterSpacing: '0.06em',
+      }}>
+        drag into DAW
+      </p>
     </motion.div>
   );
 }
@@ -1569,6 +1597,17 @@ const VALID_SCALES = ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolyd
 
 // ─── CONSTANTS ────────────────────────────────────────────────
 const GENRE_LIST = Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name }));
+
+const VIBES = [
+  { label: 'Dark',       tag: 'Dark Hypnotic Dub',      color: '#8A8A9A' },
+  { label: 'Euphoric',   tag: 'Euphoric Melodic',        color: '#FF6D3F' },
+  { label: 'Groovy',     tag: 'Organic Afro Groove',     color: '#00B894' },
+  { label: 'Aggressive', tag: 'Peak-Time Industrial',    color: '#E94560' },
+  { label: 'Dreamy',     tag: 'Ethereal Melodic',        color: '#A78BFA' },
+  { label: 'Funky',      tag: 'Nu-Disco Funk',           color: '#FFAB91' },
+  { label: 'Minimal',    tag: 'Quirky Minimal',          color: '#4A4A5A' },
+  { label: 'Festival',   tag: 'Pumping Festival Tech',   color: '#FF6D3F' },
+]
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
 function scaleLabel(value: string): string {
@@ -1596,17 +1635,17 @@ const HOW_IT_WORKS = [
   {
     num: '01',
     title: 'Describe or pick a style',
-    body: 'Type a prompt like "dark techno, Am, 130bpm" or click any style tag to load a preset instantly.',
+    body: 'Type a prompt like "dark techno, Am, 130bpm" or tap any vibe tag.',
   },
   {
     num: '02',
     title: '4 tracks generate in under a second',
-    body: 'Melody, chords, bass, and drums are written simultaneously using genre-tuned music theory rules.',
+    body: 'Melody, chords, bass, and drums generate simultaneously in under a second.',
   },
   {
     num: '03',
     title: 'Drop the .mid into your DAW',
-    body: 'Download individual tracks or the full multi-track .mid. Tested in FL Studio, Ableton, and Logic.',
+    body: 'Download individual tracks or the full .mid. Drag straight into your DAW.',
   },
 ];
 
@@ -1628,6 +1667,83 @@ const LAYER_EXPLAINER = [
     body: 'Pattern-driven: four-on-floor, breakbeat, trap, DnB, shuffle. Hat density from 8 to 32 steps per bar.',
   },
 ];
+
+function HeroDemoPreview() {
+  const [tick, setTick] = React.useState(0)
+  
+  React.useEffect(() => {
+    const interval = setInterval(() => setTick(t => (t + 1) % 60), 100)
+    return () => clearInterval(interval)
+  }, [])
+
+  const layers = [
+    { name: 'Melody', color: '#FF6D3F', pattern: [1,0,1,1,0,1,0,1,1,0,1,0,1,1,0,1] },
+    { name: 'Chords', color: '#A78BFA', pattern: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
+    { name: 'Bass',   color: '#00B894', pattern: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
+    { name: 'Drums',  color: '#E94560', pattern: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+  ]
+
+  return (
+    <div
+      className="mb-6 rounded-2xl overflow-hidden"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+    >
+      <div
+        className="flex items-center justify-between px-4 py-2"
+        style={{ borderBottom: '1px solid var(--border)' }}
+      >
+        <div className="flex items-center gap-2">
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: '#00B894',
+              animation: 'pulse-ring 2s ease-in-out infinite',
+            }}
+          />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.06em' }}>
+            LIVE PREVIEW · Tech House · 128 BPM · Am
+          </span>
+        </div>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.4)' }}>
+          generate yours →
+        </span>
+      </div>
+      <div className="p-3 grid grid-cols-2 gap-2">
+        {layers.map(layer => (
+          <div
+            key={layer.name}
+            className="rounded-xl overflow-hidden"
+            style={{ background: '#0A0A0F', border: `1px solid ${layer.color}22`, height: 52 }}
+          >
+            <div className="flex items-center gap-1.5 px-2 pt-1.5">
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: layer.color, flexShrink: 0 }} />
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: layer.color, opacity: 0.7 }}>
+                {layer.name.toUpperCase()}
+              </span>
+            </div>
+            <div className="flex items-end gap-px px-2 pb-2" style={{ height: 32 }}>
+              {layer.pattern.map((on, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    borderRadius: 1,
+                    background: layer.color,
+                    opacity: on ? (i === tick % 16 ? 1 : 0.45) : 0.08,
+                    height: on ? (layer.name === 'Melody' ? `${50 + Math.sin(i * 0.8) * 35}%` : layer.name === 'Drums' ? '80%' : '55%') : '15%',
+                    transition: 'opacity 0.1s',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function Home() {
@@ -1814,9 +1930,10 @@ export default function Home() {
 
       const createdAt = new Date(data.created_at as string);
       if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) {
+        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         await supabase
           .from('user_credits')
-          .update({ credits_used: 0, created_at: now.toISOString() })
+          .update({ credits_used: 0, created_at: firstOfMonth })
           .eq('user_id', uid);
         setCredits({ used: 0, isPro: data.is_pro as boolean });
         return;
@@ -1850,20 +1967,17 @@ export default function Home() {
 
   const incrementCredits = useCallback(async (uid: string) => {
     try {
-      const now = new Date();
       const { data } = await supabase.from('user_credits').select('*').eq('user_id', uid).single();
 
       if (!data) {
         await supabase.from('user_credits').insert({ user_id: uid, credits_used: 1, is_pro: false });
         return;
       }
-
-      const createdAt = new Date(data.created_at as string);
-      if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) {
-        await supabase.from('user_credits').update({ credits_used: 1, created_at: now.toISOString() }).eq('user_id', uid);
-      } else {
-        await supabase.from('user_credits').update({ credits_used: (data.credits_used as number) + 1 }).eq('user_id', uid);
-      }
+      // NEVER update created_at here - only update credits_used
+      await supabase
+        .from('user_credits')
+        .update({ credits_used: (data.credits_used as number) + 1 })
+        .eq('user_id', uid);
     } catch {
       // Ignore
     }
@@ -3271,8 +3385,7 @@ export default function Home() {
               className="mt-3 mx-auto leading-relaxed"
               style={{ fontSize: 16, color: 'var(--muted)', maxWidth: 560 }}
             >
-              Describe a track. Get 4 independent MIDI tracks — melody, chords, bass, and drums —
-              tuned to genre, key, and tempo. Download directly into your DAW.
+              Type a prompt. Get melody, chords, bass and drums — locked to your key and tempo — in under a second. Drop the .mid straight into FL Studio, Ableton, or Logic.
             </motion.p>
           </motion.div>
 
@@ -3469,10 +3582,30 @@ export default function Home() {
 
             {/* Style tags */}
             <div ref={styleTagsRef} className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
-              {Object.keys(STYLE_TAGS).map(tag => (
-                <button key={tag} onClick={() => handleStyleTag(tag)}
-                  className={`style-pill${activeStyleTag === tag ? ' active' : ''}`}>
-                  {tag}
+              {VIBES.map(vibe => (
+                <button
+                  key={vibe.label}
+                  onClick={() => handleStyleTag(vibe.tag)}
+                  className="flex items-center justify-center flex-shrink-0 px-4 py-2 rounded-xl transition-all"
+                  style={{
+                    border: activeStyleTag === vibe.tag
+                      ? `1px solid ${vibe.color}`
+                      : '1px solid var(--border)',
+                    background: activeStyleTag === vibe.tag
+                      ? `${vibe.color}18`
+                      : 'var(--surface)',
+                    minWidth: 80,
+                  }}
+                >
+                  <span style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: activeStyleTag === vibe.tag ? vibe.color : 'var(--foreground-muted)',
+                    letterSpacing: '0.04em',
+                    fontWeight: activeStyleTag === vibe.tag ? 600 : 400,
+                  }}>
+                    {vibe.label}
+                  </span>
                 </button>
               ))}
             </div>
@@ -3571,6 +3704,10 @@ export default function Home() {
                 </button>
               ))}
             </div>
+
+            {variations.length === 0 && !isGenerating && (
+              <HeroDemoPreview />
+            )}
 
             {/* Manual controls */}
             <div className="mb-6 rounded-xl overflow-hidden" style={{ border: '1px solid #1A1A2E' }}>
@@ -3927,9 +4064,32 @@ export default function Home() {
                       </span>
                     </span>
                   </SpotlightButton>
-                  <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
-                    ↓  Download MIDI
-                  </SpotlightButton>
+                  <div
+                    draggable
+                    onDragStart={(e) => {
+                      const sel = variations[selectedVariation];
+                      if (!sel) return;
+                      const tracks = [
+                        { name: 'Melody', notes: sel.result.melody, channel: 0 },
+                        { name: 'Chords', notes: sel.result.chords, channel: 1 },
+                        { name: 'Bass', notes: sel.result.bass, channel: 2 },
+                        { name: 'Drums', notes: sel.result.drums, channel: 9 },
+                      ].filter(t => t.notes.length > 0);
+                      const midi = generateMidiFormat1(tracks, sel.params.bpm);
+                      const ab = new ArrayBuffer(midi.byteLength);
+                      new Uint8Array(ab).set(midi);
+                      const blob = new Blob([ab], { type: 'audio/midi' });
+                      const genre = GENRES[sel.params.genre]?.name || 'track';
+                      const file = new File([blob], `pulp-${genre.toLowerCase().replace(/\s/g,'-')}.mid`, { type: 'audio/midi' });
+                      e.dataTransfer.effectAllowed = 'copy';
+                      e.dataTransfer.items.add(file);
+                    }}
+                    title="Drag directly into your DAW"
+                  >
+                    <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
+                      ↓  Download MIDI
+                    </SpotlightButton>
+                  </div>
                   <SpotlightButton onClick={() => void handleExportAbleton()} className="btn-download btn-sm">
                     ↓  Export to Ableton
                   </SpotlightButton>
@@ -4298,7 +4458,7 @@ export default function Home() {
               20 genres · 15 styles · 4 independent tracks · .mid export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
-              No account required to generate
+              No account needed. No theory required. Just hit Generate.
             </p>
           </div>
         </div>
@@ -4320,13 +4480,13 @@ export default function Home() {
           <div className="flex items-center justify-center gap-12 flex-wrap">
             {[
               { name: 'FL Studio', abbr: 'FL' },
-              { name: 'Ableton', abbr: 'AB' },
+              { name: 'Ableton Live', abbr: 'AB' },
               { name: 'Logic Pro', abbr: 'LG' },
               { name: 'GarageBand', abbr: 'GB' },
               { name: 'Pro Tools', abbr: 'PT' },
               { name: 'Cubase', abbr: 'CB' },
             ].map(daw => (
-              <div key={daw.name} className="flex flex-col items-center gap-2" style={{ opacity: 0.5 }}>
+              <div key={daw.name} className="flex flex-col items-center gap-2" style={{ opacity: 0.7 }}>
                 <div style={{
                   width: 48,
                   height: 48,
@@ -4491,6 +4651,7 @@ export default function Home() {
             </span>
 
             <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
+              <a href="/about" className="footer-link">About</a>
               <a href="/legal/terms" className="footer-link">
                 Terms
               </a>
@@ -4511,7 +4672,7 @@ export default function Home() {
             </div>
 
             <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
-              zero APIs. runs in your browser.
+              royalty-free. yours forever.
             </span>
           </div>
         </div>
