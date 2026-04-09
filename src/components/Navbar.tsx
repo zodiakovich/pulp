@@ -129,8 +129,6 @@ export function Navbar({
     </>
   );
 
-  const mobileLinks = isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks;
-
   return (
     <nav
       className="fixed top-0 left-0 right-0 z-50"
@@ -153,24 +151,19 @@ export function Navbar({
           {isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks}
         </div>
 
+        <button
+          type="button"
+          className="md:hidden flex flex-col gap-1.5 p-2 rounded-lg transition-all"
+          onClick={() => setMobileMenuOpen(v => !v)}
+          aria-label="Toggle menu"
+          style={{ color: 'var(--foreground-muted)' }}
+        >
+          <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(5px) rotate(45deg)' : 'none' }} />
+          <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, opacity: mobileMenuOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
+          <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(-5px) rotate(-45deg)' : 'none' }} />
+        </button>
+
         <div className="flex items-center gap-2 relative z-[55]" style={{marginLeft: 'auto', flexShrink: 0}}>
-          <button
-            type="button"
-            className="md:hidden h-9 w-9 rounded-lg flex items-center justify-center transition-all"
-            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-            onClick={() => setMobileMenuOpen(v => !v)}
-            style={{
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--foreground)',
-            }}
-          >
-            <div className="flex flex-col justify-center gap-[3px]">
-              <span style={{ width: 16, height: 2, background: 'currentColor', opacity: 0.9 }} />
-              <span style={{ width: 16, height: 2, background: 'currentColor', opacity: 0.9 }} />
-              <span style={{ width: 16, height: 2, background: 'currentColor', opacity: 0.9 }} />
-            </div>
-          </button>
           <WhatsNew />
           <button
             type="button"
@@ -209,21 +202,29 @@ export function Navbar({
 
       {mobileMenuOpen && (
         <div
-          className="md:hidden"
-          style={{
-            borderTop: '1px solid var(--border)',
-            background: 'color-mix(in srgb, var(--bg) 92%, transparent)',
-            backdropFilter: 'blur(12px)',
-          }}
+          className="md:hidden px-6 pb-4 flex flex-col gap-1"
+          style={{ borderTop: '1px solid var(--border)', background: 'color-mix(in srgb, var(--bg) 95%, transparent)' }}
         >
-          <div className="max-w-[1280px] mx-auto px-8 py-4 flex flex-col gap-4">
-            <div
-              className="flex flex-col gap-3"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              {mobileLinks}
-            </div>
-          </div>
+          {isLoaded && isSignedIn ? (
+            <>
+              <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>
+              <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
+              <a href="/build" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Build</a>
+              <a href="/changelog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Changelog</a>
+              <a href="/profile" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
+              <a href="/pricing" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+              <a href="/blog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Blog</a>
+              <a href="/about" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>About</a>
+            </>
+          ) : (
+            <>
+              <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>
+              <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
+              <a href="/pricing" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+              <a href="/blog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Blog</a>
+              <a href="/about" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>About</a>
+            </>
+          )}
         </div>
       )}
     </nav>

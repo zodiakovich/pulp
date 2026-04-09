@@ -335,6 +335,7 @@ function LayerCard({
   enabled: boolean; onDownload: () => void; onRegenerate: () => void;
 }) {
   const [playing, setPlaying] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const color = LAYER_COLORS[name] || '#FF6D3F';
 
   const handlePlay = async () => {
@@ -347,13 +348,20 @@ function LayerCard({
     <motion.div
       variants={fadeUp}
       className={`layer-card active-${name}${!enabled ? ' opacity-40' : ''}`}
-      draggable
+      draggable={enabled && notes.length > 0}
       onDragStartCapture={(e: DragEvent<HTMLDivElement>) => {
+        if (!enabled || notes.length === 0) return;
+        setDragging(true);
         const { blob, filename: fname } = makeDraggableMidi(notes, bpm, `pulp-${name}`);
         const file = new File([blob], `${fname}.mid`, { type: 'audio/midi' });
         const dt = e.dataTransfer;
         dt.effectAllowed = 'copy';
         dt.items.add(file);
+      }}
+      onDragEndCapture={() => setDragging(false)}
+      style={{
+        cursor: enabled && notes.length > 0 ? (dragging ? 'grabbing' : 'grab') : 'default',
+        border: dragging ? '1px solid #FF6D3F' : undefined,
       }}
     >
       <div className="flex items-center justify-between mb-4">
