@@ -3251,16 +3251,18 @@ export default function Home() {
                 className="input-field"
                 style={{ paddingLeft: 40, paddingRight: 220 }}
               />
-              <SpotlightButton
-                type="button"
-                className="btn-secondary absolute right-[104px] top-1/2 -translate-y-1/2"
-                style={{ height: 36, padding: '0 12px', fontSize: 12 }}
-                onClick={() => setShowInspire(v => !v)}
-              >
-                Inspire
-              </SpotlightButton>
-              <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
-                {effectiveIsSignedIn ? (
+              <div className="absolute right-[104px] top-1/2 -translate-y-1/2">
+                <SpotlightButton
+                  type="button"
+                  className="btn-secondary"
+                  style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+                  onClick={() => setShowInspire(v => !v)}
+                >
+                  Inspire
+                </SpotlightButton>
+              </div>
+              {effectiveIsSignedIn ? (
+                <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
                   <SpotlightButton
                     className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
                     style={{ height: 36, padding: '0 16px', fontSize: 13 }}
@@ -3274,7 +3276,9 @@ export default function Home() {
                       </span>
                     ) : 'Generate'}
                   </SpotlightButton>
-                ) : (
+                </div>
+              ) : (
+                <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
                   <SignInButton mode="modal">
                     <SpotlightButton
                       className="btn-primary"
@@ -3283,8 +3287,8 @@ export default function Home() {
                       Generate
                     </SpotlightButton>
                   </SignInButton>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             <AnimatePresence>
