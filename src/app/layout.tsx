@@ -52,8 +52,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 (function () {
                   try {
                     var t = localStorage.getItem('pulp_theme');
-                    if (t === 'dark') document.documentElement.classList.add('dark');
-                    else document.documentElement.classList.remove('dark');
+                    if (t === 'light') {
+                      document.documentElement.classList.remove('dark');
+                    } else {
+                      document.documentElement.classList.add('dark');
+                    }
                   } catch (e) {}
                 })();
               `,

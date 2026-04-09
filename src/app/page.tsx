@@ -1642,6 +1642,8 @@ export default function Home() {
   const [playingVariationIndex, setPlayingVariationIndex] = useState<number | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingStage, setGeneratingStage] = useState('');
+  const [totalGenerations, setTotalGenerations] = useState<number | null>(null);
   const [playingAll, setPlayingAll] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIndex, setCompareIndex] = useState(0);
@@ -1745,6 +1747,28 @@ export default function Home() {
   const styleTagsRef = useRef<HTMLDivElement>(null);
   const genreSelectRef = useRef<HTMLSelectElement>(null);
   const layerCardsRef = useRef<HTMLDivElement>(null);
+  const generatingStageTimeoutsRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const { count } = await supabase
+          .from('generations')
+          .select('id', { count: 'exact', head: true });
+        if (typeof count === 'number') setTotalGenerations(count);
+      } catch {
+        // ignore
+      }
+    };
+    void fetchCount();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
+      generatingStageTimeoutsRef.current = [];
+    };
+  }, []);
 
   // Open history from other pages via /?history=1
   useEffect(() => {
@@ -2002,7 +2026,18 @@ export default function Home() {
     }
 
     setIsGenerating(true);
+    setGeneratingStage('Analyzing prompt...');
     setVariationIds([]);
+
+    // Premium staged loading sequence (purely UI timing).
+    for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
+    generatingStageTimeoutsRef.current = [
+      window.setTimeout(() => setGeneratingStage('Analyzing prompt...'), 0),
+      window.setTimeout(() => setGeneratingStage('Building chord progression...'), 600),
+      window.setTimeout(() => setGeneratingStage('Writing melody...'), 1200),
+      window.setTimeout(() => setGeneratingStage('Layering bass & drums...'), 1800),
+      window.setTimeout(() => setGeneratingStage('Humanizing feel...'), 2400),
+    ];
 
     // Try Claude AI prompt parsing, fall back silently
     let aiParsed: Partial<GenerationParams> = {};
@@ -2039,7 +2074,12 @@ export default function Home() {
     const finalParams: GenerationParams = { ...params, ...parsed, ...aiParsed, ...overrideParams };
     setParams(finalParams);
 
-    setTimeout(async () => {
+    const minLoad = new Promise<void>(r => window.setTimeout(() => r(), 2800));
+
+    const actualGeneration = (async () => {
+      // Tiny intentional delay to avoid an abrupt spinner flash.
+      await new Promise<void>(r => window.setTimeout(() => r(), 320));
+
       const p1 = finalParams;
       const p2 = { ...finalParams, bpm: Math.min(200, finalParams.bpm + 4) };
       const p3 = { ...finalParams, bpm: Math.max(60, finalParams.bpm - 4) };
@@ -2092,13 +2132,13 @@ export default function Home() {
           gen3 = generateTrack(p3);
         }
       }
+
       setVariations([
         { result: gen1, params: p1 },
         { result: gen2, params: p2 },
         { result: gen3, params: p3 },
       ]);
       setSelectedVariation(0);
-      setIsGenerating(false);
 
       track('generation_created', {
         genre: finalParams.genre,
@@ -2151,7 +2191,16 @@ export default function Home() {
           // Ignore save errors
         }
       }
-    }, 320);
+    })();
+
+    try {
+      await Promise.all([actualGeneration, minLoad]);
+    } finally {
+      setIsGenerating(false);
+      setGeneratingStage('');
+      for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
+      generatingStageTimeoutsRef.current = [];
+    }
   }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, checkCreditsAllowed, incrementCredits, loadUserCredits, loadHistoryFromDb, loadInspirationChipsFromDb]);
 
   const handleStyleTag = (tag: string) => {
@@ -3272,7 +3321,7 @@ export default function Home() {
                     {isGenerating ? (
                       <span className="flex items-center gap-2">
                         <span className="spinner" />
-                        Generating
+                        {generatingStage || 'Generating…'}
                       </span>
                     ) : 'Generate'}
                   </SpotlightButton>
@@ -3427,6 +3476,87 @@ export default function Home() {
                 </button>
               ))}
             </div>
+
+            {variations.length === 0 && !isGenerating && (
+              <div
+                className="mb-6 rounded-2xl overflow-hidden"
+                style={{ border: '1px solid var(--border)', background: 'var(--surface)', position: 'relative' }}
+              >
+                {/* Header */}
+                <div
+                  className="flex items-center justify-between px-4 py-3"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ background: '#FF6D3F' }} />
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em' }}>
+                      EXAMPLE OUTPUT — Tech House 128 BPM · Am
+                    </span>
+                  </div>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.4)' }}>
+                    Generate yours →
+                  </span>
+                </div>
+
+                {/* Fake piano rolls */}
+                <div className="grid grid-cols-2 gap-3 p-4">
+                  {[
+                    { name: 'Melody', color: '#FF6D3F' },
+                    { name: 'Chords', color: '#A78BFA' },
+                    { name: 'Bass', color: '#00B894' },
+                    { name: 'Drums', color: '#E94560' },
+                  ].map(layer => (
+                    <div
+                      key={layer.name}
+                      className="rounded-xl overflow-hidden"
+                      style={{ border: `1px solid ${layer.color}22`, background: '#0A0A0F', height: 64, position: 'relative' }}
+                    >
+                      {/* Layer label */}
+                      <div className="absolute top-2 left-3 flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: layer.color }} />
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: layer.color, opacity: 0.8 }}>
+                          {layer.name.toUpperCase()}
+                        </span>
+                      </div>
+                      {/* Fake notes as colored rectangles */}
+                      <div className="absolute inset-0 flex items-center px-3 pt-6 gap-1">
+                        {Array.from({ length: layer.name === 'Drums' ? 16 : 8 }, (_, i) => {
+                          const show = layer.name === 'Melody' ? [0, 1, 3, 5, 6].includes(i) :
+                            layer.name === 'Chords' ? [0, 2, 4, 6].includes(i) :
+                              layer.name === 'Bass' ? [0, 1, 2, 4, 5, 6, 7].includes(i) :
+                                i % 2 === 0;
+                          return show ? (
+                            <div
+                              key={i}
+                              style={{
+                                flex: 1,
+                                height: layer.name === 'Melody' ? `${30 + Math.sin(i * 1.5) * 20}%` :
+                                  layer.name === 'Chords' ? '60%' :
+                                    layer.name === 'Bass' ? '40%' : '70%',
+                                background: layer.color,
+                                borderRadius: 2,
+                                opacity: 0.6 + (i % 3) * 0.15,
+                                alignSelf: 'flex-end',
+                              }}
+                            />
+                          ) : <div key={i} style={{ flex: 1 }} />;
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Overlay CTA */}
+                <div
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ background: 'linear-gradient(to top, rgba(9,9,11,0.7) 0%, transparent 100%)' }}
+                >
+                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(240,240,255,0.5)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
+                    ↑ Hit Generate to create yours
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Layer toggles */}
             <div className="flex gap-2 mb-4 flex-wrap">
@@ -3644,15 +3774,20 @@ export default function Home() {
             {/* Skeleton while generating */}
             <AnimatePresence>
               {isGenerating && (
-                <motion.div
-                  className="grid grid-cols-2 gap-4"
-                  variants={staggerContainer}
-                  initial="hidden"
-                  animate="visible"
-                  exit={{ opacity: 0 }}
-                >
-                  {LAYERS.map(l => <SkeletonCard key={l} name={l} />)}
-                </motion.div>
+                <div>
+                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#FF6D3F', textAlign: 'center', marginBottom: 16, letterSpacing: '0.06em' }}>
+                    {generatingStage}
+                  </p>
+                  <motion.div
+                    className="grid grid-cols-2 gap-4"
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                    exit={{ opacity: 0 }}
+                  >
+                    {LAYERS.map(l => <SkeletonCard key={l} name={l} />)}
+                  </motion.div>
+                </div>
               )}
             </AnimatePresence>
 
@@ -4140,12 +4275,83 @@ export default function Home() {
           <div
             className="text-center mt-12 space-y-2"
           >
+            {totalGenerations !== null && totalGenerations > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <span style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 13,
+                  color: '#FF6D3F',
+                  fontWeight: 500,
+                }}>
+                  {totalGenerations.toLocaleString()}
+                </span>
+                <span style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 13,
+                  color: 'rgba(138,138,154,0.6)',
+                }}>
+                  {' '}MIDI patterns generated
+                </span>
+              </div>
+            )}
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)', letterSpacing: '0.04em' }}>
               20 genres · 15 styles · 4 independent tracks · .mid export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
               No account required to generate
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── DAW COMPATIBILITY ── */}
+      <section className="py-16 px-8" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="max-w-[1280px] mx-auto text-center">
+          <p style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 11,
+            color: 'var(--muted)',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            marginBottom: 32,
+          }}>
+            Works with your DAW
+          </p>
+          <div className="flex items-center justify-center gap-12 flex-wrap">
+            {[
+              { name: 'FL Studio', abbr: 'FL' },
+              { name: 'Ableton', abbr: 'AB' },
+              { name: 'Logic Pro', abbr: 'LG' },
+              { name: 'GarageBand', abbr: 'GB' },
+              { name: 'Pro Tools', abbr: 'PT' },
+              { name: 'Cubase', abbr: 'CB' },
+            ].map(daw => (
+              <div key={daw.name} className="flex flex-col items-center gap-2" style={{ opacity: 0.5 }}>
+                <div style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'var(--foreground-muted)',
+                }}>
+                  {daw.abbr}
+                </div>
+                <span style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 10,
+                  color: 'var(--muted)',
+                }}>
+                  {daw.name}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </section>

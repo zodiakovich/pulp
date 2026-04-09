@@ -48,16 +48,16 @@ export function Navbar({
   historyCount?: number;
 }) {
   const { isLoaded, isSignedIn } = useAuth();
-  const [theme, setTheme] = useState<'dark' | 'light'>('light');
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
     try {
       const t = localStorage.getItem(STORAGE_KEY);
-      const resolved: 'dark' | 'light' = t === 'dark' ? 'dark' : 'light';
+      const resolved: 'dark' | 'light' = t === 'light' ? 'light' : 'dark';
       setTheme(resolved);
       document.documentElement.classList.toggle('dark', resolved === 'dark');
     } catch {
-      setTheme('light');
+      setTheme('dark');
     }
   }, []);
 
@@ -144,7 +144,7 @@ export function Navbar({
           {isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks}
         </div>
 
-        <div className="flex items-center gap-2" style={{marginLeft: 'auto', flexShrink: 0}}>
+        <div className="flex items-center gap-2 relative z-[55]" style={{marginLeft: 'auto', flexShrink: 0}}>
           <WhatsNew />
           <button
             type="button"

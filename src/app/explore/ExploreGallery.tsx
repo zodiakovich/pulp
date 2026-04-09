@@ -16,9 +16,11 @@ type GalleryItem = {
 export function ExploreGallery({
   items,
   genres,
+  seedMode,
 }: {
   items: GalleryItem[];
   genres: Array<{ key: string; name: string }>;
+  seedMode: boolean;
 }) {
   const [genreFilter, setGenreFilter] = useState<string>('all');
 
@@ -74,9 +76,23 @@ export function ExploreGallery({
         </div>
       </div>
 
+      {seedMode && (
+        <p
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 11,
+            color: 'rgba(138,138,154,0.4)',
+            marginBottom: 24,
+            letterSpacing: '0.06em',
+          }}
+        >
+          EXAMPLE GENERATIONS
+        </p>
+      )}
+
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !seedMode && (
           <div
             className="rounded-2xl p-8 lg:col-span-3"
             style={{ background: '#111118', border: '1px solid #1A1A2E' }}
@@ -106,11 +122,12 @@ export function ExploreGallery({
           const prompt = (item.prompt ?? '').trim();
           const promptShort =
             prompt.length > 40 ? `${prompt.slice(0, 40).trimEnd()}…` : (prompt || '—');
+          const href = seedMode ? '/' : `/g/${item.id}`;
 
           return (
             <Link
               key={item.id}
-              href={`/g/${item.id}`}
+              href={href}
               className="block rounded-2xl p-6 transition-all"
               style={{
                 background: '#111118',

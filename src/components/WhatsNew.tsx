@@ -45,7 +45,7 @@ export function WhatsNew() {
         onClick={() => setOpen(true)}
         aria-label="What's new"
         className="h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm"
-        style={{ background: 'rgba(255,109,63,0.1)', color: '#FF6D3F', position: 'relative' }}
+        style={{ background: 'rgba(255,109,63,0.1)', color: '#FF6D3F', position: 'relative', zIndex: 45 }}
         title="What's new"
       >
         What’s new
