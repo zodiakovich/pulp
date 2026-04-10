@@ -341,7 +341,12 @@ function LayerCard({
   const handlePlay = async () => {
     if (playing) { stopTonePreview(); setPlaying(false); return; }
     setPlaying(true);
-    await playTonePreview(notes, bpm, color, () => setPlaying(false));
+    const previewLayer =
+      name === 'drums' ? 'drums' :
+      name === 'bass' ? 'bass' :
+      name === 'chords' ? 'chords' :
+      'melody';
+    await playTonePreview(notes, bpm, previewLayer, () => setPlaying(false));
   };
 
   return (
@@ -1718,7 +1723,7 @@ function HeroDemoPreview() {
           generate yours →
         </span>
       </div>
-      <div className="p-3 grid grid-cols-2 gap-2">
+      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
         {layers.map(layer => (
           <div
             key={layer.name}
@@ -1900,6 +1905,11 @@ export default function Home() {
       const u = new URL(window.location.href);
       if (u.searchParams.get('history') === '1') {
         setShowHistory(true);
+      }
+      const prefill = u.searchParams.get('prompt');
+      if (prefill) {
+        setPrompt(prefill);
+        setActiveStyleTag(null);
       }
     } catch {
       // ignore
@@ -3371,7 +3381,7 @@ export default function Home() {
       />
 
       {/* ── HERO ── */}
-      <section className="hero-noise px-8 pt-16 pb-10">
+      <section className="hero-noise px-4 sm:px-8 pt-16 pb-10">
         <div className="max-w-[1280px] mx-auto min-h-[100svh] flex flex-col justify-center gap-6">
 
           {/* Staggered headline + subtitle */}
@@ -3384,7 +3394,7 @@ export default function Home() {
             <motion.h1
               variants={fadeUp}
               className="text-gradient font-extrabold leading-[1.1]"
-              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(2rem, 8vw, 5rem)', letterSpacing: '-0.02em' }}
+              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(1.8rem, 8vw, 5rem)', letterSpacing: '-0.02em' }}
             >
               Generate MIDI.<br />Instantly.
             </motion.h1>
@@ -3400,98 +3410,103 @@ export default function Home() {
           {/* ── GENERATOR ── */}
           <motion.div
             ref={toolRef}
-            className="max-w-[720px] mx-auto"
+            className="w-full max-w-[720px] mx-auto"
             variants={fadeUp}
             initial="hidden"
             animate="visible"
             transition={{ delay: 0.16 }}
           >
+            <div className="px-4 sm:px-0">
 
             {/* Prompt input */}
-            <div className="relative mb-4">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none"
-                style={{ color: '#FF6D3F' }}>✦</span>
-              <input
-                ref={promptRef}
-                type="text"
-                value={prompt}
-                onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
-                onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
-                placeholder="dark melodic techno, 128bpm, Am"
-                className="input-field pr-4 sm:pr-[220px]"
-                style={{ paddingLeft: 40 }}
-              />
+            <div className="relative mb-4 hidden sm:block">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: '#FF6D3F' }}>✦</span>
+                <input
+                  ref={promptRef}
+                  type="text"
+                  value={prompt}
+                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
+                  onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
+                  placeholder="dark melodic techno, 128bpm, Am"
+                  className="input-field pr-4 sm:pr-[220px]"
+                  style={{ paddingLeft: 40 }}
+                />
 
-              {/* Desktop (sm+) absolute buttons */}
-              <div className="hidden sm:block absolute right-[104px] top-1/2 -translate-y-1/2">
-                <SpotlightButton
-                  type="button"
-                  className="btn-secondary"
-                  style={{ height: 36, padding: '0 12px', fontSize: 12 }}
-                  onClick={() => setShowInspire(v => !v)}
-                >
-                  Inspire
-                </SpotlightButton>
-              </div>
-              {effectiveIsSignedIn ? (
-                <div ref={generateBtnWrapRef} className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2">
+                <div className="absolute right-[104px] top-1/2 -translate-y-1/2">
                   <SpotlightButton
-                    className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
-                    style={{ height: 36, padding: '0 16px', fontSize: 13 }}
-                    onClick={() => void handleGenerate()}
-                    disabled={isGenerating}
+                    type="button"
+                    className="btn-secondary"
+                    style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+                    onClick={() => setShowInspire(v => !v)}
                   >
-                    {isGenerating ? (
-                      <span className="flex items-center gap-2">
-                        <span className="spinner" />
-                        {generatingStage || 'Generating…'}
-                      </span>
-                    ) : 'Generate'}
+                    Inspire
                   </SpotlightButton>
                 </div>
-              ) : (
-                <div ref={generateBtnWrapRef} className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2">
-                  <SignInButton mode="modal">
+                {effectiveIsSignedIn ? (
+                  <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
                     <SpotlightButton
-                      className="btn-primary"
+                      className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
                       style={{ height: 36, padding: '0 16px', fontSize: 13 }}
+                      onClick={() => void handleGenerate()}
+                      disabled={isGenerating}
                     >
-                      Generate
+                      {isGenerating ? (
+                        <span className="flex items-center gap-2">
+                          <span className="spinner" />
+                          {generatingStage || 'Generating…'}
+                        </span>
+                      ) : 'Generate'}
                     </SpotlightButton>
-                  </SignInButton>
-                </div>
-              )}
-
-              {/* Mobile (<sm) stacked buttons */}
-              <div className="sm:hidden mt-2 flex flex-col gap-2">
+                  </div>
+                ) : (
+                  <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <SignInButton mode="modal">
+                      <SpotlightButton
+                        className="btn-primary"
+                        style={{ height: 36, padding: '0 16px', fontSize: 13 }}
+                      >
+                        Generate
+                      </SpotlightButton>
+                    </SignInButton>
+                  </div>
+                )}
+            </div>
+            <div className="sm:hidden flex flex-col gap-2 mb-4">
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: '#FF6D3F' }}>✦</span>
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
+                  onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
+                  placeholder="dark melodic techno, 128bpm, Am"
+                  className="input-field"
+                  style={{ paddingLeft: 40 }}
+                />
+              </div>
+              <div className="flex gap-2">
                 <SpotlightButton
                   type="button"
                   className="btn-secondary"
-                  style={{ height: 40, padding: '0 14px', fontSize: 12, width: '100%' }}
+                  style={{ height: 44, padding: '0 12px', fontSize: 13, flex: 1 }}
                   onClick={() => setShowInspire(v => !v)}
                 >
                   Inspire
                 </SpotlightButton>
-
                 {effectiveIsSignedIn ? (
                   <SpotlightButton
                     className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
-                    style={{ height: 40, padding: '0 14px', fontSize: 13, width: '100%' }}
+                    style={{ height: 44, padding: '0 12px', fontSize: 13, flex: 1 }}
                     onClick={() => void handleGenerate()}
                     disabled={isGenerating}
                   >
-                    {isGenerating ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="spinner" />
-                        {generatingStage || 'Generating…'}
-                      </span>
-                    ) : 'Generate'}
+                    {isGenerating ? '...' : 'Generate'}
                   </SpotlightButton>
                 ) : (
                   <SignInButton mode="modal">
                     <SpotlightButton
                       className="btn-primary"
-                      style={{ height: 40, padding: '0 14px', fontSize: 13, width: '100%' }}
+                      style={{ height: 44, padding: '0 12px', fontSize: 13, flex: 1 }}
                     >
                       Generate
                     </SpotlightButton>
@@ -4069,7 +4084,7 @@ export default function Home() {
             <AnimatePresence>
               {result && !isGenerating && (
                 <motion.div
-                  className="flex gap-3 mb-5 flex-wrap items-center"
+                  className="flex gap-2 mb-5 flex-wrap items-center"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
@@ -4282,7 +4297,7 @@ export default function Home() {
               {result && !isGenerating && (
                 <motion.div
                   ref={layerCardsRef}
-                  className="grid grid-cols-2 gap-4"
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                   variants={staggerContainer}
                   initial="hidden"
                   animate="visible"
@@ -4476,6 +4491,7 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
           </motion.div>
 
           {/* Social proof */}
@@ -4512,7 +4528,7 @@ export default function Home() {
       </section>
 
       {/* ── DAW COMPATIBILITY ── */}
-      <section className="py-16 px-8" style={{ borderBottom: '1px solid var(--border)' }}>
+      <section className="py-12 sm:py-24 px-4 sm:px-8" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="max-w-[1280px] mx-auto text-center">
           <p style={{
             fontFamily: 'JetBrains Mono, monospace',
@@ -4565,7 +4581,7 @@ export default function Home() {
 
       {/* ── HOW IT WORKS ── */}
       <section
-        className="dark-band py-24 px-8"
+        className="dark-band py-12 sm:py-24 px-4 sm:px-8"
         style={{ borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
       >
         <div className="max-w-[1280px] mx-auto">
@@ -4576,7 +4592,7 @@ export default function Home() {
             3 steps.<br />0 fuss.
           </h2>
           <div
-            className="grid grid-cols-1 md:grid-cols-3 gap-8"
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
             {HOW_IT_WORKS.map(step => (
               <div key={step.num}>
@@ -4597,7 +4613,7 @@ export default function Home() {
 
       {/* ── GENRE GRID ── */}
       <section
-        className="py-24 px-8"
+        className="py-12 sm:py-24 px-4 sm:px-8"
       >
         <div className="max-w-[1280px] mx-auto">
           <h2
@@ -4613,7 +4629,7 @@ export default function Home() {
             Click any genre to load it into the generator.
           </p>
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
           >
             {GENRE_LIST.map(g => (
               <button
@@ -4633,7 +4649,7 @@ export default function Home() {
 
       {/* ── LAYER SYSTEM ── */}
       <section
-        className="dark-band py-24 px-8"
+        className="dark-band py-12 sm:py-24 px-4 sm:px-8"
         style={{ borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
       >
         <div className="max-w-[1280px] mx-auto">
@@ -4670,7 +4686,7 @@ export default function Home() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="px-8 py-16" style={{ borderTop: '1px solid var(--border)' }}>
+      <footer className="px-4 sm:px-8 py-16" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="max-w-[1280px] mx-auto">
 
           {/* Top row */}

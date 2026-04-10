@@ -1,4 +1,4 @@
-import { EmbedClient } from './EmbedClient';
+import { EmbedIframeClient } from './EmbedIframeClient';
 
 export default async function EmbedPage({
   searchParams,
@@ -7,11 +7,10 @@ export default async function EmbedPage({
 }) {
   const sp = await searchParams;
   return (
-    <EmbedClient
+    <EmbedIframeClient
       initialGenre={sp.genre ?? null}
       initialBpm={sp.bpm ?? null}
       initialKey={sp.key ?? null}
     />
   );
 }
-

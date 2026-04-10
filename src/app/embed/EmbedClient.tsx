@@ -36,10 +36,20 @@ export function EmbedClient({
   initialGenre,
   initialBpm,
   initialKey,
+  compact = false,
+  onAfterGenerate,
+  onDownloadMidi,
+  onParamsChange,
 }: {
   initialGenre: string | null;
   initialBpm: string | null;
   initialKey: string | null;
+  /** When true, drop full-viewport centering for embedding in collab / panels */
+  compact?: boolean;
+  onAfterGenerate?: (info: { genre: string; bpm: number }) => void;
+  onDownloadMidi?: () => void;
+  /** Fires when genre changes inside the embed (for shared sessions) */
+  onParamsChange?: (info: { genre: string; bpm: number }) => void;
 }) {
   const [prompt, setPrompt] = useState('');
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
@@ -73,6 +83,7 @@ export function EmbedClient({
     try {
       const gen = generateTrack(params);
       setResult(gen);
+      onAfterGenerate?.({ genre: params.genre, bpm: params.bpm });
     } finally {
       setIsGenerating(false);
       stopAllPlayback();
@@ -101,6 +112,7 @@ export function EmbedClient({
 
   const handleDownload = () => {
     if (!result) return;
+    onDownloadMidi?.();
     const tracks: { name: string; notes: NoteEvent[]; channel: number }[] = [];
     if (result.melody.length > 0) tracks.push({ name: 'Melody', notes: result.melody, channel: 0 });
     if (result.chords.length > 0) tracks.push({ name: 'Chords', notes: result.chords, channel: 1 });
@@ -112,11 +124,14 @@ export function EmbedClient({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <div
+      className={compact ? 'w-full' : 'min-h-screen flex items-center justify-center px-4 py-10'}
+      style={{ background: compact ? 'transparent' : 'var(--bg)', color: 'var(--text)' }}
+    >
       <div
         className="w-full"
         style={{
-          maxWidth: 860,
+          maxWidth: compact ? 'none' : 860,
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 16,
@@ -144,7 +159,14 @@ export function EmbedClient({
           <select
             className="w-full"
             value={params.genre}
-            onChange={(e) => setParams(p => ({ ...p, genre: e.target.value }))}
+            onChange={(e) => {
+              const genre = e.target.value;
+              setParams(p => {
+                const next = { ...p, genre };
+                onParamsChange?.({ genre, bpm: next.bpm });
+                return next;
+              });
+            }}
             style={{ height: 44 }}
             aria-label="Genre"
           >
@@ -170,17 +192,19 @@ export function EmbedClient({
           </button>
         </div>
 
-        <div className="mt-6 pt-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderTop: '1px solid var(--border)' }}>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-            made with{' '}
-            <a href="/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-              pulp.
-            </a>
-          </span>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'color-mix(in srgb, var(--muted) 70%, transparent)' }}>
-            /embed
-          </span>
-        </div>
+        {!compact && (
+          <div className="mt-6 pt-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderTop: '1px solid var(--border)' }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
+              made with{' '}
+              <a href="/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                pulp.
+              </a>
+            </span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'color-mix(in srgb, var(--muted) 70%, transparent)' }}>
+              /embed
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 
+const EXPLORE_GENRES = ['All', 'Tech House', 'Afro House', 'Melodic Techno', 'Deep House', 'Hard Techno', 'Melodic House', 'Techno', 'Trance', 'Drum & Bass'] as const;
+
 type GalleryItem = {
   id: string;
   prompt: string | null;
@@ -24,12 +26,16 @@ export function ExploreGallery({
   genres: Array<{ key: string; name: string }>;
   seedMode: boolean;
 }) {
-  const [genreFilter, setGenreFilter] = useState<string>('all');
+  const [selectedGenre, setSelectedGenre] = useState<(typeof EXPLORE_GENRES)[number]>('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const filtered = useMemo(() => {
-    if (genreFilter === 'all') return items;
-    return items.filter(i => i.genreKey === genreFilter);
-  }, [items, genreFilter]);
+  const filteredGenerations = useMemo(() => {
+    return items.filter(g => {
+      const matchesGenre = selectedGenre === 'All' || (g.genreLabel ?? '').toLowerCase().includes(selectedGenre.toLowerCase());
+      const matchesSearch = !searchQuery || (g.prompt ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesGenre && matchesSearch;
+    });
+  }, [items, selectedGenre, searchQuery]);
 
   return (
     <div className="max-w-[1280px] mx-auto px-8">
@@ -50,31 +56,38 @@ export function ExploreGallery({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span
-            className="text-xs uppercase tracking-widest"
-            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}
-          >
-            Genre
-          </span>
-          <select
-            value={genreFilter}
-            onChange={e => setGenreFilter(e.target.value)}
-            className="h-10 rounded-xl px-3 text-sm"
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              color: 'var(--foreground)',
-              fontFamily: 'JetBrains Mono, monospace',
-            }}
-          >
-            <option value="all">All</option>
-            {genres.map(g => (
-              <option key={g.key} value={g.key}>
-                {g.name}
-              </option>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search prompts..."
+              className="input-field"
+              style={{ height: 40, fontSize: 13, maxWidth: 280 }}
+            />
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
+              {filteredGenerations.length} patterns
+            </p>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+            {EXPLORE_GENRES.map(genre => (
+              <button
+                key={genre}
+                onClick={() => setSelectedGenre(genre)}
+                className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs transition-all"
+                style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  border: selectedGenre === genre ? '1px solid #FF6D3F' : '1px solid var(--border)',
+                  background: selectedGenre === genre ? 'rgba(255,109,63,0.1)' : 'transparent',
+                  color: selectedGenre === genre ? '#FF6D3F' : 'var(--foreground-muted)',
+                }}
+              >
+                {genre}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
       </div>
 
@@ -95,7 +108,7 @@ export function ExploreGallery({
 
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
-        {filtered.length === 0 && !seedMode && (
+        {filteredGenerations.length === 0 && !seedMode && (
           <div
             className="rounded-2xl p-8 lg:col-span-3"
             style={{ background: '#111118', border: '1px solid #1A1A2E' }}
@@ -121,11 +134,12 @@ export function ExploreGallery({
             </Link>
           </div>
         )}
-        {filtered.map(item => {
+        {filteredGenerations.map(item => {
           const prompt = (item.prompt ?? '').trim();
           const promptShort =
-            prompt.length > 40 ? `${prompt.slice(0, 40).trimEnd()}…` : (prompt || '—');
+            prompt.length > 60 ? `${prompt.slice(0, 60).trimEnd()}…` : (prompt || '—');
           const href = item.isExample ? '/' : `/g/${item.id}`;
+          const usePromptHref = prompt ? `/?prompt=${encodeURIComponent(prompt)}` : '/';
 
           return (
             <Link
@@ -170,9 +184,9 @@ export function ExploreGallery({
                       className="px-2 py-1 rounded-md text-xs"
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
-                        color: '#8A8A9A',
-                        background: '#0D0D12',
-                        border: '1px solid #1A1A2E',
+                        color: '#FF6D3F',
+                        background: 'rgba(255,109,63,0.10)',
+                        border: '1px solid rgba(255,109,63,0.25)',
                       }}
                     >
                       {item.genreLabel}
@@ -201,6 +215,21 @@ export function ExploreGallery({
                         {item.style_tag}
                       </span>
                     )}
+                  </div>
+
+                  <div className="mt-4">
+                    <Link
+                      href={usePromptHref}
+                      className="inline-flex items-center gap-2 text-xs"
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        color: '#FF6D3F',
+                        textDecoration: 'none',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Use this prompt →
+                    </Link>
                   </div>
                 </div>
                 <span

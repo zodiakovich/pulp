@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { UpgradeButton } from './UpgradeButton';
 import { Navbar } from '@/components/Navbar';
+import { PricingFAQ } from './PricingFAQ';
 
 export const metadata: Metadata = {
   title: 'Pricing — Pulp',
@@ -24,13 +25,59 @@ const PRO_FEATURES = [
   'Commercial license',
 ];
 
+const FEATURES = [
+  { name: 'Generations per month', free: '10', pro: 'Unlimited' },
+  { name: 'Genres available', free: '20', pro: '20' },
+  { name: 'Style tags', free: '15', pro: '15' },
+  { name: '4 independent MIDI layers', free: '✓', pro: '✓' },
+  { name: 'Download .mid files', free: '✓', pro: '✓' },
+  { name: 'Piano roll editor', free: '✓', pro: '✓' },
+  { name: 'Export to Ableton', free: '✓', pro: '✓' },
+  { name: 'Drag to DAW', free: '✓', pro: '✓' },
+  { name: 'Generation history', free: 'Last 3', pro: 'Forever' },
+  { name: 'Smart prompt suggestions', free: '✗', pro: '✓' },
+  { name: 'Priority generation speed', free: '✗', pro: '✓' },
+  { name: 'Commercial license', free: '✗', pro: '✓' },
+  { name: 'Early access to new tools', free: '✗', pro: '✓' },
+];
+
+function TableCell({
+  value,
+  proColumn,
+}: {
+  value: string;
+  proColumn?: boolean;
+}) {
+  if (value === '✓') {
+    return (
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#00B894' }}>✓</span>
+    );
+  }
+  if (value === '✗') {
+    return (
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--foreground-muted)' }}>✗</span>
+    );
+  }
+  return (
+    <span
+      style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontWeight: proColumn ? 700 : 400,
+        color: proColumn ? 'var(--foreground)' : 'var(--foreground-muted)',
+      }}
+    >
+      {value}
+    </span>
+  );
+}
+
 export default function PricingPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <Navbar active="pricing" />
 
-      {/* Hero */}
-      <section className="pt-36 pb-16 px-8 text-center">
+      {/* SECTION 1 — Header */}
+      <section className="pt-36 pb-16 px-4 sm:px-8 text-center">
         <h1
           className="font-extrabold mb-4 text-gradient"
           style={{
@@ -40,15 +87,15 @@ export default function PricingPage() {
             lineHeight: 1.1,
           }}
         >
-          Simple pricing.
+          Start free. Go pro when you&apos;re ready.
         </h1>
-        <p style={{ fontSize: 16, color: 'var(--foreground-muted)', maxWidth: 480, margin: '0 auto' }}>
-          Start free, upgrade when you need more.
+        <p style={{ fontSize: 16, color: 'var(--foreground-muted)', maxWidth: 520, margin: '0 auto' }}>
+          10 free generations every month. No credit card required. Upgrade anytime.
         </p>
       </section>
 
-      {/* Cards */}
-      <section className="pb-24 px-8">
+      {/* Pricing cards */}
+      <section className="pb-16 px-4 sm:px-8">
         <div className="max-w-[800px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* FREE */}
@@ -135,8 +182,115 @@ export default function PricingPage() {
         </div>
       </section>
 
+      {/* SECTION 2 — Feature comparison */}
+      <section className="pb-20 px-4 sm:px-8">
+        <div className="max-w-[800px] mx-auto">
+          <h2
+            className="font-extrabold text-center mb-8"
+            style={{ fontFamily: 'Syne, sans-serif', fontSize: 28, letterSpacing: '-0.02em', color: 'var(--foreground)' }}
+          >
+            Compare plans
+          </h2>
+          <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border)' }}>
+            <table className="w-full min-w-[520px] border-collapse text-left">
+              <thead>
+                <tr style={{ background: 'var(--surface)' }}>
+                  <th
+                    className="px-4 py-4"
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    Feature
+                  </th>
+                  <th
+                    className="px-4 py-4 text-center"
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    Free
+                  </th>
+                  <th
+                    className="px-4 py-4 text-center"
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    Pro
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {FEATURES.map((row, i) => (
+                  <tr
+                    key={row.name}
+                    style={{
+                      background: i % 2 === 0 ? 'var(--surface)' : 'transparent',
+                    }}
+                  >
+                    <td
+                      className="px-4 py-3 align-middle"
+                      style={{ color: 'var(--foreground-muted)', fontSize: 14 }}
+                    >
+                      {row.name}
+                    </td>
+                    <td className="px-4 py-3 text-center align-middle">
+                      <TableCell value={row.free} />
+                    </td>
+                    <td className="px-4 py-3 text-center align-middle">
+                      <TableCell value={row.pro} proColumn />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 3 — FAQ */}
+      <section className="pb-20 px-4 sm:px-8">
+        <h2
+          className="font-extrabold text-center mb-10"
+          style={{ fontFamily: 'Syne, sans-serif', fontSize: 28, letterSpacing: '-0.02em', color: 'var(--foreground)' }}
+        >
+          FAQ
+        </h2>
+        <PricingFAQ />
+      </section>
+
+      {/* SECTION 4 — CTA */}
+      <section className="pb-24 px-4 sm:px-8 text-center">
+        <p
+          className="mb-6"
+          style={{ fontSize: 18, color: 'var(--foreground-muted)', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}
+        >
+          Still not sure? Try it free — no account needed.
+        </p>
+        <Link
+          href="/"
+          className="btn-primary inline-flex items-center justify-center"
+          style={{ height: 48, padding: '0 24px', fontSize: 15, textDecoration: 'none' }}
+        >
+          Generate your first MIDI →
+        </Link>
+      </section>
+
       {/* Footer */}
-      <footer className="px-8 py-10 text-center" style={{ borderTop: '1px solid var(--border)' }}>
+      <footer className="px-4 sm:px-8 py-10 text-center" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="flex items-center justify-center gap-4 mb-3 text-xs"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
           <Link href="/legal/terms" className="footer-link">

@@ -75,6 +75,17 @@ export default function NotFound() {
           >
             Go back home
           </Link>
+
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.4)', letterSpacing: '0.06em' }}>
+              OR TRY ONE OF THESE
+            </p>
+            <div className="flex gap-3 flex-wrap justify-center">
+              <a href="/explore" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#FF6D3F', textDecoration: 'none' }}>→ Explore generations</a>
+              <a href="/blog" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#FF6D3F', textDecoration: 'none' }}>→ Read the blog</a>
+              <a href="/pricing" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#FF6D3F', textDecoration: 'none' }}>→ See pricing</a>
+            </div>
+          </div>
         </div>
       </div>
     </>

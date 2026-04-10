@@ -15,84 +15,29 @@ export default function Error({
   }, [error]);
 
   return (
-    <>
-      <style>{`
-        @keyframes not-found-noise-opacity {
-          0%, 100% { opacity: 0.035; }
-          50% { opacity: 0.065; }
-        }
-        .not-found-noise-layer {
-          animation: not-found-noise-opacity 8s ease-in-out infinite;
-        }
-      `}</style>
-      <div
-        className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-8"
-        style={{ background: '#09090B' }}
-      >
-        <div
-          className="not-found-noise-layer pointer-events-none absolute inset-0 z-0 mix-blend-overlay"
-          aria-hidden
+    <div className="min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: 'var(--bg)' }}>
+      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.5)', letterSpacing: '0.1em', marginBottom: 16 }}>
+        ERROR
+      </p>
+      <h1 className="font-extrabold mb-4" style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, color: '#E94560' }}>
+        Something broke.
+      </h1>
+      <p className="mb-8" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--muted)', maxWidth: 400 }}>
+        An unexpected error occurred. Your generations are safe — try refreshing or go back home.
+      </p>
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={() => reset()}
+          className="btn-primary"
+          style={{ height: 44, padding: '0 20px', fontSize: 13 }}
         >
-          <svg
-            className="h-full w-full"
-            xmlns="http://www.w3.org/2000/svg"
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <filter id="errorNoise" x="-10%" y="-10%" width="120%" height="120%">
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.78"
-                  numOctaves="4"
-                  stitchTiles="stitch"
-                  seed="2"
-                  result="grain"
-                >
-                  <animate
-                    attributeName="seed"
-                    dur="14s"
-                    values="2;22;9;31;17;2"
-                    repeatCount="indefinite"
-                  />
-                </feTurbulence>
-                <feColorMatrix type="saturate" values="0" in="grain" result="mono" />
-              </filter>
-            </defs>
-            <rect width="100%" height="100%" fill="#F0F0FF" filter="url(#errorNoise)" opacity="0.5" />
-          </svg>
-        </div>
-
-        <div className="relative z-10 flex max-w-[520px] flex-col items-center text-center">
-          <h1
-            className="font-extrabold leading-tight"
-            style={{
-              fontFamily: 'Syne, sans-serif',
-              fontWeight: 800,
-              fontSize: 'clamp(32px, 6vw, 56px)',
-              letterSpacing: '-0.03em',
-              color: '#FFFFFF',
-            }}
-          >
-            Something went wrong.
-          </h1>
-          <p
-            className="mt-6 text-base leading-relaxed"
-            style={{ fontFamily: 'DM Sans, sans-serif', color: '#8A8A9A' }}
-          >
-            {error.message?.trim()
-              ? error.message
-              : 'An unexpected error occurred. You can try again or return to the homepage.'}
-          </p>
-          <div className="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center sm:gap-4">
-            <button type="button" className="btn-primary" onClick={() => reset()}>
-              Try again
-            </button>
-            <Link href="/" className="btn-secondary" style={{ textDecoration: 'none' }}>
-              Go home
-            </Link>
-          </div>
-        </div>
+          Try again
+        </button>
+        <Link href="/" className="btn-secondary" style={{ height: 44, padding: '0 20px', fontSize: 13, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+          Go home
+        </Link>
       </div>
-    </>
+    </div>
   );
 }

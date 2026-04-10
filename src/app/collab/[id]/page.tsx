@@ -1,17 +1,25 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { GENRES, STYLE_TAGS } from '@/lib/music-engine';
+import { Navbar } from '@/components/Navbar';
+import { EmbedClient } from '@/app/embed/EmbedClient';
 
 type CollabState = {
   genre: string;
   bpm: number;
   styleTag: string | null;
   updatedAt: number;
+};
+
+type ActivityEvent = {
+  id: string;
+  text: string;
+  time: string;
 };
 
 const DEFAULT_STATE: CollabState = {
@@ -25,21 +33,55 @@ function safeClampBpm(n: number) {
   return Math.max(60, Math.min(200, Math.round(n)));
 }
 
+function formatEventTime() {
+  return new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 export default function CollabSessionPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { userId } = useAuth();
+
+  const sessionCode = useMemo(() => (id ? String(id).slice(-8) : ''), [id]);
+  const [fullUrl, setFullUrl] = useState('');
 
   const myPresenceKey = useMemo(() => userId ?? `anon-${Math.random().toString(16).slice(2)}`, [userId]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const [connected, setConnected] = useState(false);
   const [onlineCount, setOnlineCount] = useState(1);
+  const prevPresenceCountRef = useRef(0);
   const [state, setState] = useState<CollabState>(DEFAULT_STATE);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'err'>('idle');
+  const [footerCopy, setFooterCopy] = useState<'idle' | 'ok'>('idle');
+
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  useEffect(() => {
+    setFullUrl(window.location.href);
+  }, []);
 
   const genreList = useMemo(() => Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name })), []);
   const styleTags = useMemo(() => Object.keys(STYLE_TAGS), []);
 
-  // Load initial state (best-effort) from DB, then join realtime room.
+  const pushActivity = useCallback(
+    (text: string) => {
+      const ev: ActivityEvent = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        text,
+        time: formatEventTime(),
+      };
+      setEvents(prev => [ev, ...prev].slice(0, 100));
+      const ch = channelRef.current;
+      if (ch) {
+        void ch.send({ type: 'broadcast', event: 'activity', payload: ev });
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!id) return;
 
@@ -80,41 +122,39 @@ export default function CollabSessionPage() {
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
         const count = Object.keys(presenceState).length;
-        setOnlineCount(Math.max(1, count));
+        const n = Math.max(1, count);
+        setOnlineCount(n);
+        if (prevPresenceCountRef.current > 0 && n > prevPresenceCountRef.current) {
+          pushActivity('Producer joined');
+        }
+        prevPresenceCountRef.current = n;
       })
       .on('broadcast', { event: 'state' }, ({ payload }) => {
         const incoming = payload as CollabState | undefined;
         if (!incoming) return;
         setState(prev => (incoming.updatedAt > prev.updatedAt ? incoming : prev));
       })
+      .on('broadcast', { event: 'activity' }, ({ payload }) => {
+        const ev = payload as ActivityEvent | undefined;
+        if (!ev?.text) return;
+        setEvents(prev => [{ ...ev, id: ev.id || `${Date.now()}` }, ...prev].slice(0, 100));
+      })
+      .on('broadcast', { event: 'state_request' }, () => {
+        void channel.send({ type: 'broadcast', event: 'state', payload: stateRef.current });
+      })
       .subscribe(status => {
         setConnected(status === 'SUBSCRIBED');
         if (status === 'SUBSCRIBED') {
           void channel.track({ joinedAt: Date.now() });
-          // Ask others for current state (if any)
           void channel.send({ type: 'broadcast', event: 'state_request', payload: { t: Date.now() } });
         }
       });
-
-    channel.on('broadcast', { event: 'state_request' }, () => {
-      // Respond with our latest known state
-      void channel.send({ type: 'broadcast', event: 'state', payload: state });
-    });
 
     return () => {
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, myPresenceKey]);
-
-  // Keep state_request responder updated with latest `state`
-  useEffect(() => {
-    const channel = channelRef.current;
-    if (!channel) return;
-    // When our local state changes, persist and broadcast.
-    // (This effect is only triggered by our explicit setters below.)
-  }, [state]);
+  }, [id, myPresenceKey, pushActivity]);
 
   const publish = async (next: Omit<CollabState, 'updatedAt'>) => {
     const updated: CollabState = { ...next, updatedAt: Date.now() };
@@ -134,142 +174,280 @@ export default function CollabSessionPage() {
     }
   };
 
+  const copySessionLink = async () => {
+    try {
+      const url = typeof window !== 'undefined' ? window.location.href : '';
+      await navigator.clipboard.writeText(url);
+      setCopyState('ok');
+      window.setTimeout(() => setCopyState('idle'), 2000);
+    } catch {
+      setCopyState('err');
+      window.setTimeout(() => setCopyState('idle'), 2000);
+    }
+  };
+
+  const copyFooterUrl = async () => {
+    try {
+      const url = typeof window !== 'undefined' ? window.location.href : '';
+      await navigator.clipboard.writeText(url);
+      setFooterCopy('ok');
+      window.setTimeout(() => setFooterCopy('idle'), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
-    <div className="min-h-screen" style={{ background: '#0A0A0F' }}>
-      {/* Nav */}
-      <nav
-        className="fixed top-0 left-0 right-0 z-50"
-        style={{ borderBottom: '1px solid #1A1A2E', background: 'rgba(10,10,15,0.85)', backdropFilter: 'blur(12px)' }}
-      >
-        <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between">
-          <Link
-            href="/"
-            className="text-gradient font-extrabold text-xl"
-            style={{ fontFamily: 'Syne, sans-serif', textDecoration: 'none' }}
-          >
-            pulp
-          </Link>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 h-9 rounded-lg" style={{ border: '1px solid #1A1A2E', background: '#111118' }}>
-              <span className="w-2 h-2 rounded-full" style={{ background: connected ? '#00B894' : 'rgba(138,138,154,0.45)' }} />
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A' }}>
-                {onlineCount} online
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <Navbar />
+
+      {/* SECTION 1 — Session header */}
+      <header className="pt-20 pb-6 px-4 sm:px-8" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="max-w-[1280px] mx-auto flex flex-col lg:flex-row lg:items-center gap-4 lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>Session</span>
+            <code
+              className="px-3 py-1.5 rounded-lg text-sm"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                color: 'var(--foreground)',
+              }}
+            >
+              {sessionCode}
+            </code>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+              onClick={() => void copySessionLink()}
+            >
+              {copyState === 'ok' ? 'Copied!' : copyState === 'err' ? 'Copy failed' : 'Copy link'}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span
+                className={`rounded-full flex-shrink-0 ${connected ? 'animate-pulse' : ''}`}
+                style={{
+                  width: 8,
+                  height: 8,
+                  background: connected ? '#00B894' : 'rgba(138,138,154,0.45)',
+                }}
+              />
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--foreground-muted)' }}>
+                {onlineCount} {onlineCount === 1 ? 'producer' : 'producers'} in session
               </span>
             </div>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
-              /collab/{id}
-            </span>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ height: 36, padding: '0 14px', fontSize: 13 }}
+              onClick={() => router.push('/')}
+            >
+              Leave session
+            </button>
           </div>
         </div>
-      </nav>
+      </header>
 
-      <section className="pt-28 pb-16 px-8">
-        <div className="max-w-[860px] mx-auto">
-          <h1
-            className="font-extrabold mb-3 text-gradient"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(34px, 4.6vw, 54px)', letterSpacing: '-0.02em', lineHeight: 1.1 }}
-          >
-            Shared session
-          </h1>
-          <p style={{ color: '#8A8A9A', fontSize: 14, lineHeight: 1.7, maxWidth: 700 }}>
-            Changes to <span style={{ color: '#F0F0FF' }}>genre</span>, <span style={{ color: '#F0F0FF' }}>BPM</span>, and{' '}
-            <span style={{ color: '#F0F0FF' }}>style tag</span> sync instantly for everyone on this link.
-          </p>
+      {/* SECTION 2 — Two columns */}
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-8">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-0">
+          {/* Left ~60% */}
+          <div className="w-full lg:w-[60%] lg:pr-8 lg:border-r lg:min-h-[480px]" style={{ borderColor: 'var(--border)' }}>
+            <p
+              className="mb-4"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--muted)',
+              }}
+            >
+              Shared controls
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              <div className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <p className="text-xs uppercase tracking-widest mb-2" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}>
+                  Genre
+                </p>
+                <select
+                  value={state.genre}
+                  onChange={e => void publish({ genre: e.target.value, bpm: state.bpm, styleTag: state.styleTag })}
+                  className="w-full h-11 rounded-xl px-3 text-sm input-field"
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  {genreList.map(g => (
+                    <option key={g.key} value={g.key}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-2xl p-5" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
-              <p className="text-xs uppercase tracking-widest mb-3" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
-                Genre
-              </p>
-              <select
-                value={state.genre}
-                onChange={e => void publish({ genre: e.target.value, bpm: state.bpm, styleTag: state.styleTag })}
-                className="w-full h-11 rounded-xl px-3 text-sm"
-                style={{ background: '#0D0D12', border: '1px solid #1A1A2E', color: '#F0F0FF', fontFamily: 'JetBrains Mono, monospace' }}
-              >
-                {genreList.map(g => (
-                  <option key={g.key} value={g.key}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <p className="text-xs uppercase tracking-widest mb-2" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}>
+                  BPM
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={60}
+                    max={200}
+                    value={state.bpm}
+                    onChange={e => void publish({ genre: state.genre, bpm: safeClampBpm(parseInt(e.target.value, 10)), styleTag: state.styleTag })}
+                    className="w-full"
+                  />
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontSize: 12, minWidth: 40, textAlign: 'right' }}>
+                    {state.bpm}
+                  </span>
+                </div>
+              </div>
 
-            <div className="rounded-2xl p-5" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
-              <p className="text-xs uppercase tracking-widest mb-3" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
-                BPM
-              </p>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={60}
-                  max={200}
-                  value={state.bpm}
-                  onChange={e => void publish({ genre: state.genre, bpm: safeClampBpm(parseInt(e.target.value)), styleTag: state.styleTag })}
-                  className="w-full"
-                />
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF6D3F', fontSize: 12, minWidth: 44, textAlign: 'right' }}>
-                  {state.bpm}
-                </span>
+              <div className="rounded-2xl p-4 sm:col-span-1" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <p className="text-xs uppercase tracking-widest mb-2" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}>
+                  Style tag
+                </p>
+                <select
+                  value={state.styleTag ?? ''}
+                  onChange={e => void publish({ genre: state.genre, bpm: state.bpm, styleTag: e.target.value || null })}
+                  className="w-full h-11 rounded-xl px-3 text-sm input-field"
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  <option value="">None</option>
+                  {styleTags.map(t => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="rounded-2xl p-5" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
-              <p className="text-xs uppercase tracking-widest mb-3" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
-                Style tag
-              </p>
-              <select
-                value={state.styleTag ?? ''}
-                onChange={e => void publish({ genre: state.genre, bpm: state.bpm, styleTag: e.target.value || null })}
-                className="w-full h-11 rounded-xl px-3 text-sm"
-                style={{ background: '#0D0D12', border: '1px solid #1A1A2E', color: '#F0F0FF', fontFamily: 'JetBrains Mono, monospace' }}
-              >
-                <option value="">None</option>
-                {styleTags.map(t => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+            <p
+              className="mb-3"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--muted)',
+              }}
+            >
+              Generator
+            </p>
+            <EmbedClient
+              initialGenre={state.genre}
+              initialBpm={String(state.bpm)}
+              initialKey={null}
+              compact
+              onParamsChange={({ genre, bpm }) => {
+                void publish({ genre, bpm, styleTag: state.styleTag });
+              }}
+              onAfterGenerate={({ genre, bpm }) => {
+                const name = GENRES[genre]?.name ?? genre;
+                pushActivity(`New generation: ${name} ${bpm}bpm`);
+              }}
+              onDownloadMidi={() => {
+                pushActivity('Layer downloaded');
+              }}
+            />
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>Variations</span>
+              {[1, 2, 3].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  style={{ height: 32 }}
+                  onClick={() => pushActivity(`Variation ${n} selected`)}
+                >
+                  {n}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl p-6" style={{ background: '#0D0D12', border: '1px solid #1A1A2E' }}>
-            <p className="text-xs uppercase tracking-widest mb-3" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
-              Current shared state
+          {/* Right ~40% */}
+          <div className="w-full lg:w-[40%] lg:pl-8 flex flex-col min-h-[320px]">
+            <p
+              className="mb-3"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--muted)',
+              }}
+            >
+              Live activity
             </p>
-            <div className="flex flex-wrap gap-2">
-              <span className="px-2 py-1 rounded-md text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A', background: '#111118', border: '1px solid #1A1A2E' }}>
-                {GENRES[state.genre]?.name ?? state.genre}
-              </span>
-              <span className="px-2 py-1 rounded-md text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A', background: '#111118', border: '1px solid #1A1A2E' }}>
-                {state.bpm} BPM
-              </span>
-              {state.styleTag && (
-                <span className="px-2 py-1 rounded-md text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF6D3F', background: 'rgba(255,109,63,0.10)', border: '1px solid rgba(255,109,63,0.25)' }}>
-                  {state.styleTag}
-                </span>
+            <div
+              className="rounded-2xl p-4 flex-1 overflow-y-auto max-h-[min(70vh,560px)]"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            >
+              {events.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--foreground-muted)' }}>Session events will appear here.</p>
+              ) : (
+                events.map(ev => (
+                  <div key={ev.id} className="flex items-start gap-2 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: '#00B894',
+                        marginTop: 6,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div>
+                      <p style={{ fontSize: 13, color: 'var(--foreground)' }}>{ev.text}</p>
+                      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>{ev.time}</p>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
-
-          <div className="mt-8">
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-semibold transition-all"
-              style={{
-                textDecoration: 'none',
-                background: 'rgba(255,109,63,0.12)',
-                border: '1px solid rgba(255,109,63,0.35)',
-                color: '#FF6D3F',
-              }}
-            >
-              Back to generator →
-            </Link>
-          </div>
         </div>
-      </section>
+      </div>
+
+      {/* SECTION 4 — Footer */}
+      <footer className="px-4 sm:px-8 py-10 mt-auto" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="max-w-[1280px] mx-auto text-center space-y-4">
+          <p style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Share this link to invite producers:</p>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-2xl mx-auto">
+            <code
+              className="block flex-1 text-left px-4 py-3 rounded-xl text-xs sm:text-sm break-all cursor-pointer select-all"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                color: 'var(--foreground)',
+              }}
+              onClick={() => void copyFooterUrl()}
+              title="Click to copy"
+            >
+              {fullUrl || '…'}
+            </code>
+            <button type="button" className="btn-secondary flex-shrink-0" style={{ height: 44, padding: '0 16px' }} onClick={() => void copyFooterUrl()}>
+              {footerCopy === 'ok' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--muted)', maxWidth: 520, margin: '0 auto' }}>
+            Sessions are temporary — generate and download before leaving
+          </p>
+          <Link href="/" className="nav-link inline-block text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            ← Back to pulp
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }
-
