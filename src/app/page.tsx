@@ -10,6 +10,7 @@ import {
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { playNotes, stopAllPlayback } from '@/lib/audio-engine';
+import { playAll, stopPlayAll } from '@/lib/tone-play-all';
 import { playTonePreview, stopTonePreview } from '@/lib/tone-preview';
 import { supabase } from '@/lib/supabase';
 import { track } from '@vercel/analytics';
@@ -1758,6 +1759,144 @@ function HeroDemoPreview() {
   )
 }
 
+function ShareModal({
+  url,
+  prompt,
+  genre,
+  bpm,
+  onClose,
+}: {
+  url: string;
+  prompt: string;
+  genre: string;
+  bpm: number;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const shareTwitter = () => {
+    const text = `Just generated a ${genre} MIDI pattern at ${bpm}BPM with pulp — the free AI MIDI generator. Try it:`;
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-[70]"
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+        onClick={onClose}
+        aria-hidden
+      />
+      <div
+        className="fixed left-1/2 top-1/2 z-[71] w-[min(480px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6"
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-modal-title"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h3 id="share-modal-title" className="font-extrabold" style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, color: 'var(--foreground)' }}>
+            Share generation
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 20 }}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--background)', border: '1px solid var(--border)' }}>
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>GENERATION</p>
+          <p style={{ fontSize: 14, color: 'var(--foreground)', marginBottom: 8 }}>{prompt || 'Untitled generation'}</p>
+          <div className="flex gap-2">
+            <span
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                color: '#FF6D3F',
+                background: 'rgba(255,109,63,0.1)',
+                padding: '2px 8px',
+                borderRadius: 6,
+              }}
+            >
+              {genre}
+            </span>
+            <span
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                color: 'var(--muted)',
+                background: 'var(--surface)',
+                padding: '2px 8px',
+                borderRadius: 6,
+              }}
+            >
+              {bpm} BPM
+            </span>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            readOnly
+            value={url}
+            className="input-field"
+            style={{ height: 40, fontSize: 12, flex: 1, fontFamily: 'JetBrains Mono, monospace' }}
+          />
+          <button
+            type="button"
+            onClick={() => void copyUrl()}
+            className="btn-primary"
+            style={{ height: 40, padding: '0 16px', fontSize: 13, flexShrink: 0 }}
+          >
+            {copied ? '✓ Copied' : 'Copy'}
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={shareTwitter}
+            className="btn-secondary"
+            style={{ height: 40, padding: '0 16px', fontSize: 13, flex: 1 }}
+          >
+            Share on X
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-secondary"
+            style={{ height: 40, padding: '0 16px', fontSize: 13, flex: 1 }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function Home() {
   const { isSignedIn, isLoaded, userId } = useAuth();
@@ -1787,10 +1926,10 @@ export default function Home() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showEmbedModal, setShowEmbedModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [editorLayer, setEditorLayer] = useState<typeof EDITOR_LAYERS[number]>('melody');
   const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
-  const [copied, setCopied] = useState(false);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const [showBpmDetect, setShowBpmDetect] = useState(false);
   const [isDetectingBpm, setIsDetectingBpm] = useState(false);
@@ -2157,6 +2296,10 @@ export default function Home() {
       }
     }
 
+    stopPlayAll();
+    stopAllPlayback();
+    setPlayingAll(false);
+
     setIsGenerating(true);
     setGeneratingStage('Analyzing prompt...');
     setVariationIds([]);
@@ -2358,19 +2501,23 @@ export default function Home() {
   const handlePlayAll = () => {
     const sel = variations[selectedVariation];
     if (!sel) return;
-    if (liveMode) return;
-    if (compareMode) return;
-    if (playingAll) { stopAllPlayback(); setPlayingAll(false); return; }
+    if (liveMode || compareMode) return;
+    if (playingAll) {
+      stopPlayAll();
+      setPlayingAll(false);
+      return;
+    }
     setPlayingAll(true);
-    playNotes({
-      melody: params.layers.melody ? sel.result.melody : undefined,
-      chords: params.layers.chords ? sel.result.chords : undefined,
-      bass:   params.layers.bass   ? sel.result.bass   : undefined,
-      drums:  params.layers.drums  ? sel.result.drums  : undefined,
-      bpm: sel.params.bpm,
-      genre: sel.params.genre,
-      onComplete: () => setPlayingAll(false),
-    });
+    void playAll(
+      {
+        melody: params.layers.melody ? sel.result.melody : undefined,
+        chords: params.layers.chords ? sel.result.chords : undefined,
+        bass: params.layers.bass ? sel.result.bass : undefined,
+        drums: params.layers.drums ? sel.result.drums : undefined,
+      },
+      sel.params.bpm,
+      () => setPlayingAll(false),
+    );
   };
 
   const stopCompare = useCallback((opts?: { stopAudio?: boolean }) => {
@@ -2378,6 +2525,7 @@ export default function Home() {
     compareTimerRef.current = null;
     setCompareMode(false);
     if (opts?.stopAudio) {
+      stopPlayAll();
       stopAllPlayback();
       setPlayingVariationIndex(null);
     }
@@ -2386,6 +2534,7 @@ export default function Home() {
   const startVariationPlayback = useCallback((i: number) => {
     const v = variations[i];
     if (!v) return;
+    stopPlayAll();
     stopAllPlayback();
     setPlayingAll(false);
     setPlayingVariationIndex(i);
@@ -2402,6 +2551,7 @@ export default function Home() {
 
   const startCompare = useCallback(() => {
     if (variations.length === 0) return;
+    stopPlayAll();
     stopAllPlayback();
     setPlayingAll(false);
     setCompareMode(true);
@@ -2449,6 +2599,7 @@ export default function Home() {
     liveBarRef.current = 0;
     livePendingParamsRef.current = null;
     livePendingResultRef.current = null;
+    stopPlayAll();
     stopAllPlayback();
     setPlayingAll(false);
   }, []);
@@ -2471,6 +2622,7 @@ export default function Home() {
       )));
 
       // “Crossfade” approximation without engine gain access: stop current and wait 200ms.
+      stopPlayAll();
       stopAllPlayback();
     }
 
@@ -2504,6 +2656,7 @@ export default function Home() {
     }
 
     // Start looping from bar 0
+    stopPlayAll();
     stopAllPlayback();
     liveBarRef.current = 0;
     window.setTimeout(() => tickLive(), 10);
@@ -2726,9 +2879,7 @@ export default function Home() {
     if (!id) return;
     const genreKey = variations[selectedVariation]?.params.genre ?? params.genre;
     track('generation_shared', { genre: genreKey });
-    void navigator.clipboard.writeText(`/g/${id}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setShowShareModal(true);
   }, [variationIds, selectedVariation, variations, params.genre]);
 
   const handleExtendSelected = useCallback(async () => {
@@ -2986,6 +3137,7 @@ export default function Home() {
       if (e.key === 'Escape') {
         e.preventDefault();
         stopCompare({ stopAudio: true });
+        stopPlayAll();
         stopAllPlayback();
         setPlayingVariationIndex(null);
         setPlayingAll(false);
@@ -3035,6 +3187,7 @@ export default function Home() {
           return;
         }
         if (playingVariationIndex === selectedVariation) {
+          stopPlayAll();
           stopAllPlayback();
           setPlayingVariationIndex(null);
         } else {
@@ -3056,8 +3209,10 @@ export default function Home() {
           if (next) {
             setPlayingAll(false);
             stopCompare({ stopAudio: true });
+            stopPlayAll();
             stopAllPlayback();
           } else {
+            stopPlayAll();
             stopAllPlayback();
           }
           return next;
@@ -3080,6 +3235,7 @@ export default function Home() {
         const idx = Number(key) - 1;
         if (!variations[idx]) return;
         stopCompare({ stopAudio: true });
+        stopPlayAll();
         stopAllPlayback();
         setPlayingVariationIndex(null);
         setPlayingAll(false);
@@ -3221,7 +3377,7 @@ export default function Home() {
                   { k: 'C', d: 'Toggle Compare mode' },
                   { k: 'E', d: 'Extend current variation' },
                   { k: 'Ctrl/Cmd + D', d: 'Download MIDI (full)' },
-                  { k: 'Ctrl/Cmd + S', d: 'Share (copy URL)' },
+                  { k: 'Ctrl/Cmd + S', d: 'Share' },
                   { k: 'Ctrl/Cmd + K', d: 'Open command bar' },
                   { k: 'Esc', d: 'Close any open modal' },
                   { k: '?', d: 'Open shortcuts' },
@@ -3253,6 +3409,18 @@ export default function Home() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showShareModal && variationIds[selectedVariation] && (
+          <ShareModal
+            url={`${window.location.origin}/g/${variationIds[selectedVariation]}`}
+            prompt={prompt}
+            genre={GENRES[params.genre]?.name || params.genre}
+            bpm={variations[selectedVariation]?.params.bpm ?? params.bpm}
+            onClose={() => setShowShareModal(false)}
+          />
         )}
       </AnimatePresence>
 
@@ -4042,6 +4210,7 @@ export default function Home() {
                             startVariationPlayback(i);
                             return;
                           }
+                          stopPlayAll();
                           stopAllPlayback();
                           setPlayingVariationIndex(null);
                           setPlayingAll(false);
@@ -4051,6 +4220,7 @@ export default function Home() {
                           e.stopPropagation();
                           if (compareMode) stopCompare();
                           if (playingVariationIndex === i) {
+                            stopPlayAll();
                             stopAllPlayback();
                             setPlayingVariationIndex(null);
                           } else {
@@ -4100,8 +4270,10 @@ export default function Home() {
                         const next = !v;
                         if (next) {
                           setPlayingAll(false);
+                          stopPlayAll();
                           stopAllPlayback();
                         } else {
+                          stopPlayAll();
                           stopAllPlayback();
                         }
                         return next;
@@ -4185,7 +4357,7 @@ export default function Home() {
                   {variationIds[selectedVariation] && (
                     <>
                       <SpotlightButton onClick={handleShare} className="btn-secondary btn-sm">
-                        {copied ? 'Copied!' : 'Share'}
+                        Share
                       </SpotlightButton>
                       <SpotlightButton onClick={() => setShowEmbedModal(true)} className="btn-secondary btn-sm">
                         Embed
