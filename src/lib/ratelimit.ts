@@ -1,43 +1,39 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getIsPro } from '@/lib/credits';
 
 const redis = Redis.fromEnv();
 
-const freeLimiter = new Ratelimit({
+/** Signed-out: by IP, 3 requests per day. */
+const guestLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(10, '1 d'),
+  limiter: Ratelimit.slidingWindow(3, '1 d'),
   analytics: true,
-  prefix: 'rl:free',
+  prefix: 'rl:guest',
 });
 
+/** Signed-in free: 15 req/day (above 10/mo credit cap to avoid false blocks). */
+const freeSignedLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(15, '1 d'),
+  analytics: true,
+  prefix: 'rl:free-signed',
+});
+
+/** Pro: 50 req/day. */
 const proLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(100, '1 d'),
+  limiter: Ratelimit.slidingWindow(50, '1 d'),
   analytics: true,
   prefix: 'rl:pro',
 });
 
-function getIp(req: Request): string {
+export function getIp(req: Request): string {
   const xf = req.headers.get('x-forwarded-for');
   if (xf) return xf.split(',')[0]!.trim();
   const xr = req.headers.get('x-real-ip');
   if (xr) return xr.trim();
   return 'unknown';
-}
-
-export async function isProUser(userId: string): Promise<boolean> {
-  try {
-    if (!supabaseAdmin) return false;
-    const { data } = await supabaseAdmin
-      .from('user_credits')
-      .select('is_pro')
-      .eq('user_id', userId)
-      .maybeSingle();
-    return Boolean(data?.is_pro);
-  } catch {
-    return false;
-  }
 }
 
 export async function enforceRateLimit(opts: {
@@ -49,11 +45,21 @@ export async function enforceRateLimit(opts: {
   | { ok: false; limit: number; remaining: number; reset: number; retryAfter: number }
 > {
   const { req, userId } = opts;
-  const isPro = opts.isPro ?? (userId ? await isProUser(userId) : false);
 
-  const key = isPro && userId ? `user:${userId}` : `ip:${getIp(req)}`;
-  const r = isPro ? await proLimiter.limit(key) : await freeLimiter.limit(key);
+  if (!userId) {
+    const key = `ip:${getIp(req)}`;
+    const r = await guestLimiter.limit(key);
+    const reset = typeof r.reset === 'number' ? r.reset : Date.now() + 60_000;
+    const retryAfter = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+    if (!r.success) {
+      return { ok: false, limit: r.limit, remaining: r.remaining, reset, retryAfter };
+    }
+    return { ok: true, limit: r.limit, remaining: r.remaining, reset };
+  }
 
+  const isPro = opts.isPro ?? (await getIsPro(userId));
+  const key = `user:${userId}`;
+  const r = isPro ? await proLimiter.limit(key) : await freeSignedLimiter.limit(key);
   const reset = typeof r.reset === 'number' ? r.reset : Date.now() + 60_000;
   const retryAfter = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
 
@@ -62,4 +68,3 @@ export async function enforceRateLimit(opts: {
   }
   return { ok: true, limit: r.limit, remaining: r.remaining, reset };
 }
-

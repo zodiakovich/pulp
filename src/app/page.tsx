@@ -9,7 +9,7 @@ import {
   type GenerationParams, type GenerationResult, type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
-import { playNotes, stopAllPlayback } from '@/lib/audio-engine';
+import { playNotesWithMix as playNotes, stopAllPlayback } from '@/lib/mix-engine';
 import { playAll, stopPlayAll } from '@/lib/tone-play-all';
 import { playTonePreview, stopTonePreview } from '@/lib/tone-preview';
 import { supabase } from '@/lib/supabase';
@@ -17,7 +17,9 @@ import { track } from '@vercel/analytics';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
 import { generateAbletonAlsBlob } from '@/lib/ableton-export';
+import { mapArtistProfileToHints, resolveArtistPromptChain } from '@/lib/artist-resolver';
 import { Navbar } from '@/components/Navbar';
+import { PianoRollEditor } from '@/components/PianoRollEditor';
 import Link from 'next/link';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
@@ -315,12 +317,6 @@ const LAYER_COLORS: Record<string, string> = {
 const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
 const EDITOR_LAYERS = [...LAYERS, 'imported'] as const;
 
-// ─── PIANO ROLL EDITOR CONSTANTS ──────────────────────────────
-const EDITOR_MIDI_MIN = 36;   // C2
-const EDITOR_MIDI_MAX = 84;   // C6 (rows show 36–83, 48 semitones)
-const EDITOR_PITCH_COUNT = EDITOR_MIDI_MAX - EDITOR_MIDI_MIN;
-const EDITOR_HEIGHT = 240;
-
 function makeDraggableMidi(notes: NoteEvent[], bpm: number, filename: string) {
   const midi = generateMidiFormat0(notes, bpm, filename);
   const ab = new ArrayBuffer(midi.byteLength);
@@ -453,150 +449,6 @@ function SkeletonCard({ name }: { name: string }) {
       </div>
       <div className="skeleton w-full rounded-md" style={{ height: 88 }} />
     </motion.div>
-  );
-}
-
-// ─── PIANO ROLL EDITOR ────────────────────────────────────────
-function PianoRollEditor({
-  notes, color, bars, onNotesChange,
-}: {
-  notes: NoteEvent[];
-  color: string;
-  bars: number;
-  onNotesChange: (notes: NoteEvent[]) => void;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const totalBeats = bars * 4;
-
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = EDITOR_HEIGHT;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    ctx.scale(dpr, dpr);
-    const rowH = h / EDITOR_PITCH_COUNT;
-
-    // Background
-    ctx.fillStyle = '#0A0A0F';
-    ctx.fillRect(0, 0, w, h);
-
-    // Pitch row shading (black keys darker)
-    for (let i = 0; i < EDITOR_PITCH_COUNT; i++) {
-      const pitch = (EDITOR_MIDI_MAX - 1) - i;
-      if ([1, 3, 6, 8, 10].includes(pitch % 12)) {
-        ctx.fillStyle = 'rgba(0,0,0,0.22)';
-        ctx.fillRect(0, i * rowH, w, rowH);
-      }
-    }
-
-    // Horizontal lines (C notes brighter)
-    for (let i = 0; i <= EDITOR_PITCH_COUNT; i++) {
-      const pitch = (EDITOR_MIDI_MAX - 1) - i;
-      const y = i * rowH;
-      const isC = pitch % 12 === 0;
-      ctx.strokeStyle = isC ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.035)';
-      ctx.lineWidth = isC ? 0.8 : 0.5;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-    }
-
-    // Vertical beat lines
-    for (let beat = 0; beat <= totalBeats; beat++) {
-      const x = (beat / totalBeats) * w;
-      const isBar = beat % 4 === 0;
-      ctx.strokeStyle = isBar ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
-      ctx.lineWidth = isBar ? 1 : 0.5;
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-    }
-
-    // Half-beat lines
-    for (let hb = 1; hb < totalBeats * 2; hb += 2) {
-      const x = (hb / 2 / totalBeats) * w;
-      ctx.strokeStyle = 'rgba(255,255,255,0.02)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-    }
-
-    // Notes
-    ctx.save();
-    for (const note of notes) {
-      if (note.pitch < EDITOR_MIDI_MIN || note.pitch >= EDITOR_MIDI_MAX) continue;
-      const pi = (EDITOR_MIDI_MAX - 1) - note.pitch;
-      const x = (note.startTime / totalBeats) * w;
-      const nw = Math.max(3, (note.duration / totalBeats) * w) - 1;
-      const y = pi * rowH + 1;
-      const nh = Math.max(2, rowH - 2);
-      const r = Math.min(2, nh / 2, nw / 2);
-      ctx.globalAlpha = 0.5 + (note.velocity / 127) * 0.5;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + nw - r, y);
-      ctx.quadraticCurveTo(x + nw, y, x + nw, y + r);
-      ctx.lineTo(x + nw, y + nh - r);
-      ctx.quadraticCurveTo(x + nw, y + nh, x + nw - r, y + nh);
-      ctx.lineTo(x + r, y + nh);
-      ctx.quadraticCurveTo(x, y + nh, x, y + nh - r);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-  }, [notes, color, totalBeats]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    draw();
-    const obs = new ResizeObserver(() => draw());
-    obs.observe(canvas);
-    return () => obs.disconnect();
-  }, [draw]);
-
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const w = canvas.clientWidth;
-    const rowH = EDITOR_HEIGHT / EDITOR_PITCH_COUNT;
-
-    // Check hit on existing note (reverse order = topmost first)
-    let hitIdx = -1;
-    for (let i = notes.length - 1; i >= 0; i--) {
-      const note = notes[i];
-      if (note.pitch < EDITOR_MIDI_MIN || note.pitch >= EDITOR_MIDI_MAX) continue;
-      const pi = (EDITOR_MIDI_MAX - 1) - note.pitch;
-      const nx = (note.startTime / totalBeats) * w;
-      const nw = Math.max(3, (note.duration / totalBeats) * w);
-      const ny = pi * rowH;
-      if (x >= nx && x <= nx + nw && y >= ny && y < ny + rowH) { hitIdx = i; break; }
-    }
-
-    if (hitIdx !== -1) {
-      onNotesChange(notes.filter((_, i) => i !== hitIdx));
-    } else {
-      const pi = Math.floor(y / rowH);
-      const pitch = (EDITOR_MIDI_MAX - 1) - pi;
-      const snapped = Math.floor((x / w) * totalBeats / 0.25) * 0.25;
-      if (pitch >= EDITOR_MIDI_MIN && pitch < EDITOR_MIDI_MAX && snapped >= 0 && snapped < totalBeats) {
-        onNotesChange([...notes, { pitch, startTime: snapped, duration: 0.5, velocity: 80 }]);
-      }
-    }
-  }, [notes, onNotesChange, totalBeats]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      onClick={handleClick}
-      style={{ width: '100%', height: EDITOR_HEIGHT, display: 'block', cursor: 'crosshair' }}
-    />
   );
 }
 
@@ -1594,10 +1446,10 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
       >
         <div className="text-3xl mb-4" style={{ color: '#FF6D3F' }}>✦</div>
         <h2 className="font-extrabold text-xl mb-3" style={{ fontFamily: 'Syne, sans-serif' }}>
-          You&apos;ve used your 10 free<br />generations this month.
+          You&apos;ve reached your monthly<br />generation limit.
         </h2>
         <p className="text-sm mb-8" style={{ color: '#8A8A9A' }}>
-          Upgrade to Pro for unlimited access.
+          Upgrade to Pro for a higher monthly allowance.
         </p>
         <div className="flex flex-col gap-3">
           <a
@@ -1948,6 +1800,7 @@ export default function Home() {
   const [variations, setVariations] = useState<{ result: GenerationResult; params: GenerationParams }[]>([]);
   const [selectedVariation, setSelectedVariation] = useState(0);
   const [playingVariationIndex, setPlayingVariationIndex] = useState<number | null>(null);
+  const [editorPlayheadBeat, setEditorPlayheadBeat] = useState(0);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStage, setGeneratingStage] = useState('');
@@ -1962,7 +1815,7 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
-  const [credits, setCredits] = useState<{ used: number; isPro: boolean } | null>(null);
+  const [credits, setCredits] = useState<{ used: number; limit: number; isPro: boolean } | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showEmbedModal, setShowEmbedModal] = useState(false);
@@ -2026,6 +1879,28 @@ export default function Home() {
     if (!selectedLayerNotes) return;
     drawSheetMusic(sheetCanvasRef.current, selectedLayerNotes, selectedParams, editorLayer);
   }, [editorView, selectedLayerNotes, selectedParams, editorLayer]);
+
+  useEffect(() => {
+    if (playingVariationIndex !== selectedVariation) {
+      setEditorPlayheadBeat(0);
+      return;
+    }
+    let cancelled = false;
+    let raf = 0;
+    const start = performance.now();
+    const bpm = variations[selectedVariation]?.params.bpm ?? params.bpm;
+    const tick = () => {
+      if (cancelled) return;
+      const elapsed = (performance.now() - start) / 1000;
+      setEditorPlayheadBeat(elapsed * (bpm / 60));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [playingVariationIndex, selectedVariation, variations, params.bpm]);
 
   const audioToMidiInputRef = useRef<HTMLInputElement>(null);
 
@@ -2110,76 +1985,6 @@ export default function Home() {
 
   // ── SUPABASE HELPERS ─────────────────────────────────────────
 
-  const loadUserCredits = useCallback(async (uid: string) => {
-    try {
-      const now = new Date();
-      const { data, error } = await supabase
-        .from('user_credits')
-        .select('*')
-        .eq('user_id', uid)
-        .single();
-
-      if (error || !data) {
-        await supabase.from('user_credits').insert({ user_id: uid, credits_used: 0, is_pro: false });
-        setCredits({ used: 0, isPro: false });
-        return;
-      }
-
-      const createdAt = new Date(data.created_at as string);
-      if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) {
-        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        await supabase
-          .from('user_credits')
-          .update({ credits_used: 0, created_at: firstOfMonth })
-          .eq('user_id', uid);
-        setCredits({ used: 0, isPro: data.is_pro as boolean });
-        return;
-      }
-
-      setCredits({ used: data.credits_used as number, isPro: data.is_pro as boolean });
-    } catch {
-      // Ignore credit load errors
-    }
-  }, []);
-
-  const checkCreditsAllowed = useCallback(async (uid: string): Promise<boolean> => {
-    try {
-      const now = new Date();
-      const { data, error } = await supabase
-        .from('user_credits')
-        .select('*')
-        .eq('user_id', uid)
-        .single();
-
-      if (error || !data) return true;
-
-      const createdAt = new Date(data.created_at as string);
-      if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) return true;
-      if (data.is_pro) return true;
-      return (data.credits_used as number) < 10;
-    } catch {
-      return true;
-    }
-  }, []);
-
-  const incrementCredits = useCallback(async (uid: string) => {
-    try {
-      const { data } = await supabase.from('user_credits').select('*').eq('user_id', uid).single();
-
-      if (!data) {
-        await supabase.from('user_credits').insert({ user_id: uid, credits_used: 1, is_pro: false });
-        return;
-      }
-      // NEVER update created_at here - only update credits_used
-      await supabase
-        .from('user_credits')
-        .update({ credits_used: (data.credits_used as number) + 1 })
-        .eq('user_id', uid);
-    } catch {
-      // Ignore
-    }
-  }, []);
-
   const loadHistoryFromDb = useCallback(async (uid: string) => {
     setHistoryLoading(true);
     try {
@@ -2243,13 +2048,26 @@ export default function Home() {
     }
   }, []);
 
-  // Load credits + history when signed in
+  useEffect(() => {
+    if (!effectiveIsSignedIn || !effectiveUserId || e2eBypass) return;
+    void (async () => {
+      try {
+        const res = await fetch('/api/credits');
+        if (!res.ok) return;
+        const d = (await res.json()) as { credits_used: number; limit: number; is_pro: boolean };
+        setCredits({ used: d.credits_used, limit: d.limit, isPro: d.is_pro });
+      } catch {
+        // ignore
+      }
+    })();
+  }, [effectiveIsSignedIn, effectiveUserId, e2eBypass]);
+
+  // Load history when signed in
   useEffect(() => {
     if (!effectiveIsSignedIn || !effectiveUserId) return;
-    loadUserCredits(effectiveUserId);
     loadHistoryFromDb(effectiveUserId);
     if (!e2eBypass) loadInspirationChipsFromDb(effectiveUserId);
-  }, [effectiveIsSignedIn, effectiveUserId, loadUserCredits, loadHistoryFromDb, loadInspirationChipsFromDb, e2eBypass]);
+  }, [effectiveIsSignedIn, effectiveUserId, loadHistoryFromDb, loadInspirationChipsFromDb, e2eBypass]);
 
   // First-time onboarding (only if 0 generations in Supabase)
   useEffect(() => {
@@ -2327,15 +2145,6 @@ export default function Home() {
   // ── GENERATE ─────────────────────────────────────────────────
 
   const handleGenerate = useCallback(async (overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
-    // Check credits before generating (signed-in users only)
-    if (!e2eBypass && effectiveIsSignedIn && effectiveUserId) {
-      const allowed = await checkCreditsAllowed(effectiveUserId);
-      if (!allowed) {
-        setShowUpgradeModal(true);
-        return;
-      }
-    }
-
     stopPlayAll();
     stopAllPlayback();
     setPlayingAll(false);
@@ -2357,12 +2166,19 @@ export default function Home() {
     // Try Claude AI prompt parsing, fall back silently
     let aiParsed: Partial<GenerationParams> = {};
     const promptText = overridePrompt ?? prompt;
-    if (!e2eBypass && promptText && effectiveIsSignedIn) {
+    let pipelinePrompt = (promptText ?? '').trim();
+    let artistHints: Partial<GenerationParams> = {};
+    if (!e2eBypass && pipelinePrompt) {
+      const resolved = await resolveArtistPromptChain(pipelinePrompt);
+      pipelinePrompt = resolved.sanitizedPrompt.trim() || pipelinePrompt;
+      if (resolved.profile) artistHints = mapArtistProfileToHints(resolved.profile);
+    }
+    if (!e2eBypass && pipelinePrompt && effectiveIsSignedIn) {
       try {
         const res = await fetch('/api/parse-prompt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: promptText }),
+          body: JSON.stringify({ prompt: pipelinePrompt }),
         });
         if (res.status === 429) {
           const d = await res.json().catch(() => null) as any;
@@ -2385,8 +2201,14 @@ export default function Home() {
       }
     }
 
-    const parsed = promptText ? parsePrompt(promptText) : {};
-    const finalParams: GenerationParams = { ...params, ...parsed, ...aiParsed, ...overrideParams };
+    const parsed = pipelinePrompt ? parsePrompt(pipelinePrompt) : {};
+    const finalParams: GenerationParams = {
+      ...params,
+      ...parsed,
+      ...artistHints,
+      ...aiParsed,
+      ...overrideParams,
+    };
     setParams(finalParams);
 
     const minLoad = new Promise<void>(r => window.setTimeout(() => r(), 2800));
@@ -2395,39 +2217,75 @@ export default function Home() {
       // Tiny intentional delay to avoid an abrupt spinner flash.
       await new Promise<void>(r => window.setTimeout(() => r(), 320));
 
-      const p1 = finalParams;
-      const p2 = { ...finalParams, bpm: Math.min(200, finalParams.bpm + 4) };
-      const p3 = { ...finalParams, bpm: Math.max(60, finalParams.bpm - 4) };
+      let p1: GenerationParams = finalParams;
+      let p2: GenerationParams = { ...finalParams, bpm: Math.min(200, finalParams.bpm + 4) };
+      let p3: GenerationParams = { ...finalParams, bpm: Math.max(60, finalParams.bpm - 4) };
 
-      const generateViaApi = async (p: GenerationParams) => {
+      const generateViaApiOnce = async () => {
         const res = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            bpm: p.bpm,
-            genre: p.genre,
-            key: p.key,
-            bars: p.bars,
-            prompt: promptText ?? '',
+            bpm: p1.bpm,
+            genre: p1.genre,
+            key: p1.key,
+            bars: p1.bars,
+            prompt: pipelinePrompt ?? '',
           }),
         });
 
         if (res.status === 429) {
-          const d = await res.json().catch(() => null) as any;
-          const after = typeof d?.retryAfter === 'number' ? d.retryAfter : null;
+          const d = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            retryAfter?: number;
+            credits_used?: number;
+            limit?: number;
+            is_pro?: boolean;
+          };
+          if (d.error === 'Monthly limit reached') {
+            if (d.credits_used !== undefined && d.limit !== undefined) {
+              setCredits({
+                used: d.credits_used,
+                limit: d.limit,
+                isPro: Boolean(d.is_pro),
+              });
+            }
+            setShowUpgradeModal(true);
+            throw new Error('monthly-limit');
+          }
+          if (d.error === 'Guest limit reached') {
+            toast.toast('Daily guest limit reached — sign in for more.', 'danger');
+            throw new Error('guest-limit');
+          }
+          const after = typeof d.retryAfter === 'number' ? d.retryAfter : null;
           toast.toast(`Rate limit exceeded${after ? ` — try again in ${after}s` : ''}`, 'danger');
           throw new Error('rate-limited');
         }
 
         if (res.status === 400) {
-          const d = await res.json().catch(() => null) as any;
+          const d = await res.json().catch(() => null) as { error?: string } | null;
           toast.toast('Invalid input', 'danger');
           throw new Error(d?.error || 'invalid input');
         }
 
+        if (res.status === 503) {
+          toast.toast('Generation temporarily unavailable', 'danger');
+          throw new Error('unavailable');
+        }
+
         if (!res.ok) throw new Error('generate failed');
-        const data = await res.json() as { result: GenerationResult };
-        return data.result;
+        const data = (await res.json()) as {
+          variations: { result: GenerationResult; params: GenerationParams }[];
+          credits?: { credits_used: number; limit: number; is_pro: boolean };
+        };
+        if (data.credits) {
+          setCredits({
+            used: data.credits.credits_used,
+            limit: data.credits.limit,
+            isPro: data.credits.is_pro,
+          });
+        }
+        return data.variations;
       };
 
       let gen1: GenerationResult;
@@ -2439,9 +2297,17 @@ export default function Home() {
         gen3 = generateTrack(p3);
       } else {
         try {
-          [gen1, gen2, gen3] = await Promise.all([generateViaApi(p1), generateViaApi(p2), generateViaApi(p3)]);
-        } catch {
-          // Fallback to local generation (keeps app usable if API is misconfigured).
+          const variations = await generateViaApiOnce();
+          gen1 = variations[0]!.result;
+          gen2 = variations[1]!.result;
+          gen3 = variations[2]!.result;
+          p1 = variations[0]!.params;
+          p2 = variations[1]!.params;
+          p3 = variations[2]!.params;
+        } catch (e) {
+          if (e instanceof Error && (e.message === 'monthly-limit' || e.message === 'guest-limit' || e.message === 'rate-limited' || e.message === 'unavailable')) {
+            throw e;
+          }
           gen1 = generateTrack(p1);
           gen2 = generateTrack(p2);
           gen3 = generateTrack(p3);
@@ -2467,7 +2333,7 @@ export default function Home() {
           const ins = (layers: GenerationResult, p: GenerationParams) =>
             supabase.from('generations').insert({
               user_id: effectiveUserId,
-              prompt: promptText,
+              prompt: pipelinePrompt,
               genre: p.genre,
               bpm: p.bpm,
               style_tag: activeStyleTag,
@@ -2499,8 +2365,6 @@ export default function Home() {
             lastInspirationSourceRef.current = null;
           }
 
-          await incrementCredits(effectiveUserId);
-          await loadUserCredits(effectiveUserId);
           await loadHistoryFromDb(effectiveUserId);
         } catch {
           // Ignore save errors
@@ -2510,13 +2374,15 @@ export default function Home() {
 
     try {
       await Promise.all([actualGeneration, minLoad]);
+    } catch {
+      // Limits / rate / availability already surfaced via toast or modal
     } finally {
       setIsGenerating(false);
       setGeneratingStage('');
       for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
       generatingStageTimeoutsRef.current = [];
     }
-  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, checkCreditsAllowed, incrementCredits, loadUserCredits, loadHistoryFromDb, loadInspirationChipsFromDb]);
+  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, loadHistoryFromDb, loadInspirationChipsFromDb]);
 
   const handleStyleTag = (tag: string) => {
     const preset = STYLE_TAGS[tag];
@@ -3888,13 +3754,20 @@ export default function Home() {
             </AnimatePresence>
 
             {/* Credits indicator */}
-            {effectiveIsSignedIn && credits !== null && !credits.isPro && (
+            {credits !== null && !credits.isPro && (
               <p className="text-xs mb-3 mt-1" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}>
-                <span style={{ color: credits.used >= 10 ? '#E94560' : 'var(--muted)' }}>
-                  {Math.max(0, 10 - credits.used)} / 10
+                <span style={{ color: credits.used >= credits.limit ? '#E94560' : 'var(--muted)' }}>
+                  {Math.max(0, credits.limit - credits.used)} / {credits.limit}
                 </span>
-                {' '}generations remaining ·{' '}
-                <a href="/pricing" style={{ color: '#FF6D3F', textDecoration: 'none' }}>Upgrade to Pro</a>
+                {' '}
+                {effectiveIsSignedIn ? (
+                  <>
+                    generations remaining ·{' '}
+                    <a href="/pricing" style={{ color: '#FF6D3F', textDecoration: 'none' }}>Upgrade to Pro</a>
+                  </>
+                ) : (
+                  'guest generations left today'
+                )}
               </p>
             )}
 
@@ -4723,7 +4596,7 @@ export default function Home() {
                   <div className="px-4 py-1.5" style={{ background: '#0D0D12', borderBottom: '1px solid #1A1A2E' }}>
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.35)' }}>
                       {editorView === 'piano'
-                        ? 'click note to delete · click empty to add (snaps to 1/16)'
+                        ? 'FL-style piano roll — snap, quantize, velocity lane, rubber-band select, undo'
                         : 'basic canvas score · durations are approximate'}
                     </span>
                   </div>
@@ -4735,6 +4608,9 @@ export default function Home() {
                       notes={editorLayer === 'imported' ? importedNotes : (result?.[editorLayer] ?? [])}
                       color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
                       bars={variations[selectedVariation]?.params.bars ?? params.bars}
+                      layerName={editorLayer === 'imported' ? 'imported' : editorLayer}
+                      isPlaying={playingVariationIndex === selectedVariation}
+                      playheadBeat={editorPlayheadBeat}
                       onNotesChange={newNotes => {
                         if (editorLayer === 'imported') setImportedNotes(newNotes);
                         else handleEditorNotesChange(editorLayer, newNotes);

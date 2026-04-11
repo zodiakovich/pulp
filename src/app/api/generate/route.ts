@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import Anthropic from '@anthropic-ai/sdk';
 import { auth } from '@clerk/nextjs/server';
-import { enforceRateLimit } from '@/lib/ratelimit';
-import { generateTrack, getDefaultParams, GENRES, NOTE_NAMES, type GenerationParams } from '@/lib/music-engine';
+import { enforceRateLimit, getIp } from '@/lib/ratelimit';
+import {
+  checkCreditsAllowed,
+  checkGuestAllowed,
+  GUEST_DAILY_LIMIT,
+  incrementCredits,
+  incrementGuest,
+} from '@/lib/credits';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import {
+  generateTrack,
+  getDefaultParams,
+  GENRES,
+  NOTE_NAMES,
+  parsePrompt,
+  type GenerationParams,
+  type GenerationResult,
+} from '@/lib/music-engine';
 
 const GENRE_KEYS = Object.keys(GENRES) as Array<keyof typeof GENRES>;
 const KEY_WHITELIST = NOTE_NAMES as readonly string[];
@@ -21,8 +38,106 @@ const GenerateSchema = z.object({
   prompt: z.string().max(500).transform((s) => stripHtml(s).trim()),
 });
 
+function noteTokenToKey(token: string): string | null {
+  const t = token.trim().replace('♭', 'b').replace('♯', '#');
+  if (!t) return null;
+  const head = t.charAt(0).toUpperCase() + t.slice(1);
+  if ((KEY_WHITELIST as readonly string[]).includes(head)) return head;
+  const flatToSharp: Record<string, string> = {
+    Db: 'C#',
+    Eb: 'D#',
+    Gb: 'F#',
+    Ab: 'G#',
+    Bb: 'A#',
+    Cb: 'B',
+    Fb: 'E',
+  };
+  const mapped = flatToSharp[head];
+  if (mapped && (KEY_WHITELIST as readonly string[]).includes(mapped)) return mapped;
+  return null;
+}
+
+const EXTRACTED_SCHEMA = z.object({
+  bpm_modifier: z.number().min(-20).max(20).optional().default(0),
+  density: z.enum(['sparse', 'normal', 'dense']).optional().default('normal'),
+  energy: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+  melody_octave: z.union([z.literal(-1), z.literal(0), z.literal(1)]).optional().default(0),
+  swing: z.boolean().optional().default(false),
+  notes_override: z.union([z.string(), z.null()]).optional().default(null),
+  mood_tags: z.array(z.string()).optional().default([]),
+});
+
+const SYSTEM_PROMPT = `You are a music parameter extractor for a MIDI generator. 
+Given a user's description, extract musical parameters as JSON.
+Return ONLY valid JSON, no explanation, no markdown.
+
+Return this exact shape:
+{
+  "bpm_modifier": number between -20 and +20 (offset from user's chosen BPM),
+  "density": "sparse" | "normal" | "dense",
+  "energy": "low" | "medium" | "high",
+  "melody_octave": -1 | 0 | 1 (shift from default),
+  "swing": boolean,
+  "notes_override": null | string (comma-separated note names like "C,Eb,G,Bb" if user implies a specific chord/scale),
+  "mood_tags": string[] (max 3, e.g. ["dark", "hypnotic", "minimal"])
+}
+
+Examples:
+- "dark hypnotic minimal techno" → density: sparse, energy: medium, swing: false, mood_tags: ["dark","hypnotic","minimal"]
+- "euphoric festival drop" → density: dense, energy: high, bpm_modifier: +10, mood_tags: ["euphoric","festival","uplifting"]
+- "late night jazz vibes" → density: normal, energy: low, swing: true, mood_tags: ["jazz","late-night","smooth"]
+- "aggressive trap banger" → density: dense, energy: high, melody_octave: -1, mood_tags: ["aggressive","trap","dark"]`;
+
+type Extracted = z.infer<typeof EXTRACTED_SCHEMA>;
+
+function applyExtractedToParams(params: GenerationParams, ex: Extracted, barsBeforeDensity: number): void {
+  params.bpm = Math.round(Math.min(200, Math.max(60, params.bpm + ex.bpm_modifier)));
+
+  let nextBars = barsBeforeDensity;
+  if (ex.density === 'sparse') nextBars = Math.max(1, Math.round(barsBeforeDensity * 0.7));
+  else if (ex.density === 'dense') nextBars = Math.min(16, Math.round(barsBeforeDensity * 1.3));
+  params.bars = nextBars;
+
+  let h = ex.energy === 'low' ? 26 : ex.energy === 'high' ? 70 : 44;
+  if (ex.swing) h = Math.min(100, h + 16);
+  params.humanization = Math.round(h);
+
+  if (ex.notes_override && typeof ex.notes_override === 'string') {
+    const first = ex.notes_override.split(',')[0]?.trim();
+    if (first) {
+      const k = noteTokenToKey(first);
+      if (k) params.key = k;
+    }
+  }
+}
+
+async function extractWithAnthropic(userPrompt: string): Promise<Extracted | null> {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key) return null;
+
+  const client = new Anthropic({ apiKey: key });
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 512,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const block = message.content[0];
+  const text = block?.type === 'text' ? block.text : '';
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(cleaned) as unknown;
+  } catch {
+    return null;
+  }
+  const parsed = EXTRACTED_SCHEMA.safeParse(raw);
+  if (!parsed.success) return null;
+  return parsed.data;
+}
+
 export async function POST(req: NextRequest) {
-  // Rate limit (free: per IP, pro: per userId) + validate all inputs.
   const { userId } = await auth();
   const rl = await enforceRateLimit({ req, userId: userId ?? null });
   if (!rl.ok) {
@@ -43,21 +158,136 @@ export async function POST(req: NextRequest) {
 
   const { bpm, genre, key, bars, prompt } = parsed.data;
 
+  const guestIp = getIp(req);
+
+  if (!userId && !supabaseAdmin) {
+    return NextResponse.json({ error: 'Guest generation unavailable' }, { status: 503 });
+  }
+
+  if (userId) {
+    try {
+      const c = await checkCreditsAllowed(userId);
+      if (!c.allowed) {
+        return NextResponse.json(
+          {
+            error: 'Monthly limit reached',
+            credits_used: c.credits_used,
+            limit: c.limit,
+            is_pro: c.is_pro,
+          },
+          { status: 429 },
+        );
+      }
+    } catch {
+      return NextResponse.json({ error: 'Credits check unavailable' }, { status: 503 });
+    }
+  } else {
+    const g = await checkGuestAllowed(guestIp);
+    if (!g.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Guest limit reached',
+          credits_used: g.count,
+          limit: GUEST_DAILY_LIMIT,
+          is_pro: false,
+        },
+        { status: 429 },
+      );
+    }
+  }
+
   const params: GenerationParams = {
-    ...getDefaultParams(),
+    ...getDefaultParams(genre),
     bpm,
     genre,
     key,
     bars,
-    // Force all layers on for API generation.
     layers: { melody: true, chords: true, bass: true, drums: true },
   };
 
-  const result = generateTrack(params);
+  let mood_tags: string[] | undefined;
+  let density: string | undefined;
+  let energy: string | undefined;
+  let swing: boolean | undefined;
+  let melody_octave: number | undefined;
+  let notes_override: string | null | undefined;
+
+  if (prompt.trim()) {
+    const hints = parsePrompt(prompt);
+    if (hints.bpm !== undefined) params.bpm = hints.bpm;
+    if (hints.key !== undefined) params.key = hints.key;
+    if (hints.scale !== undefined) params.scale = hints.scale;
+    if (hints.bars !== undefined) params.bars = hints.bars;
+    params.genre = genre;
+
+    try {
+      const ex = await extractWithAnthropic(prompt);
+      if (ex) {
+        const barsBase = params.bars;
+        applyExtractedToParams(params, ex, barsBase);
+        mood_tags = ex.mood_tags.slice(0, 3);
+        density = ex.density;
+        energy = ex.energy;
+        swing = ex.swing;
+        melody_octave = ex.melody_octave;
+        notes_override = ex.notes_override ?? null;
+      }
+    } catch {
+      // Silent fallthrough — generation still runs
+    }
+  }
+
+  const p1: GenerationParams = { ...params };
+  const p2: GenerationParams = { ...params, bpm: Math.min(200, params.bpm + 4) };
+  const p3: GenerationParams = { ...params, bpm: Math.max(60, params.bpm - 4) };
+
+  let gen1: GenerationResult;
+  let gen2: GenerationResult;
+  let gen3: GenerationResult;
+  try {
+    gen1 = generateTrack(p1);
+    gen2 = generateTrack(p2);
+    gen3 = generateTrack(p3);
+  } catch {
+    return NextResponse.json({ error: 'Generation failed' }, { status: 500 });
+  }
+
+  let creditsPayload: { credits_used: number; limit: number; is_pro: boolean };
+  try {
+    if (userId) {
+      await incrementCredits(userId);
+      const fin = await checkCreditsAllowed(userId);
+      creditsPayload = {
+        credits_used: fin.credits_used,
+        limit: fin.limit,
+        is_pro: fin.is_pro,
+      };
+    } else {
+      const g = await incrementGuest(guestIp);
+      creditsPayload = {
+        credits_used: g.credits_used,
+        limit: g.limit,
+        is_pro: false,
+      };
+    }
+  } catch {
+    return NextResponse.json({ error: 'Usage accounting failed' }, { status: 500 });
+  }
+
   return NextResponse.json({
     prompt,
-    params,
-    result,
+    params: p1,
+    variations: [
+      { result: gen1, params: p1 },
+      { result: gen2, params: p2 },
+      { result: gen3, params: p3 },
+    ],
+    credits: creditsPayload,
+    ...(mood_tags !== undefined && { mood_tags }),
+    ...(density !== undefined && { density }),
+    ...(energy !== undefined && { energy }),
+    ...(swing !== undefined && { swing }),
+    ...(melody_octave !== undefined && { melody_octave }),
+    ...(notes_override !== undefined && { notes_override }),
   });
 }
-

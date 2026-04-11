@@ -2,6 +2,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
+import { checkCreditsAllowed } from '@/lib/credits';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ProfileAccountClient } from './ProfileAccountClient';
@@ -128,6 +129,7 @@ export default async function ProfilePage() {
   let thisMonth = 0;
   let favoriteGenreData: { genre: string | null }[] | null = null;
   let creditsUsed = 0;
+  let creditLimit = 10;
   let isPro = false;
   let recentGenerations: {
     id: string;
@@ -138,7 +140,7 @@ export default async function ProfilePage() {
   }[] = [];
 
   try {
-    const [totalRes, monthRes, genreRes, creditsRes, recentRes] = await Promise.all([
+    const [totalRes, monthRes, genreRes, recentRes, creditSnap] = await Promise.all([
       db.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', userId),
       db
         .from('generations')
@@ -146,22 +148,26 @@ export default async function ProfilePage() {
         .eq('user_id', userId)
         .gte('created_at', monthStart),
       db.from('generations').select('genre').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
-      db.from('user_credits').select('credits_used, is_pro').eq('user_id', userId).maybeSingle(),
       db
         .from('generations')
         .select('id, prompt, genre, bpm, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(5),
+      checkCreditsAllowed(userId).catch(() => ({
+        credits_used: 0,
+        is_pro: false,
+        limit: 10,
+        allowed: true,
+      })),
     ]);
 
     totalGenerations = totalRes.count ?? 0;
     thisMonth = monthRes.count ?? 0;
     favoriteGenreData = genreRes.data;
-    if (creditsRes.data) {
-      creditsUsed = (creditsRes.data.credits_used as number) ?? 0;
-      isPro = Boolean(creditsRes.data.is_pro);
-    }
+    creditsUsed = creditSnap.credits_used;
+    creditLimit = creditSnap.limit;
+    isPro = creditSnap.is_pro;
     recentGenerations = (recentRes.data as typeof recentGenerations) ?? [];
   } catch {
     // keep defaults
@@ -170,7 +176,7 @@ export default async function ProfilePage() {
   const favoriteGenre = mostFrequentGenre(favoriteGenreData);
   const favoriteGenreDisplay = favoriteGenre ? formatGenreLabel(favoriteGenre) : '—';
 
-  const creditsRemainingDisplay = isPro ? '∞' : String(Math.max(0, 10 - creditsUsed));
+  const creditsRemainingDisplay = String(Math.max(0, creditLimit - creditsUsed));
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>

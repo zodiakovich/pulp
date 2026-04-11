@@ -1,0 +1,6 @@
+CREATE TABLE guest_usage (
+  ip TEXT NOT NULL,
+  count INT NOT NULL DEFAULT 0,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  PRIMARY KEY (ip, date)
+);

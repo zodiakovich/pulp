@@ -1123,7 +1123,9 @@ function drumSnareBrush(ctx: AudioContext, dest: AudioNode, start: number, vel: 
 }
 
 function drumClapReverb(ctx: AudioContext, dest: AudioNode, start: number, vel: number) {
-  if (!reverbNode) reverbNode = createReverb(ctx);
+  if (!reverbNode || reverbNode.context !== ctx) {
+    reverbNode = createReverb(ctx);
+  }
   const wet = ctx.createGain();
   wet.gain.value = 0.4;
   const dry = ctx.createGain();
@@ -1537,6 +1539,7 @@ export function stopAllPlayback() {
     audioCtx.close();
     audioCtx = null;
     masterGain = null;
+    reverbNode = null;
   }
 }
 
@@ -1570,20 +1573,30 @@ export function playLayer(
   });
 }
 
-export function playNotes(options: PlaybackOptions) {
-  stopAllPlayback();
-  isPlaying = true;
-  
-  const ctx = getAudioContext();
-  const dest = masterGain!;
+/** Per-layer destinations for external mix buses (e.g. mix-engine). */
+export interface LayerDestinationBuses {
+  melody: AudioNode;
+  chords: AudioNode;
+  bass: AudioNode;
+  drums: AudioNode;
+}
+
+/**
+ * Schedule the same notes as playNotes, but route each layer to its own bus.
+ * Used by mix-engine; callers must supply an AudioContext and keep it open until playback ends.
+ */
+export function scheduleNotesToLayerBuses(
+  ctx: AudioContext,
+  buses: LayerDestinationBuses,
+  options: PlaybackOptions
+): { maxEndTime: number; currentTime: number } {
   const secPerBeat = 60 / options.bpm;
   const sounds = pickFromGenre(options.genre);
-  
-  // Pick random synth from genre options
+
   const melodySynth = MELODY_SYNTHS[sounds.melody[Math.floor(Math.random() * sounds.melody.length)]];
   const chordSynth = CHORD_SYNTHS[sounds.chords[Math.floor(Math.random() * sounds.chords.length)]];
   const bassSynth = BASS_SYNTHS[sounds.bass[Math.floor(Math.random() * sounds.bass.length)]];
-  
+
   const kickFn =
     sounds.kick === 'deep' ? drumKickDeep :
     sounds.kick === 'punchy' ? drumKickPunchy :
@@ -1600,74 +1613,83 @@ export function playNotes(options: PlaybackOptions) {
     sounds.snare === 'rim' ? drumRim :
     sounds.snare === 'snare' ? drumSnare :
     drumClap;
-  
+
   let maxEndTime = 0;
   const currentTime = ctx.currentTime + 0.1;
-  
-  // Schedule melody
+
   if (options.melody) {
     for (const note of options.melody) {
       const start = currentTime + note.startTime * secPerBeat;
       const dur = note.duration * secPerBeat;
-      melodySynth(ctx, dest, midiToFreq(note.pitch), start, dur, note.velocity);
+      melodySynth(ctx, buses.melody, midiToFreq(note.pitch), start, dur, note.velocity);
       maxEndTime = Math.max(maxEndTime, start + dur);
     }
   }
-  
-  // Schedule chords
+
   if (options.chords) {
     for (const note of options.chords) {
       const start = currentTime + note.startTime * secPerBeat;
       const dur = note.duration * secPerBeat;
-      chordSynth(ctx, dest, midiToFreq(note.pitch), start, dur, note.velocity);
+      chordSynth(ctx, buses.chords, midiToFreq(note.pitch), start, dur, note.velocity);
       maxEndTime = Math.max(maxEndTime, start + dur);
     }
   }
-  
-  // Schedule bass
+
   if (options.bass) {
     for (const note of options.bass) {
       const start = currentTime + note.startTime * secPerBeat;
       const dur = note.duration * secPerBeat;
-      bassSynth(ctx, dest, midiToFreq(note.pitch), start, dur, note.velocity);
+      bassSynth(ctx, buses.bass, midiToFreq(note.pitch), start, dur, note.velocity);
       maxEndTime = Math.max(maxEndTime, start + dur);
     }
   }
-  
-  // Schedule drums
+
   if (options.drums) {
     for (const note of options.drums) {
       const start = currentTime + note.startTime * secPerBeat;
       const pitch = note.pitch;
       const vel = note.velocity;
-      
-      if (pitch === 36) kickFn(ctx, dest, start, vel);
-      else if (pitch === 38) snareFn(ctx, dest, start, vel);
-      else if (pitch === 39) drumClap(ctx, dest, start, vel);
+
+      if (pitch === 36) kickFn(ctx, buses.drums, start, vel);
+      else if (pitch === 38) snareFn(ctx, buses.drums, start, vel);
+      else if (pitch === 39) drumClap(ctx, buses.drums, start, vel);
       else if (pitch === 42) {
         const hat = sounds.hats[Math.floor(Math.random() * sounds.hats.length)] ?? 'closed';
-        if (hat === 'pedal') drumPedalHat(ctx, dest, start, vel);
-        else if (hat === 'sizzle') drumSizzleHat(ctx, dest, start, vel);
-        else if (hat === 'tambourine') drumTambourine(ctx, dest, start, vel);
-        else drumClosedHat(ctx, dest, start, vel);
+        if (hat === 'pedal') drumPedalHat(ctx, buses.drums, start, vel);
+        else if (hat === 'sizzle') drumSizzleHat(ctx, buses.drums, start, vel);
+        else if (hat === 'tambourine') drumTambourine(ctx, buses.drums, start, vel);
+        else drumClosedHat(ctx, buses.drums, start, vel);
       }
-      else if (pitch === 46) drumOpenHat(ctx, dest, start, vel);
-      else if (pitch === 51) drumClosedHat(ctx, dest, start, vel); // ride as hat
-      else if (pitch === 37) drumRim(ctx, dest, start, vel);
-      else if (pitch === 62) drumConga(ctx, dest, start, vel, true);
+      else if (pitch === 46) drumOpenHat(ctx, buses.drums, start, vel);
+      else if (pitch === 51) drumClosedHat(ctx, buses.drums, start, vel);
+      else if (pitch === 37) drumRim(ctx, buses.drums, start, vel);
+      else if (pitch === 62) drumConga(ctx, buses.drums, start, vel, true);
       else if (pitch === 63) {
-        // Afro house request: bongo + conga
-        if (options.genre === 'afro_house') drumBongo(ctx, dest, start, vel, false);
-        else drumConga(ctx, dest, start, vel, false);
+        if (options.genre === 'afro_house') drumBongo(ctx, buses.drums, start, vel, false);
+        else drumConga(ctx, buses.drums, start, vel, false);
       }
-      else if (pitch === 70) drumShaker(ctx, dest, start, vel);
-      else drumClosedHat(ctx, dest, start, vel); // fallback
-      
+      else if (pitch === 70) drumShaker(ctx, buses.drums, start, vel);
+      else drumClosedHat(ctx, buses.drums, start, vel);
+
       maxEndTime = Math.max(maxEndTime, start + 0.3);
     }
   }
-  
-  // On complete callback
+
+  return { maxEndTime, currentTime };
+}
+
+export function playNotes(options: PlaybackOptions) {
+  stopAllPlayback();
+  isPlaying = true;
+
+  const ctx = getAudioContext();
+  const dest = masterGain!;
+  const { maxEndTime, currentTime } = scheduleNotesToLayerBuses(
+    ctx,
+    { melody: dest, chords: dest, bass: dest, drums: dest },
+    options
+  );
+
   if (options.onComplete) {
     const totalDuration = (maxEndTime - currentTime) * 1000 + 500;
     const id = window.setTimeout(() => {
