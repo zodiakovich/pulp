@@ -1342,7 +1342,16 @@ function VariationCard({
 
 // ─── COMMAND BAR ──────────────────────────────────────────────
 function CommandBar({
-  isOpen, onClose, onGenerate, onFocusPrompt, onToggleLayers, onDownloadAll, hasResult,
+  isOpen,
+  onClose,
+  onGenerate,
+  onFocusPrompt,
+  onToggleLayers,
+  onDownloadAll,
+  onOpenBlog,
+  onOpenInspire,
+  onGoToPricing,
+  hasResult,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1350,14 +1359,25 @@ function CommandBar({
   onFocusPrompt: () => void;
   onToggleLayers: () => void;
   onDownloadAll: () => void;
+  onOpenBlog: () => void;
+  onOpenInspire: () => void;
+  onGoToPricing: () => void;
   hasResult: boolean;
 }) {
+  const [search, setSearch] = useState('');
+
   const actions = [
-    { icon: '✦', label: 'Generate track',       hint: 'G', action: onGenerate,      enabled: true },
-    { icon: '↵', label: 'Focus prompt',          hint: 'I', action: onFocusPrompt,  enabled: true },
-    { icon: '⊙', label: 'Toggle all layers',     hint: 'L', action: onToggleLayers, enabled: true },
-    { icon: '↓', label: 'Download last MIDI',    hint: 'D', action: onDownloadAll,  enabled: hasResult },
+    { icon: '♪', label: 'Generate track', hint: 'G', action: onGenerate, enabled: true },
+    { icon: '↵', label: 'Focus prompt', hint: '↵', action: onFocusPrompt, enabled: true },
+    { icon: '⊙', label: 'Toggle all layers', hint: 'L', action: onToggleLayers, enabled: true },
+    { icon: '↓', label: 'Download last MIDI', hint: 'D', action: onDownloadAll, enabled: hasResult },
+    { icon: '↗', label: 'Open blog', hint: 'B', action: onOpenBlog, enabled: true },
+    { icon: '✦', label: 'Open inspire', hint: 'I', action: onOpenInspire, enabled: true },
+    { icon: '$', label: 'Go to pricing', hint: 'P', action: onGoToPricing, enabled: true },
+    { icon: '⟳', label: 'Regenerate', hint: 'R', action: onGenerate, enabled: true },
   ];
+
+  const filteredActions = actions.filter(a => a.label.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <AnimatePresence>
@@ -1389,9 +1409,28 @@ function CommandBar({
                   <kbd>ESC</kbd>
                 </div>
 
+                <div className="px-4 py-2" style={{ borderBottom: '1px solid #1A1A2E' }}>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search actions..."
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      color: '#F0F0FF',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 13,
+                    }}
+                  />
+                </div>
+
                 {/* Actions */}
                 <div className="p-2">
-                  {actions.map(a => (
+                  {filteredActions.map(a => (
                     <button
                       key={a.label}
                       className="cmd-action"
@@ -3169,11 +3208,6 @@ export default function Home() {
           handleDownloadAll();
           return;
         }
-        if (k === 's') {
-          e.preventDefault();
-          handleShare();
-          return;
-        }
       }
 
       // Single-key shortcuts
@@ -3197,6 +3231,31 @@ export default function Home() {
       }
 
       const key = e.key.toLowerCase();
+      if (key === 'b' && !isCombo) {
+        e.preventDefault();
+        window.open('/blog', '_blank', 'noopener,noreferrer');
+        return;
+      }
+      if (key === 'p' && !isCombo) {
+        e.preventDefault();
+        window.location.href = '/pricing';
+        return;
+      }
+      if (key === 'r' && !isCombo) {
+        e.preventDefault();
+        if (variations.length > 0) void handleGenerate();
+        return;
+      }
+      if (key === 'i' && !isCombo) {
+        e.preventDefault();
+        setShowInspire(v => !v);
+        return;
+      }
+      if (key === 's' && !isCombo && variations.length > 0) {
+        e.preventDefault();
+        setShowShareModal(true);
+        return;
+      }
       if (key === 'g') {
         e.preventDefault();
         void handleGenerate();
@@ -3250,9 +3309,11 @@ export default function Home() {
     closeAllModals,
     compareIndex,
     compareMode,
+    handleDownloadAll,
     handleExtendSelected,
     handleGenerate,
-    handleShare,
+    setShowInspire,
+    setShowShareModal,
     liveMode,
     playingVariationIndex,
     selectedVariation,
@@ -3314,6 +3375,9 @@ export default function Home() {
         onFocusPrompt={handleCmdFocusPrompt}
         onToggleLayers={handleToggleAllLayers}
         onDownloadAll={handleDownloadAll}
+        onOpenBlog={() => window.open('/blog', '_blank', 'noopener,noreferrer')}
+        onOpenInspire={() => setShowInspire(true)}
+        onGoToPricing={() => { window.location.href = '/pricing'; }}
         hasResult={variations.length > 0}
       />
 
@@ -3372,12 +3436,16 @@ export default function Home() {
                 {[
                   { k: 'Space', d: 'Play/Stop current variation' },
                   { k: 'G', d: 'Generate' },
+                  { k: 'R', d: 'Regenerate' },
+                  { k: 'I', d: 'Open Inspire' },
+                  { k: 'B', d: 'Open Blog' },
+                  { k: 'P', d: 'Go to pricing' },
+                  { k: 'S', d: 'Share' },
                   { k: '1 / 2 / 3', d: 'Select variation 1, 2, 3' },
                   { k: 'L', d: 'Toggle Live mode' },
                   { k: 'C', d: 'Toggle Compare mode' },
                   { k: 'E', d: 'Extend current variation' },
                   { k: 'Ctrl/Cmd + D', d: 'Download MIDI (full)' },
-                  { k: 'Ctrl/Cmd + S', d: 'Share' },
                   { k: 'Ctrl/Cmd + K', d: 'Open command bar' },
                   { k: 'Esc', d: 'Close any open modal' },
                   { k: '?', d: 'Open shortcuts' },
