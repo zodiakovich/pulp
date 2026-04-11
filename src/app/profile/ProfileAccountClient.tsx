@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useClerk } from '@clerk/nextjs';
 
 export function ProfileAccountClient({ isPro }: { isPro: boolean }) {
@@ -36,22 +35,17 @@ export function ProfileAccountClient({ isPro }: { isPro: boolean }) {
             {isPro ? 'Pro' : 'Free'}
           </span>
           {isPro ? (
-            <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage subscription</span>
+            <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage subscription in your billing portal.</span>
           ) : (
-            <Link
-              href="/pricing"
-              className="btn-primary inline-flex items-center justify-center"
-              style={{ height: 40, padding: '0 16px', fontSize: 13, textDecoration: 'none' }}
-            >
-              Upgrade to Pro
-            </Link>
+            <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
+              Running low on credits? Upgrade from the credits card above.
+            </span>
           )}
         </div>
       </div>
       <button
         type="button"
-        className="btn-secondary"
-        style={{ height: 40, padding: '0 16px', fontSize: 13 }}
+        className="btn-secondary btn-sm"
         onClick={() => void signOut({ redirectUrl: '/' })}
       >
         Sign out

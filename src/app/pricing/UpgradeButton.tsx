@@ -9,12 +9,8 @@ export function UpgradeButton() {
   return (
     <div>
       <button
-        className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
-        style={{
-          background: '#FF6D3F',
-          border: '1px solid rgba(255,109,63,0.45)',
-          color: '#FFFFFF',
-        }}
+        type="button"
+        className="btn-primary w-full justify-center rounded-xl py-4 px-8 text-base font-semibold shadow-[0_0_20px_rgba(255,109,63,0.3)] transition-all min-h-[56px]"
         disabled={loading}
         onClick={async () => {
           if (loading) return;

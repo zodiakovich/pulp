@@ -5,21 +5,31 @@ import { useState } from 'react';
 const FAQS = [
   {
     q: 'Is the MIDI royalty-free?',
-    a: 'Yes. Everything you generate with pulp is 100% yours. No attribution required, commercial use included on Pro.',
+    a: 'Yes — you own what you generate; Pro adds a commercial license.',
   },
   {
     q: 'What DAWs does it work with?',
-    a: 'FL Studio, Ableton Live, Logic Pro, GarageBand, Pro Tools, Cubase — any DAW that accepts .mid files.',
+    a: 'Any DAW that imports standard .mid files.',
   },
   {
     q: 'Can I cancel anytime?',
-    a: 'Yes. Cancel from your profile page anytime. You keep Pro access until the end of your billing period.',
+    a: 'Yes — cancel from your profile; Pro stays active until the period ends.',
   },
   {
     q: 'Do unused generations roll over?',
-    a: 'No — free tier resets to 10 every month. Pro users never need to worry about limits.',
+    a: 'No — the free tier resets to 10 each month; Pro has no cap.',
+  },
+  {
+    q: 'How does billing work?',
+    a: 'Pro is billed monthly through Stripe until you cancel.',
+  },
+  {
+    q: 'Is my data private?',
+    a: 'We process prompts to generate MIDI; retention is explained in our Privacy Policy.',
   },
 ];
+
+const INITIAL_COUNT = 3;
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -42,48 +52,66 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 export function PricingFAQ() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
+
+  const hasMore = FAQS.length > INITIAL_COUNT;
+  const items = showAllQuestions ? FAQS : FAQS.slice(0, INITIAL_COUNT);
 
   return (
-    <div className="max-w-[800px] mx-auto">
-      {FAQS.map((item, i) => {
-        const open = openIndex === i;
-        return (
-          <div
-            key={item.q}
-            style={{ borderBottom: '1px solid var(--border)' }}
-          >
-            <button
-              type="button"
-              className="w-full flex items-center justify-between gap-4 py-5 text-left"
-              onClick={() => setOpenIndex(open ? null : i)}
-              aria-expanded={open}
-            >
-              <span
-                className="font-semibold pr-2"
-                style={{ fontFamily: 'Syne, sans-serif', fontSize: 17, color: 'var(--foreground)' }}
+    <div className="max-w-[800px] mx-auto space-y-6">
+      <div>
+        {items.map(item => {
+          const open = openKey === item.q;
+          return (
+            <div key={item.q} style={{ borderBottom: '1px solid var(--border)' }}>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between gap-4 py-6 text-left"
+                onClick={() => setOpenKey(open ? null : item.q)}
+                aria-expanded={open}
               >
-                {item.q}
-              </span>
-              <Chevron open={open} />
-            </button>
-            <div
-              className="overflow-hidden transition-[max-height,opacity] duration-200 ease-out"
-              style={{
-                maxHeight: open ? 320 : 0,
-                opacity: open ? 1 : 0,
-              }}
-            >
-              <p
-                className="pb-5 pr-10"
-                style={{ fontSize: 15, color: 'var(--foreground-muted)', lineHeight: 1.65 }}
+                <span
+                  className="font-semibold pr-2"
+                  style={{ fontFamily: 'Syne, sans-serif', fontSize: 17, color: 'var(--foreground)' }}
+                >
+                  {item.q}
+                </span>
+                <Chevron open={open} />
+              </button>
+              <div
+                className="overflow-hidden transition-[max-height,opacity] duration-200 ease-out"
+                style={{
+                  maxHeight: open ? 120 : 0,
+                  opacity: open ? 1 : 0,
+                }}
               >
-                {item.a}
-              </p>
+                <p className="pb-6 pr-10" style={{ fontSize: 15, color: 'var(--foreground-muted)', lineHeight: 1.55 }}>
+                  {item.a}
+                </p>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+
+      {hasMore && !showAllQuestions && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            className="text-sm font-medium px-6 py-3 rounded-xl transition-colors"
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              border: '1px solid var(--border)',
+              color: 'var(--foreground-muted)',
+              background: 'var(--surface)',
+            }}
+            onClick={() => setShowAllQuestions(true)}
+          >
+            More questions ({FAQS.length - INITIAL_COUNT})
+          </button>
+        </div>
+      )}
     </div>
   );
 }

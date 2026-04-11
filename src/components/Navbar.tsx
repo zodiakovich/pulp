@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { WhatsNew } from '@/components/WhatsNew';
 
@@ -48,8 +49,13 @@ export function Navbar({
   historyCount?: number;
 }) {
   const { isLoaded, isSignedIn } = useAuth();
+  const pathname = usePathname();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const scrollToGenerator = () => {
+    document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     try {
@@ -163,7 +169,7 @@ export function Navbar({
           <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(-5px) rotate(-45deg)' : 'none' }} />
         </button>
 
-        <div className="flex items-center gap-2 relative z-[55]" style={{marginLeft: 'auto', flexShrink: 0}}>
+        <div className="flex items-center gap-3 relative z-[55]" style={{ marginLeft: 'auto', flexShrink: 0 }}>
           <WhatsNew />
           <button
             type="button"
@@ -185,15 +191,21 @@ export function Navbar({
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
           <SignedIn>
+            {pathname === '/' ? (
+              <button type="button" className="btn-primary btn-sm" onClick={() => scrollToGenerator()}>
+                Generate
+              </button>
+            ) : (
+              <Link href="/#generator" className="btn-primary btn-sm" style={{ textDecoration: 'none' }}>
+                Generate
+              </Link>
+            )}
             <UserButton />
           </SignedIn>
           <SignedOut>
             <SignInButton mode="modal">
-              <button
-                type="button"
-                className="h-9 px-4 rounded-lg text-sm font-medium bg-[#FF6D3F] text-white hover:bg-[#e85a2a] transition-colors"
-              >
-                Sign in
+              <button type="button" className="btn-primary btn-sm">
+                Start free
               </button>
             </SignInButton>
           </SignedOut>

@@ -18,6 +18,7 @@ import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
 import { generateAbletonAlsBlob } from '@/lib/ableton-export';
 import { Navbar } from '@/components/Navbar';
+import Link from 'next/link';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 const EASE_OUT = [0, 0, 0.2, 1] as const;
@@ -1906,8 +1907,8 @@ function ShareModal({
           <button
             type="button"
             onClick={() => void copyUrl()}
-            className="btn-primary"
-            style={{ height: 40, padding: '0 16px', fontSize: 13, flexShrink: 0 }}
+            className="btn-primary btn-sm"
+            style={{ flexShrink: 0 }}
           >
             {copied ? '✓ Copied' : 'Copy'}
           </button>
@@ -3643,8 +3644,49 @@ export default function Home() {
             </motion.p>
           </motion.div>
 
+          {/* Dominant hero CTA — only primary button in hero */}
+          <motion.div
+            className="flex flex-col items-center justify-center gap-3"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            transition={{ delay: 0.1 }}
+          >
+            <div ref={generateBtnWrapRef}>
+              {effectiveIsSignedIn ? (
+                <SpotlightButton
+                  type="button"
+                  className={`btn-primary btn-hero${isGenerating ? ' pulsing' : ''}`}
+                  onClick={() => void handleGenerate()}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? (
+                    <span className="flex items-center gap-3">
+                      <span className="spinner" />
+                      {generatingStage || 'Generating…'}
+                    </span>
+                  ) : (
+                    'Generate now'
+                  )}
+                </SpotlightButton>
+              ) : (
+                <SignInButton mode="modal">
+                  <SpotlightButton type="button" className="btn-primary btn-hero">
+                    Start free
+                  </SpotlightButton>
+                </SignInButton>
+              )}
+            </div>
+            {!effectiveIsSignedIn && (
+              <p className="text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
+                No credit card required · 10 free generations per month
+              </p>
+            )}
+          </motion.div>
+
           {/* ── GENERATOR ── */}
           <motion.div
+            id="generator"
             ref={toolRef}
             className="w-full max-w-[720px] mx-auto"
             variants={fadeUp}
@@ -3654,8 +3696,9 @@ export default function Home() {
           >
             <div className="px-4 sm:px-0">
 
-            {/* Prompt input */}
-            <div className="relative mb-4 hidden sm:block">
+            {/* Prompt — no duplicate Generate; Inspire is a text control only */}
+            <div className="mb-4 hidden sm:block">
+              <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: '#FF6D3F' }}>✦</span>
                 <input
                   ref={promptRef}
@@ -3664,48 +3707,32 @@ export default function Home() {
                   onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
                   onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
                   placeholder="dark melodic techno, 128bpm, Am"
-                  className="input-field pr-4 sm:pr-[220px]"
+                  className="input-field pr-4"
                   style={{ paddingLeft: 40 }}
                 />
-
-                <div className="absolute right-[104px] top-1/2 -translate-y-1/2">
-                  <SpotlightButton
-                    type="button"
-                    className="btn-secondary"
-                    style={{ height: 36, padding: '0 12px', fontSize: 12 }}
-                    onClick={() => setShowInspire(v => !v)}
-                  >
-                    Inspire
-                  </SpotlightButton>
-                </div>
-                {effectiveIsSignedIn ? (
-                  <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <SpotlightButton
-                      className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
-                      style={{ height: 36, padding: '0 16px', fontSize: 13 }}
-                      onClick={() => void handleGenerate()}
-                      disabled={isGenerating}
-                    >
-                      {isGenerating ? (
-                        <span className="flex items-center gap-2">
-                          <span className="spinner" />
-                          {generatingStage || 'Generating…'}
-                        </span>
-                      ) : 'Generate'}
-                    </SpotlightButton>
-                  </div>
-                ) : (
-                  <div ref={generateBtnWrapRef} className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <SignInButton mode="modal">
-                      <SpotlightButton
-                        className="btn-primary"
-                        style={{ height: 36, padding: '0 16px', fontSize: 13 }}
-                      >
-                        Generate
-                      </SpotlightButton>
-                    </SignInButton>
-                  </div>
-                )}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-4 px-1">
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
+                  {effectiveIsSignedIn ? 'Press Enter to generate' : 'Sign in above, then describe your track'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowInspire(v => !v)}
+                  className="text-left shrink-0"
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: 'var(--foreground-muted)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 3,
+                  }}
+                >
+                  Inspire
+                </button>
+              </div>
             </div>
             <div className="sm:hidden flex flex-col gap-2 mb-4">
               <div className="relative">
@@ -3720,34 +3747,27 @@ export default function Home() {
                   style={{ paddingLeft: 40 }}
                 />
               </div>
-              <div className="flex gap-2">
-                <SpotlightButton
+              <div className="flex items-center justify-between gap-4 px-1">
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
+                  {effectiveIsSignedIn ? 'Enter to generate' : 'Start free above'}
+                </span>
+                <button
                   type="button"
-                  className="btn-secondary"
-                  style={{ height: 44, padding: '0 12px', fontSize: 13, flex: 1 }}
                   onClick={() => setShowInspire(v => !v)}
+                  className="text-left shrink-0"
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: 'var(--foreground-muted)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 3,
+                  }}
                 >
                   Inspire
-                </SpotlightButton>
-                {effectiveIsSignedIn ? (
-                  <SpotlightButton
-                    className={`btn-primary${isGenerating ? ' pulsing' : ''}`}
-                    style={{ height: 44, padding: '0 12px', fontSize: 13, flex: 1 }}
-                    onClick={() => void handleGenerate()}
-                    disabled={isGenerating}
-                  >
-                    {isGenerating ? '...' : 'Generate'}
-                  </SpotlightButton>
-                ) : (
-                  <SignInButton mode="modal">
-                    <SpotlightButton
-                      className="btn-primary"
-                      style={{ height: 44, padding: '0 12px', fontSize: 13, flex: 1 }}
-                    >
-                      Generate
-                    </SpotlightButton>
-                  </SignInButton>
-                )}
+                </button>
               </div>
             </div>
 
@@ -3776,8 +3796,8 @@ export default function Home() {
                     />
                     <SpotlightButton
                       type="submit"
-                      className="btn-primary"
-                      style={{ height: 40, padding: '0 14px', fontSize: 12, whiteSpace: 'nowrap' }}
+                      className="btn-primary btn-sm"
+                      style={{ whiteSpace: 'nowrap' }}
                       disabled={isInspiring || !inspireText.trim()}
                     >
                       {isInspiring ? '…' : 'Apply'}
@@ -4761,7 +4781,7 @@ export default function Home() {
               20 genres · 15 styles · 4 independent tracks · .mid export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
-              No account needed. No theory required. Just hit Generate.
+              No account needed. Use the button above or press G.
             </p>
           </div>
         </div>
@@ -4848,6 +4868,19 @@ export default function Home() {
               </div>
             ))}
           </div>
+          <div className="mt-16 flex justify-center">
+            {effectiveIsSignedIn ? (
+              <button type="button" className="btn-primary" onClick={() => scrollToTool()}>
+                Open generator →
+              </button>
+            ) : (
+              <SignInButton mode="modal">
+                <button type="button" className="btn-primary">
+                  Try it free →
+                </button>
+              </SignInButton>
+            )}
+          </div>
         </div>
       </section>
 
@@ -4866,7 +4899,7 @@ export default function Home() {
             className="mb-12 text-sm"
             style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}
           >
-            Click any genre to load it into the generator.
+            Pick a genre to pre-fill the prompt — scroll up to generate when you are ready.
           </p>
           <div
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
@@ -4922,6 +4955,20 @@ export default function Home() {
               </div>
             ))}
           </div>
+          <div className="mt-10">
+            <Link
+              href="/explore"
+              className="text-sm inline-block"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                color: 'var(--accent)',
+                textDecoration: 'none',
+                borderBottom: '1px solid rgba(255,109,63,0.35)',
+              }}
+            >
+              See an example →
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -4935,10 +4982,6 @@ export default function Home() {
             <span className="text-gradient font-extrabold text-2xl" style={{ fontFamily: 'Syne, sans-serif' }}>
               pulp
             </span>
-            <nav className="flex items-center gap-8 text-sm">
-              <button type="button" onClick={scrollToTool} className="nav-link">Create</button>
-              <button type="button" onClick={() => setShowHistory(true)} className="nav-link">History</button>
-            </nav>
             <span className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
               a{' '}
               <span className="font-extrabold text-gradient" style={{ fontFamily: 'Syne, sans-serif' }}>papaya</span>

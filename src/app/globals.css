@@ -219,27 +219,41 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 52px;
-  padding: 0 28px;
+  min-height: 48px;
+  height: auto;
+  padding: 12px 32px;
   border-radius: 10px;
   background: #FF6D3F;
   color: #fff;
   font-family: 'DM Sans', sans-serif;
   font-weight: 600;
   font-size: 15px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
   cursor: pointer;
   transition: all 180ms ease-out;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-  box-shadow: 0 0 24px rgba(255,109,63,0.35);
+  filter: brightness(1.08);
+  box-shadow: 0 0 28px rgba(255, 109, 63, 0.38), 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
 }
 .btn-primary:active:not(:disabled) { transform: scale(0.97); }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary.pulsing { animation: pulse-ring 1.4s ease-out infinite; }
+
+/* Home hero — single dominant CTA above the fold */
+.btn-hero {
+  min-height: 56px;
+  padding: 16px 40px !important;
+  font-size: clamp(17px, 2.4vw, 20px) !important;
+  font-weight: 600;
+  box-shadow: 0 0 40px rgba(255, 109, 63, 0.32), 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+}
+.btn-hero:hover:not(:disabled) {
+  box-shadow: 0 0 52px rgba(255, 109, 63, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+}
 
 .btn-secondary {
   display: inline-flex;
@@ -254,7 +268,8 @@ body {
   font-family: 'DM Sans', sans-serif;
   font-weight: 500;
   font-size: 15px;
-  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15) inset;
   cursor: pointer;
   transition: all 180ms ease-out;
   white-space: nowrap;
@@ -263,6 +278,11 @@ body {
 .btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .btn-secondary:active:not(:disabled) { transform: scale(0.97); }
 .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+html:not(.dark) .btn-secondary {
+  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+  box-shadow: none;
+}
 
 .btn-download {
   display: inline-flex;
@@ -291,10 +311,20 @@ body {
 
 /* Compact variants — apply alongside btn-* */
 .btn-sm {
+  min-height: 40px !important;
   height: 40px !important;
   padding: 0 16px !important;
   font-size: 13px !important;
   border-radius: 8px !important;
+}
+.btn-primary.btn-sm {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.btn-secondary.btn-sm {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+html:not(.dark) .btn-secondary.btn-sm {
+  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
 /* ─── INPUTS ─── */

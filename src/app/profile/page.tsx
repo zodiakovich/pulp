@@ -75,6 +75,42 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function CreditsStatWithUpgrade({ value, isPro }: { value: string; isPro: boolean }) {
+  return (
+    <div
+      className="rounded-2xl p-6 flex flex-col gap-4 h-full"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+    >
+      <div>
+        <p
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 11,
+            color: 'var(--muted)',
+            marginBottom: 8,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Credits remaining
+        </p>
+        <p className="font-extrabold" style={{ fontFamily: 'Syne, sans-serif', fontSize: 36, color: 'var(--foreground)' }}>
+          {value}
+        </p>
+      </div>
+      {!isPro && (
+        <Link
+          href="/pricing"
+          className="btn-primary inline-flex items-center justify-center w-full text-center mt-auto"
+          style={{ textDecoration: 'none' }}
+        >
+          Upgrade to Pro
+        </Link>
+      )}
+    </div>
+  );
+}
+
 export default async function ProfilePage() {
   const user = await currentUser();
   if (!user) redirect('/');
@@ -212,7 +248,7 @@ export default async function ProfilePage() {
               <StatCard label="Total generations" value={String(totalGenerations)} />
               <StatCard label="This month" value={String(thisMonth)} />
               <StatCard label="Favorite genre" value={favoriteGenreDisplay} />
-              <StatCard label="Credits remaining" value={creditsRemainingDisplay} />
+              <CreditsStatWithUpgrade value={creditsRemainingDisplay} isPro={isPro} />
             </div>
           </section>
 
