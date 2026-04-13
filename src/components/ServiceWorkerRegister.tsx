@@ -15,7 +15,11 @@ export function ServiceWorkerRegister() {
       }
     };
 
-    void run();
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(() => void run(), { timeout: 8000 });
+    } else {
+      setTimeout(() => void run(), 4000);
+    }
   }, []);
 
   return null;

@@ -13,12 +13,12 @@ export type MidiUploadSuccessPayload = {
   variationIds: (string | null)[];
 };
 
-const PANEL = '#111118';
-const BORDER = '#1A1A2E';
-const DASH = '#2A2A40';
+const PANEL = 'var(--surface)';
+const BORDER = 'var(--border)';
+const DASH = 'rgba(255,255,255,0.12)';
 const ACCENT = '#FF6D3F';
-const MUTED = '#8A8A9A';
-const CTA_TEXT = '#09090B';
+const MUTED = 'var(--muted)';
+const CTA_TEXT = 'var(--on-accent)';
 const MAX_BYTES = 2 * 1024 * 1024;
 
 type Mode = 'continue' | 'vary';
@@ -121,7 +121,7 @@ export function StudioMidiUploadModal({
         return;
       }
       if (res.status === 429) {
-        setError(data.error === 'Monthly limit reached' ? 'Monthly limit reached.' : 'Rate limited — try again later.');
+        setError(data.error === 'Monthly limit reached' ? 'Monthly limit reached.' : 'Rate limited. Try again later.');
         return;
       }
       if (!res.ok) {
@@ -168,7 +168,7 @@ export function StudioMidiUploadModal({
             onClick={e => e.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
-              <h2 id="midi-upload-title" className="text-lg font-bold" style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: '#F5F5F5' }}>
+              <h2 id="midi-upload-title" className="text-lg font-bold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)' }}>
                 Upload MIDI
               </h2>
               <button
@@ -209,7 +209,7 @@ export function StudioMidiUploadModal({
                 Drag & drop .mid / .midi (max 2 MB)
               </p>
               {fileName && (
-                <p className="mt-2 text-sm font-medium" style={{ fontFamily: 'DM Sans, sans-serif', color: '#F5F5F5' }}>
+                <p className="mt-2 text-sm font-medium" style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--text)' }}>
                   {fileName}
                 </p>
               )}
@@ -248,7 +248,7 @@ export function StudioMidiUploadModal({
             </div>
 
             {error && (
-              <p className="mb-4 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: '#E94560' }}>
+              <p className="mb-4 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: ACCENT }}>
                 {error}
               </p>
             )}

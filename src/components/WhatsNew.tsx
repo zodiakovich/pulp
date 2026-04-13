@@ -44,8 +44,8 @@ export function WhatsNew() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="What's new"
-        className="h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm"
-        style={{ background: 'rgba(255,109,63,0.1)', color: '#FF6D3F', position: 'relative', zIndex: 45 }}
+        className="h-9 px-3 rounded-lg flex items-center gap-2 transition-all duration-200 ease-ui text-sm"
+        style={{ background: 'rgba(255,109,63,0.1)', color: 'var(--accent)', position: 'relative', zIndex: 45 }}
         title="What's new"
       >
         What’s new
@@ -56,11 +56,10 @@ export function WhatsNew() {
               width: 8,
               height: 8,
               borderRadius: 999,
-              background: 'var(--hot)',
+              background: 'var(--accent)',
               position: 'absolute',
               top: 6,
               right: 6,
-              boxShadow: '0 0 0 4px rgba(233,69,96,0.16)',
             }}
           />
         )}
@@ -70,23 +69,18 @@ export function WhatsNew() {
         <>
           <div
             className="fixed inset-0 z-[70]"
-            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)' }}
+            style={{ background: 'rgba(10,10,11,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
             onClick={() => setOpen(false)}
           />
           <div
-            className="fixed left-1/2 top-1/2 z-[71] w-[min(980px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6"
+            className="fixed left-1/2 top-1/2 z-[71] w-[min(980px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6 glass-elevated card-tilt-hover"
             role="dialog"
             aria-modal="true"
             aria-label="What's new"
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              boxShadow: '0 32px 100px rgba(0,0,0,0.65)',
-            }}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24, color: 'var(--text)' }}>
+                <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
                   What’s new
                 </div>
                 <div style={{ marginTop: 6, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
@@ -96,7 +90,7 @@ export function WhatsNew() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="h-9 px-3 rounded-lg transition-all"
+                className="h-9 px-3 rounded-lg transition-all duration-200 ease-ui"
                 style={{
                   border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                   color: 'var(--text)',
@@ -138,7 +132,7 @@ export function WhatsNew() {
                       {formatDate(e.date)}
                     </span>
                   </div>
-                  <div className="mt-3" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>
+                  <div className="mt-3" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
                     {e.title}
                   </div>
                   <div className="mt-2" style={{ color: 'var(--muted)' }}>

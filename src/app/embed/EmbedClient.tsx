@@ -11,6 +11,7 @@ import {
 } from '@/lib/music-engine';
 import { playNotes, stopAllPlayback } from '@/lib/audio-engine';
 import { generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
+import { ButtonLoadingDots } from '@/components/ButtonLoadingDots';
 
 function normalizeGenreParam(raw: string | null): string | null {
   const v = (raw ?? '').trim();
@@ -129,18 +130,11 @@ export function EmbedClient({
       style={{ background: compact ? 'transparent' : 'var(--bg)', color: 'var(--text)' }}
     >
       <div
-        className="w-full"
-        style={{
-          maxWidth: compact ? 'none' : 860,
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 16,
-          padding: 20,
-          boxShadow: '0 28px 90px rgba(0,0,0,0.45)',
-        }}
+        className="w-full rounded-2xl p-5 glass-elevated card-tilt-hover"
+        style={{ maxWidth: compact ? 'none' : 860 }}
       >
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18 }}>
+          <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em' }}>
             pulp
           </div>
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
@@ -154,7 +148,9 @@ export function EmbedClient({
             onChange={e => setPrompt(e.target.value)}
             placeholder="Describe the vibe…"
             className="input-field md:col-span-2"
-            style={{ height: 44 }}
+            style={{ height: 44, opacity: isGenerating ? 0.55 : 1 }}
+            readOnly={isGenerating}
+            aria-busy={isGenerating}
           />
           <select
             className="w-full"
@@ -182,7 +178,7 @@ export function EmbedClient({
             onClick={() => void handleGenerate()}
             disabled={isGenerating}
           >
-            {isGenerating ? 'Generating…' : 'Generate'}
+            {isGenerating ? <ButtonLoadingDots label="Generating" /> : 'Generate'}
           </button>
           <button className="btn-secondary btn-sm" onClick={handlePlayToggle} disabled={!result}>
             {playing ? '■ Stop' : '▶ Play'}

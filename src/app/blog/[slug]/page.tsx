@@ -4,6 +4,10 @@ import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { supabase } from '@/lib/supabase';
+import { articlePageMeta } from '@/lib/seo-metadata';
+import { ArticleJsonLd } from './ArticleJsonLd';
+
+export const revalidate = 3600;
 
 type BlogPost = {
   slug: string;
@@ -20,6 +24,16 @@ function formatDate(iso: string) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** Pre-render known posts at build; new posts appear after revalidate window. */
+export async function generateStaticParams() {
+  try {
+    const { data } = await supabase.from('blog_posts').select('slug');
+    return (data ?? []).map((row: { slug: string }) => ({ slug: row.slug }));
+  } catch {
+    return [];
+  }
+}
+
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> }
 ): Promise<Metadata> {
@@ -30,27 +44,14 @@ export async function generateMetadata(
     .eq('slug', slug)
     .single();
 
-  if (!data) return { title: 'Blog — pulp' };
+  if (!data) return { title: 'Blog post' };
 
-  const title = `${data.title} — pulp`;
-  const desc = data.excerpt;
-  const url = `https://pulp-4ubq.vercel.app/blog/${data.slug}`;
-
-  return {
-    title,
-    description: desc,
-    openGraph: {
-      title,
-      description: desc,
-      url,
-      images: [{ url: '/og-image.png', width: 1200, height: 630, alt: title }],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description: desc,
-    },
-  };
+  return articlePageMeta({
+    title: data.title,
+    description: data.excerpt,
+    path: `/blog/${data.slug}`,
+    publishedTime: data.published_at,
+  });
 }
 
 export default async function BlogPostPage({
@@ -71,12 +72,18 @@ export default async function BlogPostPage({
 
   return (
     <div className="min-h-screen px-8 pt-24 pb-16" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <ArticleJsonLd
+        slug={post.slug}
+        title={post.title}
+        excerpt={post.excerpt}
+        publishedAt={post.published_at}
+      />
       <div className="mx-auto" style={{ maxWidth: 720 }}>
         <Link href="/blog" style={{ textDecoration: 'none', color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
           ← Back to blog
         </Link>
 
-        <h1 className="mt-6" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 40, letterSpacing: '-0.02em' }}>
+        <h1 className="mt-6" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 32, letterSpacing: '-0.02em', lineHeight: 1.15 }}>
           {post.title}
         </h1>
         <p className="mt-3" style={{ color: 'var(--muted)', lineHeight: 1.8 }}>
@@ -114,8 +121,8 @@ export default async function BlogPostPage({
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                h2: (props) => <h2 {...props} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, marginTop: 28 }} />,
-                h3: (props) => <h3 {...props} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, marginTop: 22 }} />,
+                h2: (props) => <h2 {...props} style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2, marginTop: 28 }} />,
+                h3: (props) => <h3 {...props} style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, marginTop: 22 }} />,
                 p: (props) => <p {...props} style={{ color: 'var(--muted)', lineHeight: 1.9, marginTop: 12 }} />,
                 li: (props) => <li {...props} style={{ color: 'var(--muted)', lineHeight: 1.9, marginTop: 6 }} />,
                 a: (props) => <a {...props} style={{ color: 'var(--accent)', textDecoration: 'none' }} />,

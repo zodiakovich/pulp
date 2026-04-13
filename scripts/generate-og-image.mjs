@@ -5,15 +5,9 @@ import sharp from 'sharp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
-const fontPath = path.join(
-  root,
-  'node_modules',
-  '@fontsource',
-  'syne',
-  'files',
-  'syne-latin-800-normal.woff2'
-);
+const fontPath = path.join(root, 'public', 'fonts', 'syne-800-latin.woff2');
 const outPng = path.join(root, 'public', 'og-image.png');
+const outWebp = path.join(root, 'public', 'og-image.webp');
 
 const fontBuf = await fs.readFile(fontPath);
 const fontB64 = fontBuf.toString('base64');
@@ -47,5 +41,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <text x="600" y="398" text-anchor="middle" font-family="Syne, sans-serif" font-weight="800" font-size="44" fill="#FF6D3F" letter-spacing="0.02em">AI MIDI Generator</text>
 </svg>`;
 
-await sharp(Buffer.from(svg)).resize(1200, 630).png().toFile(outPng);
-console.log('Wrote', path.relative(root, outPng));
+const raster = sharp(Buffer.from(svg)).resize(1200, 630);
+await raster.png().toFile(outPng);
+await sharp(Buffer.from(svg)).resize(1200, 630).webp({ quality: 88 }).toFile(outWebp);
+console.log('Wrote', path.relative(root, outPng), 'and', path.relative(root, outWebp));

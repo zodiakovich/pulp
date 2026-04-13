@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { playAll, stopPlayAll } from '@/lib/tone-play-all';
+import { playAll, stopPlayAll } from '@/lib/tone-lazy';
 import type { GenerationResult } from '@/lib/music-engine';
 
 export function PlayButton({

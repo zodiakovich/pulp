@@ -27,15 +27,16 @@ export type ToastAPI = {
 
 export const ToastContext = createContext<ToastAPI | null>(null);
 
-function toneStyles(tone: ToastTone): { accent: string; bg: string; border: string } {
+function toneStyles(tone: ToastTone): { accent: string } {
   switch (tone) {
     case 'success':
-      return { accent: '#00B894', bg: 'rgba(0,184,148,0.10)', border: 'rgba(0,184,148,0.30)' };
+      return { accent: '#00B894' };
     case 'danger':
-      return { accent: '#E94560', bg: 'rgba(233,69,96,0.10)', border: 'rgba(233,69,96,0.28)' };
+      // No red in the design system — use primary accent.
+      return { accent: '#FF6D3F' };
     case 'info':
     default:
-      return { accent: '#FF6D3F', bg: 'rgba(255,109,63,0.10)', border: 'rgba(255,109,63,0.28)' };
+      return { accent: '#FF6D3F' };
   }
 }
 
@@ -46,6 +47,7 @@ function uid(): string {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef<Map<ToastId, number>>(new Map());
+  const TTL_MS = 3000;
 
   const dismiss = useCallback((id: ToastId) => {
     setToasts(prev => prev.map(t => (t.id === id ? { ...t, visible: false } : t)));
@@ -54,7 +56,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     timersRef.current.delete(id);
     window.setTimeout(() => {
       setToasts(prev => prev.filter(x => x.id !== id));
-    }, 220);
+    }, 150);
   }, []);
 
   const push = useCallback((title: string, tone: ToastTone = 'info') => {
@@ -67,7 +69,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       setToasts(prev => prev.map(t => (t.id === id ? { ...t, visible: true } : t)));
     }, 10);
 
-    const timer = window.setTimeout(() => dismiss(id), 3000);
+    const timer = window.setTimeout(() => dismiss(id), TTL_MS);
     timersRef.current.set(id, timer);
   }, [dismiss]);
 
@@ -95,27 +97,29 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <div
         aria-live="polite"
         aria-relevant="additions removals"
-        className="fixed bottom-6 right-6 z-[120] flex flex-col gap-2"
+        className="fixed top-6 right-6 z-[120] flex flex-col gap-2"
       >
         <AnimatePresence initial={false}>
           {toasts.map(t => {
             const s = toneStyles(t.tone);
+            const createdAgo = Math.max(0, Date.now() - t.createdAt);
+            const remaining = Math.max(0, TTL_MS - createdAgo);
             return (
               <motion.div
                 key={t.id}
                 role="status"
-                initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                initial={{ opacity: 0, y: -12, x: 12, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 14, scale: 0.98 }}
-                transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.9 }}
+                exit={{
+                  opacity: 0,
+                  y: -8,
+                  scale: 0.98,
+                  transition: { duration: 0.22, ease: [0.55, 0, 1, 0.45] },
+                }}
+                transition={{ type: 'tween', duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+                className="glass-elevated overflow-hidden rounded-xl"
                 style={{
                   width: 320,
-                  background: 'rgba(17,17,24,0.78)',
-                  borderRadius: 12,
-                  border: `1px solid rgba(255,255,255,0.06)`,
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  overflow: 'hidden',
                 }}
               >
                 <div
@@ -124,12 +128,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     alignItems: 'center',
                     gap: 10,
                     padding: '12px 12px',
-                    background: s.bg,
-                    borderBottom: `1px solid rgba(255,255,255,0.06)`,
+                    background: 'transparent',
+                    borderBottom: `1px solid var(--divider)`,
                   }}
                 >
-                  <span style={{ width: 8, height: 8, borderRadius: 999, background: s.accent, boxShadow: `0 0 0 4px ${s.accent}22` }} />
-                  <span style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', fontSize: 13, color: '#F0F0FF' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: s.accent }} />
+                  <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>
                     {t.title}
                   </span>
                   <button
@@ -140,13 +144,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                       width: 30,
                       height: 30,
                       borderRadius: 8,
-                      border: `1px solid ${s.border}`,
+                      border: `1px solid var(--border)`,
                       background: 'transparent',
-                      color: s.accent,
+                      color: 'var(--foreground-muted)',
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 12,
                       cursor: 'pointer',
-                      transition: 'transform 140ms ease-out, background 180ms ease-out',
+                      transition: 'transform 140ms var(--ease-ui), background 180ms var(--ease-ui)',
                     }}
                     onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.98)')}
                     onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
@@ -155,6 +159,19 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     ×
                   </button>
                 </div>
+
+                <motion.div
+                  aria-hidden
+                  initial={false}
+                  animate={{ scaleX: 0 }}
+                  transition={{ duration: remaining / 1000, ease: [0.23, 1, 0.32, 1] }}
+                  style={{
+                    height: 2,
+                    background: s.accent,
+                    opacity: 0.35,
+                    transformOrigin: 'left',
+                  }}
+                />
               </motion.div>
             );
           })}

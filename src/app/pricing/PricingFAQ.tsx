@@ -4,8 +4,8 @@ import { useState } from 'react';
 
 const FAQS = [
   {
-    q: 'Is the MIDI royalty-free?',
-    a: 'Yes — you own what you generate; Pro adds a commercial license.',
+    q: 'Can I use generated MIDI commercially?',
+    a: 'Pro and Studio include a commercial license. See the License page for details.',
   },
   {
     q: 'What DAWs does it work with?',
@@ -73,14 +73,14 @@ export function PricingFAQ() {
               >
                 <span
                   className="font-semibold pr-2"
-                  style={{ fontFamily: 'Syne, sans-serif', fontSize: 17, color: 'var(--foreground)' }}
+                  style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', color: 'var(--foreground)', lineHeight: 1.2 }}
                 >
                   {item.q}
                 </span>
                 <Chevron open={open} />
               </button>
               <div
-                className="overflow-hidden transition-[max-height,opacity] duration-200 ease-out"
+                className="overflow-hidden transition-[max-height,opacity] duration-200 ease-ui"
                 style={{
                   maxHeight: open ? 120 : 0,
                   opacity: open ? 1 : 0,

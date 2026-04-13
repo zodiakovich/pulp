@@ -19,7 +19,7 @@ function Confetti() {
     return () => { document.head.removeChild(style); };
   }, []);
 
-  const colors = ['#FF6D3F', '#00B894', '#E94560', '#A78BFA', '#FFFFFF'];
+  const colors = ['#FF6D3F', '#00B894', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.40)', 'rgba(255,255,255,0.90)'];
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -41,10 +41,9 @@ function Confetti() {
               borderRadius: 2,
               background: color,
               opacity: 0,
-              animation: `confetti-fall ${dur}s ease-out ${delay}s forwards`,
+              animation: `confetti-fall ${dur}s cubic-bezier(0.23, 1, 0.32, 1) ${delay}s forwards`,
               // CSS vars used inside keyframes
               ...( { ['--x' as any]: '0px', ['--drift' as any]: drift } as any ),
-              boxShadow: `0 10px 40px ${color}22`,
             }}
           />
         );
@@ -63,7 +62,7 @@ export default function ProSuccessPage() {
         <p style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', letterSpacing: '0.08em', fontSize: 12 }}>
           PRO ACTIVATED
         </p>
-        <h1 className="mt-3" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 44, letterSpacing: '-0.02em' }}>
+        <h1 className="mt-3" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 32, letterSpacing: '-0.02em', lineHeight: 1.15 }}>
           You&apos;re now Pro!
         </h1>
         <p className="mt-3" style={{ color: 'var(--muted)' }}>

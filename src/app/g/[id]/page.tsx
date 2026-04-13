@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { supabase } from '@/lib/supabase';
 import type { GenerationResult, NoteEvent } from '@/lib/music-engine';
 import { notFound } from 'next/navigation';
+import { clipDescription } from '@/lib/seo';
+import { pageMeta } from '@/lib/seo-metadata';
 import { PlayButton } from './PlayButton';
 import { PianoRollViz } from './PianoRollViz';
 
@@ -88,46 +90,46 @@ export default async function GenerationPage({
           <div className="min-w-0">
             <p
               className="text-xs mb-3"
-              style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)', letterSpacing: '0.08em' }}
+              style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)', letterSpacing: '0.08em' }}
             >
               GENERATION
             </p>
             <h1
               className="font-extrabold leading-[1.1] mb-3"
-              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(28px, 3.8vw, 44px)', letterSpacing: '-0.02em' }}
+              style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 'clamp(24px, 3.8vw, 34px)', letterSpacing: '-0.02em', lineHeight: 1.15 }}
             >
               {prompt || 'Untitled prompt'}
             </h1>
             <div className="flex flex-wrap gap-2">
               <span
                 className="px-2 py-1 rounded-md text-xs"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A', background: '#111118', border: '1px solid #1A1A2E' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
                 {genre}
               </span>
               <span
                 className="px-2 py-1 rounded-md text-xs"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A', background: '#111118', border: '1px solid #1A1A2E' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
                 {keyGuess}
               </span>
               <span
                 className="px-2 py-1 rounded-md text-xs"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A', background: '#111118', border: '1px solid #1A1A2E' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
                 {bpm} BPM
               </span>
               {inspiration && (
                 <span
                   className="px-2 py-1 rounded-md text-xs"
-                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.75)', background: '#111118', border: '1px solid #1A1A2E' }}
+                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.50)', background: 'var(--surface)', border: '1px solid var(--border)' }}
                 >
                   {inspiration}
                 </span>
               )}
               <span
                 className="px-2 py-1 rounded-md text-xs"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)', background: '#111118', border: '1px solid #1A1A2E' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)', background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
                 /g/{id}
               </span>
@@ -143,10 +145,10 @@ export default async function GenerationPage({
           <PianoRollViz layers={layers} bars={bars} />
         </div>
 
-        <div className="mt-8 rounded-2xl p-6" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
+        <div className="mt-8 rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <p
             className="text-xs mb-3"
-            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)', letterSpacing: '0.08em' }}
+            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)', letterSpacing: '0.08em' }}
           >
             CHORD PROGRESSION
           </p>
@@ -155,7 +157,7 @@ export default async function GenerationPage({
               <span
                 key={`${name}-${i}`}
                 className="text-sm"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}
               >
                 {name}
                 {i < chords.length - 1 && <span style={{ color: 'rgba(138,138,154,0.35)' }}> → </span>}
@@ -164,7 +166,7 @@ export default async function GenerationPage({
           </div>
         </div>
 
-        <div className="mt-4 rounded-2xl p-6" style={{ background: '#0D0D12', border: '1px solid #1A1A2E' }}>
+        <div className="mt-4 rounded-2xl p-6" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
           <p
             className="text-xs"
             style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.45)' }}
@@ -173,16 +175,16 @@ export default async function GenerationPage({
           </p>
         </div>
 
-        <div className="mt-6 rounded-2xl p-6 flex items-center justify-between gap-4 flex-wrap" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
-          <p style={{ fontFamily: 'DM Sans, sans-serif', color: '#F0F0FF', fontWeight: 600 }}>
-            Make your own — try pulp free
+        <div className="mt-6 rounded-2xl p-6 flex items-center justify-between gap-4 flex-wrap" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <p style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--text)', fontWeight: 600 }}>
+            Generate your own pattern
           </p>
           <a
             href="/"
             className="btn-primary btn-sm"
             style={{ textDecoration: 'none' }}
           >
-            Go to pulp
+            Start generating
           </a>
         </div>
       </div>
@@ -190,24 +192,32 @@ export default async function GenerationPage({
   );
 }
 
+function titleSegmentFromPrompt(prompt: string): string {
+  const t = (prompt || '').trim();
+  if (!t) return 'Shared generation';
+  if (t.length <= 48) return t;
+  return `${t.slice(0, 45)}…`;
+}
+
 export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Metadata> {
   const { id } = await params;
+  const path = `/g/${id}`;
   const { data } = await supabase
     .from('generations')
-    .select('genre, bpm, layers, is_public')
+    .select('genre, bpm, layers, is_public, prompt')
     .eq('id', id)
     .eq('is_public', true)
     .maybeSingle();
 
-  const url = `https://pulp.bypapaya.com/g/${id}`;
   if (!data) {
-    return {
-      title: 'pulp',
-      description: 'AI MIDI generator',
-      openGraph: { title: 'pulp', description: 'AI MIDI generator', url },
-    };
+    return pageMeta({
+      title: 'Shared generation',
+      description:
+        'This shared MIDI link is unavailable or private. Use pulp to generate editable melody, chords, bass, and drums from a text prompt.',
+      path,
+    });
   }
   const genre = (data.genre as string) || 'beat';
   const bpm = (data.bpm as number) || 0;
@@ -224,21 +234,15 @@ export async function generateMetadata(
     const best = counts.reduce((bi, v, i) => (v > counts[bi]! ? i : bi), 0);
     return NOTE_NAMES[best] ?? '—';
   })();
-  const desc = `${genre} · ${key} · ${bpm} BPM`;
+  const prompt = (data.prompt as string) || '';
+  const titleSeg = titleSegmentFromPrompt(prompt);
+  const desc = clipDescription(
+    `${genre} at ${bpm} BPM, key ${key}. ${prompt ? `“${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}” ` : ''}Preview shared MIDI from pulp or export to your DAW.`,
+  );
 
-  return {
-    title: 'Check out this beat I made on pulp',
+  return pageMeta({
+    title: titleSeg,
     description: desc,
-    openGraph: {
-      title: 'Check out this beat I made on pulp',
-      description: desc,
-      url,
-      siteName: 'pulp',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: 'Check out this beat I made on pulp',
-      description: desc,
-    },
-  };
+    path,
+  });
 }

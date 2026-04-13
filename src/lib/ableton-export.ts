@@ -1,12 +1,14 @@
 import type { GenerationResult, NoteEvent } from './music-engine';
+import { DS } from './design-system';
 
 type AbletonLayer = 'Melody' | 'Chords' | 'Bass' | 'Drums';
 
+/** Hex approximations of DS layer tints (accent + white opacities) for Ableton XML Color fields. */
 const TRACKS: Array<{ key: keyof GenerationResult; name: AbletonLayer; color: string }> = [
-  { key: 'melody', name: 'Melody', color: '#FF6D3F' },
-  { key: 'chords', name: 'Chords', color: '#A78BFA' },
-  { key: 'bass', name: 'Bass', color: '#00B894' },
-  { key: 'drums', name: 'Drums', color: '#E94560' },
+  { key: 'melody', name: 'Melody', color: DS.accent },
+  { key: 'chords', name: 'Chords', color: '#919191' },
+  { key: 'bass', name: 'Bass', color: '#6C6C6C' },
+  { key: 'drums', name: 'Drums', color: '#4F4F4F' },
 ];
 
 function escapeXml(s: string): string {

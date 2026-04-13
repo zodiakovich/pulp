@@ -2,15 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { GENRES, STYLE_TAGS, generateTrack, getDefaultParams, type GenerationParams, type GenerationResult, type NoteEvent } from '@/lib/music-engine';
 import { Navbar } from '@/components/Navbar';
-import { PianoRollEditor } from '@/components/PianoRollEditor';
 import { playNotesWithMix as playNotes, stopAllPlayback } from '@/lib/mix-engine';
 import { useToast } from '@/components/toast/useToast';
 import { AnimatePresence, motion } from 'framer-motion';
+import { LAYER_VIZ_COLORS } from '@/lib/design-system';
+import { SiteFooter } from '@/components/SiteFooter';
+
+const PianoRollEditor = dynamic(
+  () => import('@/components/PianoRollEditor').then(m => ({ default: m.PianoRollEditor })),
+  { ssr: false },
+);
 
 type CollabState = {
   genre: string;
@@ -80,6 +87,14 @@ export default function CollabSessionPage() {
   const [hostKey, setHostKey] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'err'>('idle');
   const [footerCopy, setFooterCopy] = useState<'idle' | 'ok'>('idle');
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    };
+  }, []);
 
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [params, setParams] = useState<GenerationParams>(() => ({
@@ -99,7 +114,16 @@ export default function CollabSessionPage() {
     const key = myPresenceKey;
     let h = 0;
     for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-    const palette = ['#FF6D3F', '#A78BFA', '#00B894', '#E94560', '#FFAB91', '#4A4A5A', '#60A5FA', '#F59E0B'];
+    const palette = [
+      '#FF6D3F',
+      'rgba(255,255,255,0.55)',
+      'rgba(255,255,255,0.45)',
+      'rgba(255,255,255,0.35)',
+      'rgba(255,255,255,0.28)',
+      'rgba(255,255,255,0.22)',
+      'rgba(255,255,255,0.18)',
+      'rgba(255,255,255,0.12)',
+    ];
     return palette[h % palette.length]!;
   }, [myPresenceKey]);
 
@@ -393,8 +417,16 @@ export default function CollabSessionPage() {
     return Object.entries(presenceMap).sort((a, b) => (a[1].joinedAt ?? 0) - (b[1].joinedAt ?? 0));
   }, [presenceMap]);
 
-  const dotColor = connStatus === 'connected' ? '#00B894' : connStatus === 'reconnecting' ? '#F59E0B' : '#E94560';
-  const dotLabel = connStatus === 'connected' ? 'Connected' : connStatus === 'reconnecting' ? 'Reconnecting…' : 'Disconnected';
+  const dotColor =
+    connStatus === 'connected'
+      ? '#00B894'
+      : connStatus === 'reconnecting'
+        ? '#FF6D3F'
+        : 'rgba(255,255,255,0.32)';
+  const dotLabel =
+    connStatus === 'connected' ? 'Connected' : connStatus === 'reconnecting' ? 'Reconnecting…' : 'Disconnected';
+  const dotAnimClass =
+    connStatus === 'connected' ? 'conn-dot--connected' : connStatus === 'reconnecting' ? 'conn-dot--reconnecting' : '';
 
   const copySessionLink = async () => {
     try {
@@ -439,20 +471,28 @@ export default function CollabSessionPage() {
             >
               {sessionCode}
             </code>
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ height: 36, padding: '0 12px', fontSize: 12 }}
-              onClick={() => void copySessionLink()}
-            >
-              {copyState === 'ok' ? 'Copied!' : copyState === 'err' ? 'Copy failed' : 'Copy invite link'}
-            </button>
+            {copyState === 'err' ? (
+              <span className="inline-flex items-center rounded-lg border px-3 text-xs" style={{ height: 36, borderColor: 'var(--border)', color: 'var(--muted)' }}>
+                Copy failed
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="btn-secondary copy-label-stack"
+                data-copied={copyState === 'ok' ? 'true' : 'false'}
+                style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+                onClick={() => void copySessionLink()}
+              >
+                <span className="copy-label-stack__a">Copy invite link</span>
+                <span className="copy-label-stack__b">Copied</span>
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <span
-                className={`rounded-full flex-shrink-0 ${connStatus === 'connected' ? 'animate-pulse' : ''}`}
+                className={`rounded-full flex-shrink-0 ${dotAnimClass}`}
                 style={{
                   width: 8,
                   height: 8,
@@ -473,7 +513,7 @@ export default function CollabSessionPage() {
                     className="w-7 h-7 rounded-full flex items-center justify-center text-xs"
                     style={{
                       background: meta.color,
-                      color: '#09090B',
+                      color: 'var(--bg)',
                       border: '2px solid var(--bg)',
                       fontFamily: 'JetBrains Mono, monospace',
                     }}
@@ -505,14 +545,48 @@ export default function CollabSessionPage() {
             >
               {chatOpen ? 'Close chat' : 'Chat'}
             </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ height: 36, padding: '0 14px', fontSize: 13 }}
-              onClick={() => router.push('/')}
-            >
-              Leave session
-            </button>
+            {leaveConfirm ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--muted)' }}>Are you sure?</span>
+                <button
+                  type="button"
+                  className="btn-primary btn-sm"
+                  style={{ height: 36, padding: '0 14px', fontSize: 13 }}
+                  onClick={() => {
+                    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+                    leaveTimerRef.current = null;
+                    setLeaveConfirm(false);
+                    router.push('/');
+                  }}
+                >
+                  Leave
+                </button>
+                <button
+                  type="button"
+                  style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  onClick={() => {
+                    setLeaveConfirm(false);
+                    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+                    leaveTimerRef.current = null;
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ height: 36, padding: '0 14px', fontSize: 13 }}
+                onClick={() => {
+                  setLeaveConfirm(true);
+                  if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+                  leaveTimerRef.current = setTimeout(() => setLeaveConfirm(false), 5000);
+                }}
+              >
+                Leave session
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -650,7 +724,7 @@ export default function CollabSessionPage() {
                     inset: isFullscreen ? 0 : undefined,
                     zIndex: isFullscreen ? 90 : 1,
                     padding: isFullscreen ? 16 : 0,
-                    background: isFullscreen ? 'rgba(9,9,11,0.92)' : 'transparent',
+                    background: isFullscreen ? 'color-mix(in srgb, var(--bg) 92%, transparent)' : 'transparent',
                   }}
                 >
                   {isFullscreen ? (
@@ -669,7 +743,7 @@ export default function CollabSessionPage() {
                     className={isFullscreen ? 'overflow-hidden' : 'rounded-2xl overflow-hidden'}
                     style={{
                       border: '1px solid var(--border)',
-                      background: '#0A0A0F',
+                      background: 'var(--bg)',
                       position: 'relative',
                       borderRadius: isFullscreen ? 16 : undefined,
                       height: isFullscreen ? 'calc(100vh - 32px)' : undefined,
@@ -679,7 +753,7 @@ export default function CollabSessionPage() {
                     <div style={{ position: 'relative', zIndex: 1 }}>
                     <PianoRollEditor
                       notes={(result?.[editorLayer] ?? []) as NoteEvent[]}
-                      color={editorLayer === 'melody' ? '#FF6D3F' : editorLayer === 'chords' ? '#A78BFA' : editorLayer === 'bass' ? '#00B894' : '#60A5FA'}
+                      color={LAYER_VIZ_COLORS[editorLayer] ?? LAYER_VIZ_COLORS.melody}
                       bars={16}
                       layerName={editorLayer}
                       chordOverlayNotes={chordOverlayNotes}
@@ -711,8 +785,7 @@ export default function CollabSessionPage() {
                                 height: 10,
                                 borderRadius: 999,
                                 background: m.color,
-                                boxShadow: '0 10px 30px rgba(0,0,0,0.45)',
-                                border: '2px solid rgba(9,9,11,0.9)',
+                                border: '2px solid rgba(10,10,11,0.95)',
                               }}
                             />
                             <div
@@ -720,9 +793,9 @@ export default function CollabSessionPage() {
                                 marginTop: 6,
                                 display: 'inline-block',
                                 padding: '2px 8px',
-                                borderRadius: 999,
-                                background: 'rgba(17,17,24,0.92)',
-                                border: '1px solid rgba(42,42,64,0.8)',
+                                borderRadius: 8,
+                                background: 'var(--surface)',
+                                border: '1px solid var(--border)',
                                 color: 'var(--foreground)',
                                 fontFamily: 'JetBrains Mono, monospace',
                                 fontSize: 11,
@@ -786,7 +859,7 @@ export default function CollabSessionPage() {
                         width: 6,
                         height: 6,
                         borderRadius: '50%',
-                        background: '#00B894',
+                        background: 'var(--accent)',
                         marginTop: 6,
                         flexShrink: 0,
                       }}
@@ -817,14 +890,14 @@ export default function CollabSessionPage() {
               right: 0,
               bottom: 0,
               width: 360,
-              background: '#111118',
-              borderLeft: '1px solid #1A1A2E',
+              background: 'var(--surface)',
+              borderLeft: '1px solid var(--border)',
               zIndex: 80,
               display: 'flex',
               flexDirection: 'column',
             }}
           >
-            <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid #1A1A2E' }}>
+            <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>Session chat</div>
               <button
                 type="button"
@@ -840,7 +913,7 @@ export default function CollabSessionPage() {
                 <div style={{ fontSize: 13, color: 'var(--foreground-muted)' }}>No messages yet.</div>
               ) : (
                 messages.map(m => (
-                  <div key={m.id} className="rounded-xl p-3" style={{ background: 'rgba(9,9,11,0.55)', border: '1px solid rgba(42,42,64,0.65)' }}>
+                  <div key={m.id} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-weak)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: m.color }}>{m.from}</div>
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>{m.time}</div>
@@ -850,7 +923,7 @@ export default function CollabSessionPage() {
                 ))
               )}
             </div>
-            <div className="p-4" style={{ borderTop: '1px solid #1A1A2E' }}>
+            <div className="p-4" style={{ borderTop: '1px solid var(--border)' }}>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -878,10 +951,12 @@ export default function CollabSessionPage() {
         ) : null}
       </AnimatePresence>
 
-      {/* SECTION 4 — Footer */}
-      <footer className="px-4 sm:px-8 py-10 mt-auto" style={{ borderTop: '1px solid var(--border)' }}>
+      {/* Invite link */}
+      <section className="px-4 sm:px-8 py-12 mt-auto" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="max-w-[1280px] mx-auto text-center space-y-4">
-          <p style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Share this link to invite producers:</p>
+          <p style={{ fontSize: 14, color: 'var(--foreground-muted)', fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif' }}>
+            Share this link to invite producers
+          </p>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-2xl mx-auto">
             <code
               className="block flex-1 text-left px-4 py-3 rounded-xl text-xs sm:text-sm break-all cursor-pointer select-all"
@@ -896,18 +971,27 @@ export default function CollabSessionPage() {
             >
               {fullUrl || '…'}
             </code>
-            <button type="button" className="btn-secondary flex-shrink-0" style={{ height: 44, padding: '0 16px' }} onClick={() => void copyFooterUrl()}>
-              {footerCopy === 'ok' ? 'Copied' : 'Copy'}
+            <button
+              type="button"
+              className="btn-secondary flex-shrink-0 copy-label-stack"
+              data-copied={footerCopy === 'ok' ? 'true' : 'false'}
+              style={{ height: 44, padding: '0 16px' }}
+              onClick={() => void copyFooterUrl()}
+            >
+              <span className="copy-label-stack__a">Copy</span>
+              <span className="copy-label-stack__b">Copied</span>
             </button>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--muted)', maxWidth: 520, margin: '0 auto' }}>
+          <p style={{ fontSize: 13, color: 'var(--muted)', maxWidth: 520, margin: '0 auto', fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif' }}>
             Sessions are temporary — generate and download before leaving
           </p>
           <Link href="/" className="nav-link inline-block text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
             ← Back to pulp
           </Link>
         </div>
-      </footer>
+      </section>
+
+      <SiteFooter />
     </div>
   );
 }

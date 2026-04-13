@@ -1,10 +1,20 @@
 import { Navbar } from '@/components/Navbar';
+import { pageMeta } from '@/lib/seo-metadata';
+
+export const revalidate = 3600;
+
+export const metadata = pageMeta({
+  title: 'Blog',
+  description:
+    'Production tips, genre breakdowns, and music theory for electronic producers—MIDI-focused articles from the pulp team.',
+  path: '/blog',
+});
 
 const TAG_COLORS: Record<string, string> = {
-  Theory: '#A78BFA',
+  Theory: '#FF6D3F',
   Production: '#FF6D3F',
-  Tutorial: '#00B894',
-  Genre: '#8A8A9A',
+  Tutorial: 'rgba(255,255,255,0.40)',
+  Genre: 'rgba(255,255,255,0.50)',
 };
 
 const FEATURED = {
@@ -63,7 +73,7 @@ export default function BlogIndexPage() {
           {/* Header */}
           <h1
             className="font-extrabold text-gradient"
-            style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 44, letterSpacing: '-0.02em', lineHeight: 1.1 }}
+            style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 36, letterSpacing: '-0.02em', lineHeight: 1.15 }}
           >
             The Pulp Blog
           </h1>
@@ -106,7 +116,7 @@ export default function BlogIndexPage() {
 
                 <div
                   className="mt-4"
-                  style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 28, letterSpacing: '-0.015em', lineHeight: 1.15 }}
+                  style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', lineHeight: 1.2 }}
                 >
                   {FEATURED.title}
                 </div>
@@ -176,7 +186,7 @@ export default function BlogIndexPage() {
                     </span>
                   </div>
 
-                  <div className="mt-4" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, letterSpacing: '-0.01em', lineHeight: 1.25 }}>
+                  <div className="mt-4" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                     {p.title}
                   </div>
 
@@ -190,7 +200,7 @@ export default function BlogIndexPage() {
 
           {/* Subscribe */}
           <div className="mt-10 rounded-2xl p-8 bg-[var(--surface)] border border-[color:var(--border)]">
-            <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, letterSpacing: '-0.01em' }}>
+            <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               New articles every Monday. Subscribe to get notified.
             </div>
             <div className="mt-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">

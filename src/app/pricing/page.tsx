@@ -1,31 +1,38 @@
 import Link from 'next/link';
-import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { PricingFAQ } from './PricingFAQ';
 import { PricingPlansClient } from './PricingPlansClient';
-import { CrispSupportLink } from '@/components/CrispSupportLink';
+import { SiteFooter } from '@/components/SiteFooter';
+import { PricingJsonLd } from './PricingJsonLd';
+import { pageMeta } from '@/lib/seo-metadata';
 
-export const metadata: Metadata = {
-  title: 'Pricing — Pulp',
-  description: 'Free, Pro, and Studio plans for AI MIDI generation.',
-};
+export const dynamic = 'force-static';
+
+export const metadata = pageMeta({
+  title: 'Pricing',
+  description:
+    'pulp pricing: Free, Pro ($7/mo), and Studio ($19/mo) with monthly MIDI generation limits, Stripe billing, and commercial license on paid plans.',
+  path: '/pricing',
+});
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen" style={{ background: '#09090B' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
+      <PricingJsonLd />
       <Navbar active="pricing" />
 
       <PricingPlansClient />
 
-      <section className="px-4 sm:px-8 pb-32" style={{ background: '#09090B' }}>
+      <section className="px-4 sm:px-8 pb-32" style={{ background: 'var(--bg)' }}>
         <h2
           className="mb-14 text-center"
           style={{
-            fontFamily: "'Syne', sans-serif",
-            fontWeight: 800,
+            fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+            fontWeight: 700,
             fontSize: 'clamp(1.5rem, 3vw, 1.75rem)',
             letterSpacing: '-0.02em',
-            color: '#F0F0FF',
+            color: 'var(--text)',
+            lineHeight: 1.2,
           }}
         >
           FAQ
@@ -33,52 +40,31 @@ export default function PricingPage() {
         <PricingFAQ />
       </section>
 
-      <section className="w-full px-4 sm:px-8 py-24" style={{ background: '#111118', borderTop: '1px solid #1A1A2E' }}>
+      <section className="w-full px-4 sm:px-8 py-24" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}>
         <div className="mx-auto flex max-w-[720px] flex-col items-center gap-8 text-center">
           <p
             style={{
-              fontFamily: "'Syne', sans-serif",
-              fontWeight: 800,
+              fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+              fontWeight: 700,
               fontSize: 'clamp(1.25rem, 3vw, 1.625rem)',
-              color: '#F0F0FF',
-              lineHeight: 1.35,
+              color: 'var(--text)',
+              lineHeight: 1.2,
+              letterSpacing: '-0.02em',
             }}
           >
-            Try Pulp on the home page — no card required.
+            Start on the home page.
           </p>
           <Link
             href="/"
             className="inline-flex min-h-[56px] items-center justify-center rounded-xl px-8 py-4 text-base font-semibold transition-all"
-            style={{ background: '#FF6D3F', color: '#09090B', textDecoration: 'none', fontFamily: 'DM Sans, sans-serif' }}
+            style={{ background: 'var(--accent)', color: 'var(--bg)', textDecoration: 'none', fontFamily: 'DM Sans, sans-serif' }}
           >
             Start generating
           </Link>
         </div>
       </section>
 
-      <footer className="px-4 sm:px-8 py-14 text-center" style={{ borderTop: '1px solid #1A1A2E', background: '#09090B' }}>
-        <div
-          className="mb-3 flex flex-wrap items-center justify-center gap-4 text-xs"
-          style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}
-        >
-          <CrispSupportLink className="footer-link" label="Support" />
-          <Link href="/legal/terms" className="footer-link">
-            Terms
-          </Link>
-          <Link href="/legal/privacy" className="footer-link">
-            Privacy
-          </Link>
-          <Link href="/legal/license" className="footer-link">
-            License
-          </Link>
-        </div>
-        <span
-          className="text-xs"
-          style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}
-        >
-          © 2026 PULP. MADE BY PAPAYA.
-        </span>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -2,6 +2,14 @@ import { supabase } from '@/lib/supabase';
 import { GENRES } from '@/lib/music-engine';
 import { ExploreGallery } from './ExploreGallery';
 import { Navbar } from '@/components/Navbar';
+import { pageMeta } from '@/lib/seo-metadata';
+
+export const metadata = pageMeta({
+  title: 'Explore',
+  description:
+    'Browse public MIDI generations from the pulp community—genre, BPM, and prompts—or open a pattern and learn from real examples.',
+  path: '/explore',
+});
 
 const SEED_GENERATIONS = [
   { id: 'seed-1', prompt: 'dark melodic techno, 128bpm, Am', genre: 'Melodic Techno', bpm: 128, style_tag: 'Dark Hypnotic Dub', created_at: new Date().toISOString() },

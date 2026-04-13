@@ -69,7 +69,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
       >
         {label}
       </p>
-      <p className="font-extrabold" style={{ fontFamily: 'Syne, sans-serif', fontSize: 36, color: 'var(--foreground)' }}>
+      <p className="font-extrabold" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, fontSize: 32, letterSpacing: '0.02em', color: 'var(--foreground)' }}>
         {value}
       </p>
     </div>
@@ -95,7 +95,7 @@ function CreditsStatWithUpgrade({ value, isPro }: { value: string; isPro: boolea
         >
           Credits remaining
         </p>
-        <p className="font-extrabold" style={{ fontFamily: 'Syne, sans-serif', fontSize: 36, color: 'var(--foreground)' }}>
+        <p className="font-extrabold" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, fontSize: 32, letterSpacing: '0.02em', color: 'var(--foreground)' }}>
           {value}
         </p>
       </div>
@@ -194,7 +194,7 @@ export default async function ProfilePage() {
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
-                  alt=""
+                  alt={`${displayName} profile photo`}
                   width={72}
                   height={72}
                   className="rounded-full flex-shrink-0"
@@ -209,7 +209,9 @@ export default async function ProfilePage() {
                     border: '1px solid var(--border)',
                     background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
                     color: 'var(--accent)',
-                    fontFamily: 'Syne, sans-serif',
+                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                    fontWeight: 700,
+                    letterSpacing: '-0.02em',
                   }}
                   aria-hidden
                 >
@@ -217,7 +219,7 @@ export default async function ProfilePage() {
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="truncate" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 26, color: 'var(--foreground)' }}>
+                <h1 className="truncate" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--foreground)' }}>
                   {displayName}
                 </h1>
                 {email ? (
@@ -276,7 +278,7 @@ export default async function ProfilePage() {
             <div className="space-y-3">
               {recentGenerations.length === 0 ? (
                 <div className="rounded-2xl p-6" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
-                  <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--foreground)' }}>
+                  <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--foreground)' }}>
                     No generations yet
                   </p>
                   <p className="mt-2" style={{ color: 'var(--muted)', fontSize: 14 }}>
@@ -303,7 +305,7 @@ export default async function ProfilePage() {
                       <div className="min-w-0 flex-1">
                         <p
                           className="font-extrabold line-clamp-2"
-                          style={{ fontFamily: 'Syne, sans-serif', fontSize: 17, color: 'var(--foreground)' }}
+                          style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--foreground)' }}
                         >
                           {promptText}
                         </p>

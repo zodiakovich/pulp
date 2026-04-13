@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useState, useCallback, useRef, useEffect, useMemo, type DragEvent } from 'react';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { motion, AnimatePresence, type Variants, useReducedMotion, useScroll, useSpring, useTransform } from 'framer-motion';
 import { useAuth } from '@clerk/nextjs';
 import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
 import {
@@ -11,28 +11,50 @@ import {
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { playNotesWithMix as playNotes, renderNotesWithMixToWav, stopAllPlayback } from '@/lib/mix-engine';
-import { playAll, stopPlayAll } from '@/lib/tone-play-all';
-import { playTonePreview, stopTonePreview } from '@/lib/tone-preview';
+import { playAll, stopPlayAll, playTonePreview, stopTonePreview } from '@/lib/tone-lazy';
 import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { track } from '@vercel/analytics';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
 import { generateAbletonAlsBlob } from '@/lib/ableton-export';
 import { mapArtistProfileToHints, resolveArtistPromptChain } from '@/lib/artist-resolver';
+import dynamic from 'next/dynamic';
 import { Navbar } from '@/components/Navbar';
-import { PianoRollEditor } from '@/components/PianoRollEditor';
-import { StudioMidiUploadModal, type MidiUploadSuccessPayload } from '@/components/StudioMidiUploadModal';
-import { StudioAudioToMidiModal } from '@/components/StudioAudioToMidiModal';
-import { CrispSupportLink } from '@/components/CrispSupportLink';
+import type { MidiUploadSuccessPayload } from '@/components/StudioMidiUploadModal';
+import { EmptyState } from '@/components/EmptyState';
+import { ButtonLoadingDots } from '@/components/ButtonLoadingDots';
+import { SiteFooter } from '@/components/SiteFooter';
+
+const PianoRollEditor = dynamic(
+  () => import('@/components/PianoRollEditor').then(m => ({ default: m.PianoRollEditor })),
+  { ssr: false },
+);
+const OnboardingOverlay = dynamic(
+  () => import('@/components/OnboardingOverlay').then(m => ({ default: m.OnboardingOverlay })),
+  { ssr: false },
+);
+const StudioMidiUploadModal = dynamic(
+  () => import('@/components/StudioMidiUploadModal').then(m => ({ default: m.StudioMidiUploadModal })),
+  { ssr: false },
+);
+const StudioAudioToMidiModal = dynamic(
+  () => import('@/components/StudioAudioToMidiModal').then(m => ({ default: m.StudioAudioToMidiModal })),
+  { ssr: false },
+);
 import type { PlanType } from '@/lib/credits';
+import { DS, LAYER_VIZ_COLORS, readCssColor, getLayerVizColorsForCanvas } from '@/lib/design-system';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import Link from 'next/link';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
-const EASE_OUT = [0, 0, 0.2, 1] as const;
+/** Default UI easing — hover, enters, in-view */
+const EASE_UI = [0.23, 1, 0.32, 1] as const;
+/** Exit / dismiss */
+const EASE_EXIT = [0.55, 0, 1, 0.45] as const;
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_OUT } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_UI } },
 };
 
 const staggerContainer: Variants = {
@@ -42,7 +64,7 @@ const staggerContainer: Variants = {
 
 const reveal: Variants = {
   hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_OUT } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_UI } },
 };
 
 const revealContainer: Variants = {
@@ -54,13 +76,81 @@ const scrollSection = {
   initial: { opacity: 0, y: 14 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true, amount: 0.12 },
-  transition: { duration: 0.4, ease: EASE_OUT },
+  transition: { duration: 0.4, ease: EASE_UI },
 } as const;
 
 const LANDING_STATS: { value: string; label: string }[] = [
   { value: '10,000+', label: ' generations' },
   { value: '300+', label: ' artists' },
   { value: '50+', label: ' genres' },
+];
+
+const QUICK_START_TEMPLATES: {
+  name: string;
+  subtitle: string;
+  prompt: string;
+  preset: Pick<GenerationParams, 'genre' | 'bpm' | 'key' | 'scale'>;
+}[] = [
+  {
+    name: 'Acid Drop',
+    subtitle: '138 BPM · Minor · Driving melody + acid bass',
+    prompt: 'acid techno groove, 138bpm, minor key, driving melody, 303 acid bass, tight hats, warehouse energy',
+    preset: { genre: 'hard_techno', bpm: 138, key: 'A', scale: 'minor' },
+  },
+  {
+    name: 'UK Garage',
+    subtitle: '132 BPM · Minor · Shuffle drums + vocal chops',
+    prompt: 'UK garage groove, 132bpm, minor, shuffling drums, swung hats, warm chords, chopped hooks, bouncy bass',
+    preset: { genre: 'uk_garage', bpm: 132, key: 'F', scale: 'minor' },
+  },
+  {
+    name: 'Deep Hypnotic',
+    subtitle: '124 BPM · Minor · Minimal drums + evolving chords',
+    prompt: 'deep hypnotic minimal techno, 124bpm, minor, restrained drums, evolving chords, subtle movement, late-night',
+    preset: { genre: 'minimal_tech', bpm: 124, key: 'D', scale: 'minor' },
+  },
+  {
+    name: 'Bouncy Funk',
+    subtitle: '126 BPM · Major · Funky bass + bright stabs',
+    prompt: 'bouncy funky house, 126bpm, major key, punchy bassline, bright chord stabs, playful rhythm, tight groove',
+    preset: { genre: 'tech_house', bpm: 126, key: 'G', scale: 'major' },
+  },
+  {
+    name: 'Melodic Techno',
+    subtitle: '128 BPM · Minor · Emotional chords + wide lead',
+    prompt: 'melodic techno, 128bpm, minor, emotional chord progression, wide lead melody, driving kick, clean low end',
+    preset: { genre: 'melodic_techno', bpm: 128, key: 'C', scale: 'minor' },
+  },
+  {
+    name: 'Afro Pulse',
+    subtitle: '122 BPM · Minor · Percussion swing + warm bass',
+    prompt: 'afro house pulse, 122bpm, minor, percussive swing, warm bass, organic groove, airy tops, rolling rhythm',
+    preset: { genre: 'afro_house', bpm: 122, key: 'E', scale: 'minor' },
+  },
+  {
+    name: 'Lo‑Fi Chill',
+    subtitle: '82 BPM · Minor · Soft chords + lazy drums',
+    prompt: 'lo-fi chillout, 82bpm, minor, soft chords, lazy drums, mellow melody, tape warmth, relaxed',
+    preset: { genre: 'lofi_hiphop', bpm: 82, key: 'A', scale: 'minor' },
+  },
+  {
+    name: 'Dark Minimal',
+    subtitle: '126 BPM · Minor · Sparse rhythm + tension',
+    prompt: 'dark minimal groove, 126bpm, minor, sparse drum pattern, tension, tight bass, short motifs, focused',
+    preset: { genre: 'minimal_tech', bpm: 126, key: 'F', scale: 'minor' },
+  },
+  {
+    name: 'Euphoric Trance',
+    subtitle: '140 BPM · Minor · Big chords + soaring lead',
+    prompt: 'euphoric trance, 140bpm, minor, big chord progression, soaring lead melody, energetic drums, uplifting',
+    preset: { genre: 'trance', bpm: 140, key: 'D', scale: 'minor' },
+  },
+  {
+    name: 'Broken Beat',
+    subtitle: '126 BPM · Minor · Broken drums + jazzy chords',
+    prompt: 'broken beat, 126bpm, minor, broken drum groove, syncopation, jazzy chords, snappy bass, swing',
+    preset: { genre: 'uk_garage', bpm: 126, key: 'G', scale: 'minor' },
+  },
 ];
 
 // ─── TYPES ───────────────────────────────────────────────────
@@ -105,6 +195,7 @@ function guessKeyFromLayers(layers: GenerationResult): string {
 
 function MiniPianoRollThumb({ layers }: { layers: GenerationResult }) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const colorScheme = useColorScheme();
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -116,14 +207,15 @@ function MiniPianoRollThumb({ layers }: { layers: GenerationResult }) {
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#0A0A0F';
+    const cv = getLayerVizColorsForCanvas();
+    ctx.fillStyle = readCssColor('--bg', '#0A0A0B');
     ctx.fillRect(0, 0, w, h);
 
     const all = [
-      ...(layers.melody ?? []).map(n => ({ n, c: '#FF6D3F' })),
-      ...(layers.chords ?? []).map(n => ({ n, c: '#A78BFA' })),
-      ...(layers.bass ?? []).map(n => ({ n, c: '#00B894' })),
-      ...(layers.drums ?? []).map(n => ({ n, c: '#E94560' })),
+      ...(layers.melody ?? []).map(n => ({ n, c: cv.melody })),
+      ...(layers.chords ?? []).map(n => ({ n, c: cv.chords })),
+      ...(layers.bass ?? []).map(n => ({ n, c: cv.bass })),
+      ...(layers.drums ?? []).map(n => ({ n, c: cv.drums })),
     ];
     if (all.length === 0) return;
     const bars = 4;
@@ -143,12 +235,12 @@ function MiniPianoRollThumb({ layers }: { layers: GenerationResult }) {
       ctx.fillRect(x0, y - hh / 2, ww, hh);
       ctx.globalAlpha = 1;
     }
-  }, [layers]);
+  }, [layers, colorScheme]);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: '100%', height: 48, display: 'block', borderRadius: 10, background: '#0A0A0F', border: '1px solid rgba(26,26,46,0.7)' }}
+      style={{ width: '100%', height: 48, display: 'block', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border-weak)' }}
     />
   );
 }
@@ -199,9 +291,9 @@ function OnboardingTooltip({
           top: targetRect.top - 6,
           width: targetRect.width + 12,
           height: targetRect.height + 12,
-          borderRadius: 14,
+          borderRadius: 16,
           border: '1px solid rgba(255,109,63,0.55)',
-          boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
+          boxShadow: `0 0 0 9999px rgba(10,10,11,0.55)`,
         }}
       />
 
@@ -210,13 +302,15 @@ function OnboardingTooltip({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
+        transition={{ duration: 0.2, ease: EASE_UI }}
         style={{
           left,
           top,
           width: maxW,
-          background: '#111118',
-          border: '1px solid #1A1A2E',
+          background: DS.surface,
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: `1px solid ${DS.border}`,
           borderRadius: 16,
           padding: 16,
           pointerEvents: 'auto',
@@ -229,9 +323,9 @@ function OnboardingTooltip({
             left: arrowLeft,
             width: 12,
             height: 12,
-            background: '#111118',
-            borderLeft: '1px solid #1A1A2E',
-            borderTop: '1px solid #1A1A2E',
+            background: 'var(--surface)',
+            borderLeft: `1px solid ${DS.border}`,
+            borderTop: `1px solid ${DS.border}`,
             transform: 'translateX(-50%) rotate(45deg)',
             top: arrowTop,
             bottom: arrowBottom,
@@ -239,24 +333,24 @@ function OnboardingTooltip({
         />
 
         <div className="flex items-center justify-between gap-4 mb-2">
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.55)', letterSpacing: '0.08em' }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--text-micro)', letterSpacing: '0.08em' }}>
             {stepLabel}
           </span>
           <button
             onClick={onSkip}
             className="text-xs transition-colors"
-            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.6)' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(138,138,154,0.6)')}
+            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
           >
             Skip
           </button>
         </div>
 
-        <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 16, color: '#F0F0FF' }}>
+        <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}>
           {title}
         </p>
-        <p className="mt-2" style={{ color: '#8A8A9A', fontSize: 13, lineHeight: 1.6 }}>
+        <p className="mt-2" style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
           {body}
         </p>
 
@@ -269,11 +363,11 @@ function OnboardingTooltip({
               fontFamily: 'JetBrains Mono, monospace',
               background: 'rgba(255,109,63,0.12)',
               border: '1px solid rgba(255,109,63,0.35)',
-              color: '#FF6D3F',
+              color: DS.accent,
               outline: 'none',
             }}
-            onFocus={e => (e.currentTarget.style.boxShadow = '0 0 0 2px rgba(255,109,63,0.25)')}
-            onBlur={e => (e.currentTarget.style.boxShadow = 'none')}
+            onFocus={e => (e.currentTarget.style.outline = '2px solid rgba(255,109,63,0.25)')}
+            onBlur={e => (e.currentTarget.style.outline = 'none')}
           >
             Next
           </button>
@@ -288,15 +382,17 @@ interface SpotlightButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElem
   children: React.ReactNode;
 }
 
-function SpotlightButton({ children, style, ...rest }: SpotlightButtonProps) {
+function SpotlightButton({ children, style, disabled, ...rest }: SpotlightButtonProps) {
   const ref = useRef<HTMLButtonElement>(null);
   const [spot, setSpot] = useState({ x: 0, y: 0, show: false });
 
   return (
     <button
       ref={ref}
+      disabled={disabled}
       style={{ ...style, position: 'relative', overflow: 'hidden' }}
       onMouseMove={e => {
+        if (disabled) return;
         const r = ref.current?.getBoundingClientRect();
         if (r) setSpot({ x: e.clientX - r.left, y: e.clientY - r.top, show: true });
       }}
@@ -325,6 +421,7 @@ function SpotlightButton({ children, style, ...rest }: SpotlightButtonProps) {
 // ─── PIANO ROLL ───────────────────────────────────────────────
 function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: string; height?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const colorScheme = useColorScheme();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -339,10 +436,10 @@ function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: s
     canvas.height = h * dpr;
     ctx.scale(dpr, dpr);
 
-    ctx.fillStyle = '#0A0A0F';
+    ctx.fillStyle = readCssColor('--piano-roll-bg', '#0A0A0B');
     ctx.fillRect(0, 0, w, h);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = readCssColor('--piano-roll-viz-grid', 'rgba(255,255,255,0.05)');
     ctx.lineWidth = 0.5;
     for (let x = 0; x < w; x += w / 16) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
@@ -380,21 +477,15 @@ function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: s
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }, [notes, color, height]);
+  }, [notes, color, height, colorScheme]);
 
   return (
     <canvas ref={canvasRef} className="w-full rounded-md piano-roll" style={{ height }} />
   );
 }
 
-// ─── LAYER COLORS ─────────────────────────────────────────────
-const LAYER_COLORS: Record<string, string> = {
-  melody: '#FF6D3F',
-  chords: '#A78BFA',
-  bass:   '#00B894',
-  drums:  '#E94560',
-  imported: '#A78BFA',
-};
+// ─── LAYER COLORS (strict palette) ────────────────────────────
+const LAYER_COLORS: Record<string, string> = LAYER_VIZ_COLORS;
 
 const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
 const EDITOR_LAYERS = [...LAYERS, 'imported'] as const;
@@ -416,7 +507,7 @@ function LayerCard({
 }) {
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const color = LAYER_COLORS[name] || '#FF6D3F';
+  const color = LAYER_COLORS[name] || DS.accent;
 
   const handlePlay = async () => {
     if (playing) { stopTonePreview(); setPlaying(false); return; }
@@ -446,17 +537,17 @@ function LayerCard({
       onDragEndCapture={() => setDragging(false)}
       style={{
         cursor: enabled && notes.length > 0 ? (dragging ? 'grabbing' : 'grab') : 'default',
-        border: dragging ? '1px solid #FF6D3F' : undefined,
+        border: dragging ? `1px solid ${DS.accent}` : undefined,
       }}
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
           <div>
-            <p className="text-sm font-semibold capitalize leading-tight" style={{ fontFamily: 'Syne, sans-serif' }}>
+            <p className="text-sm font-semibold capitalize leading-tight" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               {name}
             </p>
-            <p className="text-xs mt-0.5" style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>
               {notes.length} notes
             </p>
           </div>
@@ -501,7 +592,7 @@ function LayerCard({
       <p style={{
         fontFamily: 'JetBrains Mono, monospace',
         fontSize: 9,
-        color: 'rgba(138,138,154,0.35)',
+        color: 'rgba(255,255,255,0.30)',
         textAlign: 'center',
         marginTop: 8,
         letterSpacing: '0.06em',
@@ -816,14 +907,20 @@ function drawSheetMusic(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#0D0D12';
+  ctx.fillStyle = readCssColor('--piano-roll-bg', '#0A0A0B');
   ctx.fillRect(0, 0, width, height);
 
+  const ink = readCssColor('--text', 'rgba(255,255,255,0.90)');
+  const inkMuted = readCssColor('--muted', 'rgba(255,255,255,0.50)');
+  const staffLine = readCssColor('--piano-roll-beat-bar', 'rgba(255,255,255,0.14)');
+  const measureLine = readCssColor('--border', 'rgba(255,255,255,0.10)');
+  const hollowFill = readCssColor('--piano-roll-bg', '#0A0A0B');
+
   // Header text
-  ctx.fillStyle = 'rgba(240,240,255,0.92)';
-  ctx.font = '700 14px Syne, sans-serif';
+  ctx.fillStyle = ink;
+  ctx.font = '700 14px "DM Sans", system-ui, sans-serif';
   ctx.fillText(`${layer.toUpperCase()} — Sheet Music`, 16, 26);
-  ctx.fillStyle = 'rgba(138,138,154,0.8)';
+  ctx.fillStyle = inkMuted;
   ctx.font = '12px "JetBrains Mono", monospace';
   ctx.fillText(`4/4  ·  Key: ${params.key} ${scaleLabel(params.scale)}  ·  ${params.bpm} BPM`, 16, 46);
 
@@ -833,7 +930,7 @@ function drawSheetMusic(
   const lineGap = 12;
 
   // Staff (5 lines)
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.strokeStyle = staffLine;
   ctx.lineWidth = 1;
   for (let i = 0; i < 5; i++) {
     const y = staffTop + i * lineGap;
@@ -848,7 +945,7 @@ function drawSheetMusic(
   const beatsTotal = bars * 4;
   const usableW = staffRight - staffLeft - 60; // leave some margin
   const startX = staffLeft + 60;
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  ctx.strokeStyle = measureLine;
   for (let b = 0; b <= bars; b++) {
     const x = startX + (b / bars) * usableW;
     ctx.beginPath();
@@ -876,8 +973,8 @@ function drawSheetMusic(
     ctx.rotate(-0.35);
     ctx.beginPath();
     ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2);
-    ctx.fillStyle = filled ? 'rgba(240,240,255,0.92)' : 'rgba(13,13,18,1)';
-    ctx.strokeStyle = 'rgba(240,240,255,0.92)';
+    ctx.fillStyle = filled ? ink : hollowFill;
+    ctx.strokeStyle = ink;
     ctx.lineWidth = 1.5;
     ctx.fill();
     ctx.stroke();
@@ -886,7 +983,7 @@ function drawSheetMusic(
     // Stem (skip for whole notes)
     if (!isWhole) {
       const stemUp = y > staffTop + lineGap * 2; // simplistic
-      ctx.strokeStyle = 'rgba(240,240,255,0.92)';
+      ctx.strokeStyle = ink;
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       if (stemUp) {
@@ -1149,33 +1246,34 @@ function VariationCard({
   return (
     <motion.div
       variants={fadeUp}
+      className="glass-elevated card-tilt-hover"
       onClick={onSelect}
-      animate={compareHighlight ? { boxShadow: ['0 0 0 0 rgba(255,109,63,0.00)', '0 0 0 6px rgba(255,109,63,0.22)', '0 0 0 0 rgba(255,109,63,0.00)'] } : { boxShadow: 'none' }}
-      transition={compareHighlight ? { duration: 1.1, repeat: Infinity, ease: 'easeOut' } : { duration: 0.15 }}
+      animate={compareHighlight ? { borderColor: ['rgba(255,109,63,0.35)', 'rgba(255,109,63,0.85)', 'rgba(255,109,63,0.35)'] } : false}
+      transition={compareHighlight ? { duration: 1.1, repeat: Infinity, ease: EASE_UI } : { duration: 0.3, ease: EASE_UI }}
       style={{
-        border: compareHighlight ? '2px solid rgba(255,109,63,0.95)' : (selected ? '1.5px solid #FF6D3F' : '1px solid #1A1A2E'),
+        border: compareHighlight ? '2px solid rgba(255,109,63,0.55)' : (selected ? `1.5px solid ${DS.accent}` : '1px solid var(--border)'),
         borderRadius: 12,
         padding: 16,
         cursor: 'pointer',
-        background: selected ? 'rgba(255,109,63,0.04)' : '#111118',
-        transition: 'border-color 0.15s, background 0.15s',
+        background: selected ? 'rgba(255,109,63,0.04)' : 'var(--surface)',
+        transition: 'border-color 300ms cubic-bezier(0.23, 1, 0.32, 1), background 300ms cubic-bezier(0.23, 1, 0.32, 1)',
         flex: 1,
       }}
     >
       <div className="flex items-center justify-between mb-3">
-        <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: selected ? '#FF6D3F' : '#F0F0FF' }}>
+        <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em', color: selected ? DS.accent : 'var(--text)' }}>
           {label}
         </span>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8A8A9A' }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
           {variationParams.bpm} BPM
         </span>
       </div>
-      <PianoRoll notes={vResult.melody} color="#FF6D3F" height={56} />
+      <PianoRoll notes={vResult.melody} color={DS.accent} height={56} />
       <div className="flex gap-1.5 flex-wrap mt-3 mb-1">
         {deriveChordProgression(vResult.chords, variationParams.bars).map((name, i, arr) => (
-          <span key={i} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#8A8A9A', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span key={i} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
             {name}
-            {i < arr.length - 1 && <span style={{ color: 'rgba(138,138,154,0.35)' }}>→</span>}
+            {i < arr.length - 1 && <span style={{ color: 'rgba(255,255,255,0.30)' }}>→</span>}
           </span>
         ))}
       </div>
@@ -1220,12 +1318,12 @@ function VariationCard({
                   }}
                   className="flex-1 h-7 flex items-center justify-center rounded-md transition-all disabled:opacity-30"
                   style={{
-                    border: `1px solid ${LAYER_COLORS[layer]}33`,
+                    border: '1px solid var(--border-weak)',
                     fontFamily: 'JetBrains Mono, monospace',
                     fontSize: 10,
                     color: LAYER_COLORS[layer],
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = `${LAYER_COLORS[layer]}12`)}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   title={`Download ${layer}`}
                 >
@@ -1237,15 +1335,15 @@ function VariationCard({
           <button
             onClick={e => { e.stopPropagation(); onExtend?.(e); }}
             className="w-full h-8 mt-2 flex items-center justify-center rounded-lg text-xs transition-all"
-            style={{ border: '1px solid rgba(255,255,255,0.10)', color: '#F0F0FF' }}
+            style={{ border: '1px solid rgba(255,255,255,0.10)', color: 'var(--text)' }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
             onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)')}
             title="Extend this variation by 8 bars"
           >
             + Extend 8 bars
           </button>
-          <div className="mt-3 pt-3" style={{ borderTop: '1px solid #1A1A2E' }} onClick={e => e.stopPropagation()}>
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.45)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.30)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               Find on Splice
             </p>
             {(['melody', 'chords', 'bass', 'drums'] as const).map(layer => {
@@ -1259,9 +1357,9 @@ function VariationCard({
                     href={`https://splice.com/sounds/search?q=${encodeURIComponent(term)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#8A8A9A', textDecoration: 'none' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#8A8A9A')}
+                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', textDecoration: 'none' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
                   >
                     {term} ↗
                   </a>
@@ -1305,7 +1403,7 @@ function CommandBar({
     { icon: '♪', label: 'Generate track', hint: 'G', action: onGenerate, enabled: true },
     { icon: '↵', label: 'Focus prompt', hint: '↵', action: onFocusPrompt, enabled: true },
     { icon: '⊙', label: 'Toggle all layers', hint: 'L', action: onToggleLayers, enabled: true },
-    { icon: '↓', label: 'Download last MIDI', hint: 'D', action: onDownloadAll, enabled: hasResult },
+    { icon: '↓', label: 'Download last MIDI', hint: '⌘S', action: onDownloadAll, enabled: hasResult },
     { icon: '↗', label: 'Open blog', hint: 'B', action: onOpenBlog, enabled: true },
     { icon: '✦', label: 'Open inspire', hint: 'I', action: onOpenInspire, enabled: true },
     { icon: '$', label: 'Go to pricing', hint: 'P', action: onGoToPricing, enabled: true },
@@ -1332,19 +1430,19 @@ function CommandBar({
               initial={{ opacity: 0, y: -12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.96 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+              transition={{ duration: 0.18, ease: EASE_UI }}
             >
               <div className="cmd-modal">
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3"
-                  style={{ borderBottom: '1px solid #1A1A2E' }}>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8A8A9A' }}>
+                  style={{ borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
                     Quick actions
                   </span>
                   <kbd>ESC</kbd>
                 </div>
 
-                <div className="px-4 py-2" style={{ borderBottom: '1px solid #1A1A2E' }}>
+                <div className="px-4 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
                   <input
                     autoFocus
                     type="text"
@@ -1356,7 +1454,7 @@ function CommandBar({
                       background: 'transparent',
                       border: 'none',
                       outline: 'none',
-                      color: '#F0F0FF',
+                      color: 'var(--text)',
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 13,
                     }}
@@ -1373,7 +1471,7 @@ function CommandBar({
                       onClick={() => { a.action(); onClose(); }}
                     >
                       <span className="flex items-center gap-3">
-                        <span style={{ color: '#FF6D3F', fontSize: 14, width: 16, textAlign: 'center' }}>{a.icon}</span>
+                        <span style={{ color: 'var(--accent)', fontSize: 14, width: 16, textAlign: 'center' }}>{a.icon}</span>
                         <span style={{ fontSize: 14 }}>{a.label}</span>
                       </span>
                       <kbd>{a.hint}</kbd>
@@ -1383,9 +1481,9 @@ function CommandBar({
 
                 {/* Footer */}
                 <div className="px-4 py-3 flex items-center justify-center gap-2"
-                  style={{ borderTop: '1px solid #1A1A2E' }}>
+                  style={{ borderTop: '1px solid var(--border)' }}>
                   <kbd>⌘K</kbd>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.4)' }}>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
                     to open · <kbd style={{ fontSize: 10 }}>ESC</kbd> to close
                   </span>
                 </div>
@@ -1397,6 +1495,54 @@ function CommandBar({
     </AnimatePresence>
   );
 }
+
+const SHORTCUT_OVERLAY_GROUPS: { title: string; rows: { k: string; d: string }[] }[] = [
+  {
+    title: 'General',
+    rows: [
+      { k: 'G', d: 'New generation' },
+      { k: 'S', d: 'Share link' },
+      { k: '?', d: 'Show shortcuts overlay' },
+      { k: 'Esc', d: 'Close modal, overlay, or fullscreen' },
+      { k: '⌘ / Ctrl + K', d: 'Open command bar' },
+      { k: 'R', d: 'Regenerate' },
+      { k: 'I', d: 'Toggle Inspire' },
+      { k: 'B', d: 'Open blog' },
+      { k: 'P', d: 'Go to pricing' },
+      { k: 'L', d: 'Toggle Live mode' },
+      { k: 'C', d: 'Toggle Compare mode' },
+      { k: '1 / 2 / 3', d: 'Select variation' },
+    ],
+  },
+  {
+    title: 'Piano roll',
+    rows: [
+      { k: 'E', d: 'Toggle piano roll / sheet view' },
+      { k: 'F', d: 'Fullscreen piano roll' },
+      { k: 'D', d: 'Toggle chord detection overlay' },
+      { k: '⌘ / Ctrl + E', d: 'Extend variation (+8 bars)' },
+      {
+        k: '⌘ / Ctrl + Z',
+        d: 'Undo (click the piano grid first so the roll has focus)',
+      },
+      {
+        k: '⌘ / Ctrl + Shift + Z',
+        d: 'Redo (when the piano roll has focus)',
+      },
+    ],
+  },
+  {
+    title: 'Playback',
+    rows: [{ k: 'Space', d: 'Play / pause current variation' }],
+  },
+  {
+    title: 'Export',
+    rows: [
+      { k: '⌘ / Ctrl + S', d: 'Export MIDI (full arrangement)' },
+      { k: '⌘ / Ctrl + Shift + S', d: 'Export WAV' },
+    ],
+  },
+];
 
 // ─── HISTORY SIDEBAR ──────────────────────────────────────────
 function HistorySidebar({
@@ -1509,20 +1655,20 @@ function HistorySidebar({
 
   return (
     <motion.div
-      className="fixed right-0 top-0 h-full w-80 z-40 flex flex-col"
-      style={{ background: '#111118', borderLeft: '1px solid #1A1A2E' }}
-      initial={{ x: 320 }}
+      className="fixed right-0 top-0 h-full w-full sm:w-80 z-40 flex flex-col glass-elevated"
+      style={{ borderLeft: '1px solid var(--border)' }}
+      initial={{ x: '100%' }}
       animate={{ x: 0 }}
-      exit={{ x: 320 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+      exit={{ x: '100%', transition: { duration: 0.26, ease: EASE_EXIT } }}
+      transition={{ duration: 0.3, ease: EASE_UI }}
     >
       <div className="flex items-center justify-between px-6 py-5"
-        style={{ borderBottom: '1px solid #1A1A2E' }}>
-        <span className="text-sm font-semibold" style={{ fontFamily: 'Syne, sans-serif' }}>
+        style={{ borderBottom: '1px solid var(--border)' }}>
+        <span className="text-sm font-semibold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em' }}>
           History
           {!loading && history.length > 0 && (
             <span className="ml-2 text-xs font-normal"
-              style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>
+              style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>
               ({history.length})
             </span>
           )}
@@ -1530,9 +1676,9 @@ function HistorySidebar({
         <button
           onClick={onClose}
           className="w-7 h-7 flex items-center justify-center rounded-lg text-lg leading-none transition-colors"
-          style={{ color: '#8A8A9A' }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#8A8A9A')}
+          style={{ color: 'var(--muted)' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
         >×</button>
       </div>
 
@@ -1554,7 +1700,7 @@ function HistorySidebar({
         </div>
       ) : !isSignedIn ? (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-4">
-          <p className="text-sm text-center leading-relaxed" style={{ color: '#8A8A9A' }}>
+          <p className="text-sm text-center leading-relaxed" style={{ color: 'var(--muted)' }}>
             Sign in to view your generation history.
           </p>
           <a
@@ -1566,10 +1712,29 @@ function HistorySidebar({
           </a>
         </div>
       ) : displayed.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center px-8">
-          <p className="text-sm text-center leading-relaxed" style={{ color: '#8A8A9A' }}>
-            {rows.length === 0 ? 'Generate a track to see your history here.' : 'No matches.'}
-          </p>
+        <div className="flex-1 flex items-center justify-center px-6">
+          {rows.length === 0 && tab === 'all' ? (
+            <EmptyState
+              title="Your generations will appear here"
+              actionLabel="Create your first"
+              onAction={() => {
+                onClose();
+                window.setTimeout(() => document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+              }}
+            />
+          ) : rows.length === 0 && tab === 'favorites' ? (
+            <EmptyState
+              title="No favorites yet"
+              subtitle="Star a generation to save it here"
+            />
+          ) : query.trim().length > 0 ? (
+            <EmptyState
+              title={`No results for “${query.trim()}”`}
+              subtitle="Try a different search term"
+            />
+          ) : (
+            <EmptyState title="No results" subtitle="Try a different search term" />
+          )}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto" ref={listRef}
@@ -1584,18 +1749,18 @@ function HistorySidebar({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search genre, artist, key, BPM…"
-              className="input-field"
+              className="input-field w-full"
               style={{ height: 40, fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}
             />
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
               {(['all', 'favorites'] as const).map(t => (
                 <button
                   key={t}
                   type="button"
-                  className="px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
+                  className="shrink-0 px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
                   style={{
                     borderColor: tab === t ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
-                    color: tab === t ? '#FF6D3F' : '#8A8A9A',
+                    color: tab === t ? 'var(--accent)' : 'var(--muted)',
                     background: tab === t ? 'rgba(255,109,63,0.10)' : 'transparent',
                   }}
                   onClick={() => setTab(t)}
@@ -1605,13 +1770,13 @@ function HistorySidebar({
               ))}
             </div>
             {availableGenres.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
                 <button
                   type="button"
-                  className="px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
+                  className="shrink-0 px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
                   style={{
                     borderColor: !genreFilter ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.10)',
-                    color: !genreFilter ? '#F0F0FF' : '#8A8A9A',
+                    color: !genreFilter ? 'var(--text)' : 'var(--muted)',
                     background: !genreFilter ? 'rgba(255,255,255,0.06)' : 'transparent',
                   }}
                   onClick={() => setGenreFilter(null)}
@@ -1622,10 +1787,10 @@ function HistorySidebar({
                   <button
                     key={g}
                     type="button"
-                    className="px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
+                    className="shrink-0 px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
                     style={{
                       borderColor: genreFilter === g ? 'rgba(0,184,148,0.45)' : 'rgba(255,255,255,0.10)',
-                      color: genreFilter === g ? '#00B894' : '#8A8A9A',
+                      color: genreFilter === g ? DS.accent : 'var(--muted)',
                       background: genreFilter === g ? 'rgba(0,184,148,0.10)' : 'transparent',
                     }}
                     onClick={() => setGenreFilter(g)}
@@ -1660,23 +1825,22 @@ function HistorySidebar({
                   };
                   onRestore(entry);
                 }}
-                className="w-full text-left px-6 py-4 transition-colors"
-                style={{ borderBottom: '1px solid rgba(26,26,46,0.5)' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                className="w-full text-left px-4 py-4 mx-3 mb-3 max-w-[calc(100%-24px)] history-gen-card card-tilt-hover"
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF6D3F' }}>
+                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
                         {genreName}
                       </span>
-                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.75)' }}>
+                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.50)' }}>
                         {keyGuess} · {row.bpm} BPM
                       </span>
                     </div>
                     {row.inspiration_source && (
-                      <p className="mt-1 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
+                      <p className="mt-1 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)' }}>
                         {row.inspiration_source}
                       </p>
                     )}
@@ -1687,7 +1851,7 @@ function HistorySidebar({
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
                     <span
                       className="text-xs"
-                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}
+                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.35)' }}
                     >
                       {formatTimeAgo(ts)}
                     </span>
@@ -1702,7 +1866,7 @@ function HistorySidebar({
                       style={{
                         borderColor: row.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
                         background: row.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
-                        color: row.is_favorite ? '#FF6D3F' : 'rgba(138,138,154,0.85)',
+                        color: row.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.50)',
                         cursor: 'pointer',
                       }}
                       title={row.is_favorite ? 'Unfavorite' : 'Favorite'}
@@ -1724,9 +1888,9 @@ function HistorySidebar({
         </div>
       )}
 
-      <div className="px-6 py-4" style={{ borderTop: '1px solid #1A1A2E' }}>
+      <div className="px-6 py-4" style={{ borderTop: '1px solid var(--border)' }}>
         <p className="text-xs text-center"
-          style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
+          style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.35)' }}>
           Showing {displayed.length} · {tab === 'favorites' ? 'favorites' : 'latest'} · loads 20 at a time
         </p>
       </div>
@@ -1744,20 +1908,20 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 backdrop-blur-md" style={{ background: 'rgba(10,10,11,0.72)' }} onClick={onClose} />
       <motion.div
         className="relative z-10 w-full max-w-md rounded-2xl p-8 text-center"
-        style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         initial={{ scale: 0.95, opacity: 0, y: 12 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 8 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
+        transition={{ duration: 0.2, ease: EASE_UI }}
       >
-        <div className="text-3xl mb-4" style={{ color: '#FF6D3F' }}>✦</div>
-        <h2 className="font-extrabold text-xl mb-3" style={{ fontFamily: 'Syne, sans-serif' }}>
+        <div className="text-3xl mb-4" style={{ color: 'var(--accent)' }}>✦</div>
+        <h2 className="font-extrabold text-xl mb-3" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
           You&apos;ve reached your monthly<br />generation limit.
         </h2>
-        <p className="text-sm mb-8" style={{ color: '#8A8A9A' }}>
+        <p className="text-sm mb-8" style={{ color: 'var(--muted)' }}>
           Upgrade to Pro for a higher monthly allowance.
         </p>
         <div className="flex flex-col gap-3">
@@ -1771,9 +1935,9 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             className="text-sm transition-colors"
-            style={{ color: '#8A8A9A' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8A8A9A')}
+            style={{ color: 'var(--muted)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
           >
             Maybe later
           </button>
@@ -1814,14 +1978,14 @@ const VALID_SCALES = ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolyd
 const GENRE_LIST = Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name }));
 
 const VIBES = [
-  { label: 'Dark',       tag: 'Dark Hypnotic Dub',      color: '#8A8A9A' },
-  { label: 'Euphoric',   tag: 'Euphoric Melodic',        color: '#FF6D3F' },
-  { label: 'Groovy',     tag: 'Organic Afro Groove',     color: '#00B894' },
-  { label: 'Aggressive', tag: 'Peak-Time Industrial',    color: '#E94560' },
-  { label: 'Dreamy',     tag: 'Ethereal Melodic',        color: '#A78BFA' },
-  { label: 'Funky',      tag: 'Nu-Disco Funk',           color: '#FFAB91' },
-  { label: 'Minimal',    tag: 'Quirky Minimal',          color: '#4A4A5A' },
-  { label: 'Festival',   tag: 'Pumping Festival Tech',   color: '#FF6D3F' },
+  { label: 'Dark',       tag: 'Dark Hypnotic Dub',      color: 'var(--muted)' },
+  { label: 'Euphoric',   tag: 'Euphoric Melodic',        color: DS.accent },
+  { label: 'Groovy',     tag: 'Organic Afro Groove',     color: 'rgba(255,255,255,0.65)' },
+  { label: 'Aggressive', tag: 'Peak-Time Industrial',    color: 'rgba(255,255,255,0.45)' },
+  { label: 'Dreamy',     tag: 'Ethereal Melodic',        color: 'rgba(255,255,255,0.55)' },
+  { label: 'Funky',      tag: 'Nu-Disco Funk',           color: 'rgba(255,255,255,0.40)' },
+  { label: 'Minimal',    tag: 'Quirky Minimal',          color: 'rgba(255,255,255,0.35)' },
+  { label: 'Festival',   tag: 'Pumping Festival Tech',   color: DS.accent },
 ]
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
@@ -1855,10 +2019,10 @@ function HeroDemoPreview() {
   }, [])
 
   const layers = [
-    { name: 'Melody', color: '#FF6D3F', pattern: [1,0,1,1,0,1,0,1,1,0,1,0,1,1,0,1] },
-    { name: 'Chords', color: '#A78BFA', pattern: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
-    { name: 'Bass',   color: '#00B894', pattern: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
-    { name: 'Drums',  color: '#E94560', pattern: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+    { name: 'Melody', color: LAYER_VIZ_COLORS.melody, pattern: [1,0,1,1,0,1,0,1,1,0,1,0,1,1,0,1] },
+    { name: 'Chords', color: LAYER_VIZ_COLORS.chords, pattern: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
+    { name: 'Bass',   color: LAYER_VIZ_COLORS.bass, pattern: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
+    { name: 'Drums',  color: LAYER_VIZ_COLORS.drums, pattern: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
   ]
 
   return (
@@ -1872,19 +2036,19 @@ function HeroDemoPreview() {
       >
         <div className="flex items-center gap-2">
           <div
+            className="animate-pulse"
             style={{
               width: 6,
               height: 6,
               borderRadius: '50%',
-              background: '#00B894',
-              animation: 'pulse-ring 2s ease-in-out infinite',
+              background: DS.accent,
             }}
           />
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.06em' }}>
             LIVE PREVIEW · Tech House · 128 BPM · Am
           </span>
         </div>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.4)' }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
           generate yours →
         </span>
       </div>
@@ -1893,7 +2057,7 @@ function HeroDemoPreview() {
           <div
             key={layer.name}
             className="rounded-xl overflow-hidden"
-            style={{ background: '#0A0A0F', border: `1px solid ${layer.color}22`, height: 52 }}
+            style={{ background: 'var(--bg)', border: '1px solid var(--border-weak)', height: 52 }}
           >
             <div className="flex items-center gap-1.5 px-2 pt-1.5">
               <div style={{ width: 5, height: 5, borderRadius: '50%', background: layer.color, flexShrink: 0 }} />
@@ -1949,7 +2113,7 @@ function ShareModal({
   };
 
   const shareTwitter = () => {
-    const text = `Just generated a ${genre} MIDI pattern at ${bpm}BPM with pulp — the free AI MIDI generator. Try it:`;
+    const text = `Generated a ${genre} MIDI pattern at ${bpm} BPM with pulp. Start generating:`;
     window.open(
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
       '_blank',
@@ -1961,23 +2125,18 @@ function ShareModal({
     <>
       <div
         className="fixed inset-0 z-[70]"
-        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+        style={{ background: 'rgba(10,10,11,0.72)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
         onClick={onClose}
         aria-hidden
       />
       <div
-        className="fixed left-1/2 top-1/2 z-[71] w-[min(480px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6"
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
-        }}
+        className="fixed left-1/2 top-1/2 z-[71] w-[min(480px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6 glass-elevated card-tilt-hover"
         role="dialog"
         aria-modal="true"
         aria-labelledby="share-modal-title"
       >
         <div className="flex items-center justify-between mb-6">
-          <h3 id="share-modal-title" className="font-extrabold" style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, color: 'var(--foreground)' }}>
+          <h3 id="share-modal-title" className="font-extrabold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--foreground)' }}>
             Share generation
           </h3>
           <button
@@ -1998,7 +2157,7 @@ function ShareModal({
               style={{
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: 11,
-                color: '#FF6D3F',
+                color: 'var(--accent)',
                 background: 'rgba(255,109,63,0.1)',
                 padding: '2px 8px',
                 borderRadius: 6,
@@ -2031,10 +2190,12 @@ function ShareModal({
           <button
             type="button"
             onClick={() => void copyUrl()}
-            className="btn-primary btn-sm"
+            className="btn-primary btn-sm copy-label-stack"
+            data-copied={copied ? 'true' : 'false'}
             style={{ flexShrink: 0 }}
           >
-            {copied ? '✓ Copied' : 'Copy'}
+            <span className="copy-label-stack__a">Copy</span>
+            <span className="copy-label-stack__b">Copied</span>
           </button>
         </div>
 
@@ -2069,6 +2230,7 @@ export default function Home() {
   const effectiveIsSignedIn = e2eBypass ? true : isSignedIn;
   const effectiveUserId = e2eBypass ? 'e2e' : userId;
   const toast = useToast();
+  const prefersReducedMotion = useReducedMotion();
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
   const [variations, setVariations] = useState<{ result: GenerationResult; params: GenerationParams }[]>([]);
   const [selectedVariation, setSelectedVariation] = useState(0);
@@ -2077,6 +2239,10 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStage, setGeneratingStage] = useState('');
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [genBar, setGenBar] = useState<'idle' | 'loading' | 'complete' | 'error'>('idle');
+  const [shareCopied, setShareCopied] = useState(false);
+  const [inspireFieldStatus, setInspireFieldStatus] = useState<'idle' | 'error' | 'success'>('idle');
   const [totalGenerations, setTotalGenerations] = useState<number | null>(null);
   const [playingAll, setPlayingAll] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
@@ -2110,9 +2276,6 @@ export default function Home() {
   const [showBpmDetect, setShowBpmDetect] = useState(false);
   const [isDetectingBpm, setIsDetectingBpm] = useState(false);
   const [collabCopied, setCollabCopied] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
-  const [onboardingTargetRect, setOnboardingTargetRect] = useState<DOMRect | null>(null);
   const [showInspire, setShowInspire] = useState(false);
   const [inspireText, setInspireText] = useState('');
   const [isInspiring, setIsInspiring] = useState(false);
@@ -2120,9 +2283,11 @@ export default function Home() {
   const lastInspirationSourceRef = useRef<string | null>(null);
   const [isExtending, setIsExtending] = useState(false);
   const [editorView, setEditorView] = useState<'piano' | 'sheet'>('piano');
+  const [pianoChordStripVisible, setPianoChordStripVisible] = useState(true);
   const [importedNotes, setImportedNotes] = useState<NoteEvent[]>([]);
   const [showAudioToMidiModal, setShowAudioToMidiModal] = useState(false);
   const [promptCardsDismissed, setPromptCardsDismissed] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(true);
 
   const result = variations[selectedVariation]?.result ?? null;
 
@@ -2136,11 +2301,115 @@ export default function Home() {
 
   const toolRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
+  const onboardingPromptRef = useRef<HTMLDivElement>(null);
+  const onboardingPianoRef = useRef<HTMLDivElement>(null);
+  const onboardingExportRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const demoFeaturesRef = useRef<HTMLElement>(null);
+  const dawStripRef = useRef<HTMLElement>(null);
+  const compareRef = useRef<HTMLElement>(null);
+
+  // ─── SCROLL-TELLING (landing) ────────────────────────────────
+  // All effects are driven from scroll position (no intersection observer).
+  const { scrollYProgress: heroProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const heroP = useSpring(heroProgress, { stiffness: 120, damping: 30, mass: 0.6 });
+  const heroGlowX = useTransform(heroP, [0, 1], [0, -24]);
+  // Parallax at ~0.3x feel: subtle drift only.
+  const heroGlowY = useTransform(heroP, [0, 1], [0, -70]);
+  const heroGlowOpacity = useTransform(heroP, [0, 0.35, 1], [0.65, 0.95, 0.55]);
+  const heroGlowScale = useTransform(heroP, [0, 1], [1, 1.04]);
+
+  const { scrollYProgress: demoProgress } = useScroll({
+    target: demoFeaturesRef,
+    offset: ['start 0.9', 'end 0.35'],
+  });
+  const demoP = useSpring(demoProgress, { stiffness: 140, damping: 32, mass: 0.55 });
+
+  // Demo / features bento: staggered “constructing” reveal with mixed angles.
+  const demoCard0T = useTransform(demoP, [0.06, 0.44], [0, 1]);
+  const demoCard1T = useTransform(demoP, [0.14, 0.52], [0, 1]);
+  const demoCard2T = useTransform(demoP, [0.22, 0.6], [0, 1]);
+
+  const demoCard0X = useTransform(demoCard0T, [0, 1], [-18, 0]);
+  const demoCard0Y = useTransform(demoCard0T, [0, 1], [10, 0]);
+  const demoCard0R = useTransform(demoCard0T, [0, 1], [-1.0, 0]);
+  const demoCard0O = useTransform(demoCard0T, [0, 1], [0, 1]);
+
+  const demoCard1X = useTransform(demoCard1T, [0, 1], [0, 0]);
+  const demoCard1Y = useTransform(demoCard1T, [0, 1], [14, 0]);
+  const demoCard1R = useTransform(demoCard1T, [0, 1], [0.7, 0]);
+  const demoCard1O = useTransform(demoCard1T, [0, 1], [0, 1]);
+
+  const demoCard2X = useTransform(demoCard2T, [0, 1], [18, 0]);
+  const demoCard2Y = useTransform(demoCard2T, [0, 1], [10, 0]);
+  const demoCard2R = useTransform(demoCard2T, [0, 1], [1.0, 0]);
+  const demoCard2O = useTransform(demoCard2T, [0, 1], [0, 1]);
+
+  const { scrollYProgress: dawProgress } = useScroll({
+    target: dawStripRef,
+    offset: ['start end', 'end start'],
+  });
+  const dawP = useSpring(dawProgress, { stiffness: 140, damping: 34, mass: 0.55 });
+  const dawSpotlightOpacity = useTransform(dawP, [0, 0.5, 1], [0.3, 0.7, 0.3]);
+
+  const { scrollYProgress: compareProgress } = useScroll({
+    target: compareRef,
+    offset: ['start 0.9', 'end 0.35'],
+  });
+  const compareP = useSpring(compareProgress, { stiffness: 140, damping: 34, mass: 0.55 });
+
+  // Comparison table: rows reveal one-by-one; pulp column leads by ~50ms feel.
+  const cmpRow0T = useTransform(compareP, [0.06, 0.28], [0, 1]);
+  const cmpRow1T = useTransform(compareP, [0.14, 0.36], [0, 1]);
+  const cmpRow2T = useTransform(compareP, [0.22, 0.44], [0, 1]);
+  const cmpRow3T = useTransform(compareP, [0.3, 0.52], [0, 1]);
+  const cmpRow4T = useTransform(compareP, [0.38, 0.6], [0, 1]);
+  const cmpRow5T = useTransform(compareP, [0.46, 0.68], [0, 1]);
+  const cmpRow6T = useTransform(compareP, [0.54, 0.76], [0, 1]);
+
+  const cmpRow0O = useTransform(cmpRow0T, [0, 1], [0, 1]);
+  const cmpRow1O = useTransform(cmpRow1T, [0, 1], [0, 1]);
+  const cmpRow2O = useTransform(cmpRow2T, [0, 1], [0, 1]);
+  const cmpRow3O = useTransform(cmpRow3T, [0, 1], [0, 1]);
+  const cmpRow4O = useTransform(cmpRow4T, [0, 1], [0, 1]);
+  const cmpRow5O = useTransform(cmpRow5T, [0, 1], [0, 1]);
+  const cmpRow6O = useTransform(cmpRow6T, [0, 1], [0, 1]);
+
+  const cmpRow0Y = useTransform(cmpRow0T, [0, 1], [10, 0]);
+  const cmpRow1Y = useTransform(cmpRow1T, [0, 1], [10, 0]);
+  const cmpRow2Y = useTransform(cmpRow2T, [0, 1], [10, 0]);
+  const cmpRow3Y = useTransform(cmpRow3T, [0, 1], [10, 0]);
+  const cmpRow4Y = useTransform(cmpRow4T, [0, 1], [10, 0]);
+  const cmpRow5Y = useTransform(cmpRow5T, [0, 1], [10, 0]);
+  const cmpRow6Y = useTransform(cmpRow6T, [0, 1], [10, 0]);
+
+  const cmpPulp0O = useTransform(compareP, [0.07, 0.22], [0, 1]);
+  const cmpPulp1O = useTransform(compareP, [0.15, 0.3], [0, 1]);
+  const cmpPulp2O = useTransform(compareP, [0.23, 0.38], [0, 1]);
+  const cmpPulp3O = useTransform(compareP, [0.31, 0.46], [0, 1]);
+  const cmpPulp4O = useTransform(compareP, [0.39, 0.54], [0, 1]);
+  const cmpPulp5O = useTransform(compareP, [0.47, 0.62], [0, 1]);
+  const cmpPulp6O = useTransform(compareP, [0.55, 0.7], [0, 1]);
+
+  const cmpOther0O = useTransform(compareP, [0.09, 0.24], [0, 1]);
+  const cmpOther1O = useTransform(compareP, [0.17, 0.32], [0, 1]);
+  const cmpOther2O = useTransform(compareP, [0.25, 0.4], [0, 1]);
+  const cmpOther3O = useTransform(compareP, [0.33, 0.48], [0, 1]);
+  const cmpOther4O = useTransform(compareP, [0.41, 0.56], [0, 1]);
+  const cmpOther5O = useTransform(compareP, [0.49, 0.64], [0, 1]);
+  const cmpOther6O = useTransform(compareP, [0.57, 0.72], [0, 1]);
   const tapTimesRef = useRef<number[]>([]);
   const tapResetTimerRef = useRef<number | null>(null);
   const bpmFileInputRef = useRef<HTMLInputElement>(null);
   const sheetCanvasRef = useRef<HTMLCanvasElement>(null);
   const compareTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (variations.length > 0) setTemplatesOpen(false);
+  }, [variations.length]);
 
   const closeAllModals = useCallback(() => {
     setShowShortcuts(false);
@@ -2151,7 +2420,19 @@ export default function Home() {
     setShowInspire(false);
     setShowBpmDetect(false);
     setShowAudioToMidiModal(false);
-    setShowOnboarding(false);
+    setShowMidiUploadModal(false);
+    setShowShareModal(false);
+    setShowDownloadMenu(false);
+  }, []);
+
+  const [showKbdShortcutsTrigger, setShowKbdShortcutsTrigger] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const sync = () => setShowKbdShortcutsTrigger(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
   }, []);
   const liveTimerRef = useRef<number | null>(null);
   const liveBarRef = useRef(0);
@@ -2191,7 +2472,7 @@ export default function Home() {
     setImportedNotes(detected);
     setEditorLayer('imported');
     setEditorView('piano');
-    toast.toast(`Audio converted to MIDI — ${detected.length} notes detected`, 'success');
+    toast.toast(`Converted to MIDI (${detected.length} notes)`, 'success');
     window.setTimeout(() => toolRef.current?.scrollIntoView({ behavior: 'smooth' }), 120);
   }, [toast]);
   const generateBtnWrapRef = useRef<HTMLDivElement>(null);
@@ -2357,77 +2638,7 @@ export default function Home() {
   }, [effectiveIsSignedIn, effectiveUserId, loadHistoryFromDb, loadInspirationChipsFromDb, e2eBypass]);
 
   // First-time onboarding (only if 0 generations in Supabase)
-  useEffect(() => {
-    if (!isLoaded || !effectiveIsSignedIn || !effectiveUserId) return;
-    const key = 'pulp_onboarding_complete_v1';
-    try {
-      if (localStorage.getItem(key) === '1') return;
-    } catch {
-      // Ignore
-    }
-
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const { count } = await supabase
-          .from('generations')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', effectiveUserId)
-          .limit(1);
-        if (cancelled) return;
-        if ((count ?? 0) === 0) {
-          setShowOnboarding(true);
-          setOnboardingStep(0);
-        }
-      } catch {
-        // Ignore
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, effectiveIsSignedIn, effectiveUserId, supabase]);
-
-  const completeOnboarding = useCallback(() => {
-    const key = 'pulp_onboarding_complete_v1';
-    try {
-      localStorage.setItem(key, '1');
-    } catch {
-      // Ignore
-    }
-    setShowOnboarding(false);
-  }, []);
-
-  // Ensure manual controls are open for step 2 (genre selector)
-  useEffect(() => {
-    if (!showOnboarding) return;
-    if (onboardingStep === 1) setShowManual(true);
-  }, [showOnboarding, onboardingStep]);
-
-  // Position onboarding tooltip on current step
-  useEffect(() => {
-    if (!showOnboarding) return;
-
-    const getRect = () => {
-      if (onboardingStep === 0) return promptRef.current?.getBoundingClientRect() ?? null;
-      if (onboardingStep === 1) return (genreSelectRef.current ?? styleTagsRef.current)?.getBoundingClientRect() ?? null;
-      if (onboardingStep === 2) return generateBtnWrapRef.current?.getBoundingClientRect() ?? null;
-      if (onboardingStep === 3) return layerCardsRef.current?.getBoundingClientRect() ?? null;
-      return null;
-    };
-
-    const update = () => setOnboardingTargetRect(getRect());
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, { passive: true } as AddEventListenerOptions);
-    const id = window.setInterval(update, 250);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update as any);
-      window.clearInterval(id);
-    };
-  }, [showOnboarding, onboardingStep, result]);
+  // Note: first-time onboarding is handled by <OnboardingOverlay /> and a localStorage key.
 
   const handleMidiUploadSuccess = useCallback(
     (data: MidiUploadSuccessPayload) => {
@@ -2461,6 +2672,8 @@ export default function Home() {
     stopAllPlayback();
     setPlayingAll(false);
 
+    setGenerationError(null);
+    setGenBar('loading');
     setIsGenerating(true);
     setGeneratingStage('Analyzing prompt...');
     setVariationIds([]);
@@ -2493,11 +2706,7 @@ export default function Home() {
           body: JSON.stringify({ prompt: pipelinePrompt }),
         });
         if (res.status === 429) {
-          const d = await res.json().catch(() => null) as any;
-          const after = typeof d?.retryAfter === 'number' ? d.retryAfter : null;
-          toast.toast(`Rate limit exceeded${after ? ` — try again in ${after}s` : ''}`, 'danger');
-          // Fall back to rule-based parser.
-          throw new Error('rate-limited');
+          // Fall back to rule-based parser (no toast — avoids noise during typing).
         }
         if (res.ok) {
           const data = await res.json() as { genre?: string; bpm?: number; scale?: string };
@@ -2566,22 +2775,17 @@ export default function Home() {
             throw new Error('monthly-limit');
           }
           if (d.error === 'Guest limit reached') {
-            toast.toast('Daily guest limit reached — sign in for more.', 'danger');
             throw new Error('guest-limit');
           }
-          const after = typeof d.retryAfter === 'number' ? d.retryAfter : null;
-          toast.toast(`Rate limit exceeded${after ? ` — try again in ${after}s` : ''}`, 'danger');
           throw new Error('rate-limited');
         }
 
         if (res.status === 400) {
           const d = await res.json().catch(() => null) as { error?: string } | null;
-          toast.toast('Invalid input', 'danger');
           throw new Error(d?.error || 'invalid input');
         }
 
         if (res.status === 503) {
-          toast.toast('Generation temporarily unavailable', 'danger');
           throw new Error('unavailable');
         }
 
@@ -2685,15 +2889,35 @@ export default function Home() {
       }
     })();
 
+    let genFailed = false;
     try {
       await Promise.all([actualGeneration, minLoad]);
-    } catch {
-      // Limits / rate / availability already surfaced via toast or modal
+    } catch (e) {
+      genFailed = true;
+      const msg = e instanceof Error ? e.message : '';
+      if (msg === 'monthly-limit') {
+        setGenerationError('Monthly limit reached. Upgrade to keep generating.');
+      } else if (msg === 'guest-limit') {
+        setGenerationError('Guest limit reached. Sign in to continue.');
+      } else if (msg === 'rate-limited') {
+        setGenerationError('Rate limited. Try again in a moment.');
+      } else if (msg === 'unavailable') {
+        setGenerationError('Generation is unavailable. Try again later.');
+      } else if (msg === 'invalid input' || msg.includes('invalid')) {
+        setGenerationError('Invalid input. Simplify your prompt and try again.');
+      } else {
+        setGenerationError('Generation failed. Try again or simplify your prompt.');
+      }
+      setGenBar('error');
     } finally {
       setIsGenerating(false);
       setGeneratingStage('');
       for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
       generatingStageTimeoutsRef.current = [];
+      if (!genFailed) {
+        setGenBar('complete');
+        window.setTimeout(() => setGenBar('idle'), 800);
+      }
     }
   }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, loadHistoryFromDb, loadInspirationChipsFromDb, supabase]);
 
@@ -2707,6 +2931,20 @@ export default function Home() {
     void handleGenerate(preset, tag.toLowerCase());
     toolRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const runTemplate = useCallback(
+    (t: (typeof QUICK_START_TEMPLATES)[number]) => {
+      setPromptCardsDismissed(true);
+      setTemplatesOpen(false);
+      setActiveStyleTag(null);
+      setPrompt(t.prompt);
+      setParams(p => ({ ...p, ...t.preset }));
+      void handleGenerate(t.preset, t.prompt);
+      toolRef.current?.scrollIntoView({ behavior: 'smooth' });
+      window.setTimeout(() => promptRef.current?.focus(), 0);
+    },
+    [handleGenerate],
+  );
 
   const toggleLayer = (layer: keyof GenerationParams['layers']) =>
     setParams(p => ({ ...p, layers: { ...p.layers, [layer]: !p.layers[layer] } }));
@@ -2997,7 +3235,7 @@ export default function Home() {
       await downloadBlob(blob, filename);
       toast.toast('WAV exported', 'success');
     } catch {
-      toast.toast('WAV export failed', 'danger');
+      toast.toast('WAV export failed. Try again.', 'danger');
     } finally {
       setIsRenderingWav(false);
     }
@@ -3018,7 +3256,7 @@ export default function Home() {
       await downloadBlob(blob, filename);
       toast.toast('Ableton project exported', 'success');
     } catch {
-      toast.toast('Ableton export failed', 'danger');
+      toast.toast('Export failed. Try again.', 'danger');
     }
   }, [variations, selectedVariation, toast]);
 
@@ -3085,6 +3323,7 @@ export default function Home() {
     const inspiration = inspireText.trim();
     if (!inspiration) return;
     setIsInspiring(true);
+    setInspireFieldStatus('idle');
     try {
       const res = await fetch('/api/inspire', {
         method: 'POST',
@@ -3092,9 +3331,7 @@ export default function Home() {
         body: JSON.stringify({ inspiration }),
       });
       if (res.status === 429) {
-        const d = await res.json().catch(() => null) as any;
-        const after = typeof d?.retryAfter === 'number' ? d.retryAfter : null;
-        toast.toast(`Rate limit exceeded${after ? ` — try again in ${after}s` : ''}`, 'danger');
+        setInspireFieldStatus('error');
         return;
       }
       if (!res.ok) throw new Error('Failed to inspire');
@@ -3137,11 +3374,14 @@ export default function Home() {
         return next.slice(0, 5);
       });
 
-      toast.toast(`Inspired by ${inspiration}`, 'success');
+      setInspireFieldStatus('success');
+      window.setTimeout(() => setInspireFieldStatus('idle'), 1000);
+      toast.toast(`Loaded inspiration: ${inspiration}`, 'success');
       setShowInspire(false);
       setInspireText('');
     } catch {
-      toast.toast('Inspire failed', 'danger');
+      setInspireFieldStatus('error');
+      toast.toast('Inspire failed. Try again.', 'danger');
     } finally {
       setIsInspiring(false);
     }
@@ -3150,7 +3390,7 @@ export default function Home() {
   const handleShare = useCallback(() => {
     const id = variationIds[selectedVariation];
     if (!id) {
-      toast.toast('Generate first to share', 'info');
+      toast.toast('Generate a pattern to share', 'info');
       return;
     }
     const genreKey = variations[selectedVariation]?.params.genre ?? params.genre;
@@ -3177,9 +3417,10 @@ export default function Home() {
           document.execCommand('copy');
           ta.remove();
         }
-        toast.toast('Link copied!', 'success');
+        setShareCopied(true);
+        window.setTimeout(() => setShareCopied(false), 2000);
       } catch {
-        toast.toast('Copy failed', 'danger');
+        toast.toast('Copy failed. Try again.', 'danger');
       }
     })();
   }, [variationIds, selectedVariation, variations, params.genre, toast, supabase]);
@@ -3224,9 +3465,9 @@ export default function Home() {
         };
       }));
 
-      toast.toast('Extended +8 bars', 'success');
+      toast.toast('Extended by 8 bars', 'success');
     } catch {
-      toast.toast('Extend failed', 'danger');
+      toast.toast('Extend failed. Try again.', 'danger');
     } finally {
       setIsExtending(false);
     }
@@ -3277,7 +3518,7 @@ export default function Home() {
       }));
     }
 
-    toast.toast('Pattern completed — 8 bars added', 'success');
+    toast.toast('Added 8 bars', 'success');
   }, [selectedLayerNotes, selectedParams, editorLayer, selectedVariation, toast]);
 
   const handleCreateCollab = useCallback(() => {
@@ -3417,7 +3658,7 @@ export default function Home() {
       toast.toast(`BPM detected: ${bpm}`, 'success');
       setShowBpmDetect(false);
     } catch {
-      toast.toast('BPM detection failed', 'danger');
+      toast.toast('BPM detection failed. Try again.', 'danger');
     } finally {
       setIsDetectingBpm(false);
       if (bpmFileInputRef.current) bpmFileInputRef.current.value = '';
@@ -3435,14 +3676,64 @@ export default function Home() {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      // ESC closes any open modal
+      const isCombo = e.metaKey || e.ctrlKey;
+
+      // ESC: dismiss top overlay first (no audio teardown), then fullscreen, then global reset
       if (e.key === 'Escape') {
+        e.preventDefault();
+        if (showShortcuts) {
+          setShowShortcuts(false);
+          return;
+        }
+        if (showCommandBar) {
+          setShowCommandBar(false);
+          return;
+        }
+        if (showShareModal) {
+          setShowShareModal(false);
+          return;
+        }
+        if (showEmbedModal) {
+          setShowEmbedModal(false);
+          setEmbedCopied(false);
+          return;
+        }
+        if (showDownloadMenu) {
+          setShowDownloadMenu(false);
+          return;
+        }
+        if (showMidiUploadModal) {
+          setShowMidiUploadModal(false);
+          return;
+        }
+        if (showAudioToMidiModal) {
+          setShowAudioToMidiModal(false);
+          return;
+        }
+        if (showUpgradeModal) {
+          setShowUpgradeModal(false);
+          return;
+        }
+        if (showHistory) {
+          setShowHistory(false);
+          return;
+        }
+        if (showInspire) {
+          setShowInspire(false);
+          return;
+        }
+        if (showBpmDetect) {
+          setShowBpmDetect(false);
+          return;
+        }
+        if (showManual) {
+          setShowManual(false);
+          return;
+        }
         if (isPianoFullscreen) {
-          e.preventDefault();
           setIsPianoFullscreen(false);
           return;
         }
-        e.preventDefault();
         stopCompare({ stopAudio: true });
         stopPlayAll();
         stopAllPlayback();
@@ -3452,15 +3743,14 @@ export default function Home() {
         return;
       }
 
-      // '?' opens shortcuts
-      if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+      // '?' opens shortcuts (not while typing)
+      if ((e.key === '?' || (e.key === '/' && e.shiftKey)) && !isTypingTarget(e.target)) {
         e.preventDefault();
         setShowShortcuts(true);
         return;
       }
 
       // Don't steal keystrokes while typing (except cmd/ctrl combos and ESC/? handled above)
-      const isCombo = e.metaKey || e.ctrlKey;
       if (!isCombo && isTypingTarget(e.target)) return;
 
       // Cmd/Ctrl shortcuts
@@ -3471,9 +3761,16 @@ export default function Home() {
           setShowCommandBar(true);
           return;
         }
-        if (k === 'd') {
+        if (k === 's') {
+          if (variations.length === 0) return;
           e.preventDefault();
-          handleDownloadAll();
+          if (e.shiftKey) void handleDownloadWav();
+          else handleDownloadAll();
+          return;
+        }
+        if (k === 'e') {
+          e.preventDefault();
+          void handleExtendSelected();
           return;
         }
       }
@@ -3483,7 +3780,6 @@ export default function Home() {
         e.preventDefault();
         if (liveMode) return;
         if (compareMode) {
-          // lock current compare variation
           stopCompare();
           startVariationPlayback(compareIndex);
           return;
@@ -3559,9 +3855,16 @@ export default function Home() {
         else startCompare();
         return;
       }
-      if (key === 'e') {
+      if (key === 'e' && !isCombo) {
+        if (variations.length === 0) return;
         e.preventDefault();
-        void handleExtendSelected();
+        setEditorView(v => (v === 'piano' ? 'sheet' : 'piano'));
+        return;
+      }
+      if (key === 'd' && !isCombo) {
+        if (variations.length === 0) return;
+        e.preventDefault();
+        setPianoChordStripVisible(v => !v);
         return;
       }
       if (key === '1' || key === '2' || key === '3') {
@@ -3586,6 +3889,7 @@ export default function Home() {
     compareMode,
     editorView,
     handleDownloadAll,
+    handleDownloadWav,
     handleExtendSelected,
     handleGenerate,
     isPianoFullscreen,
@@ -3594,6 +3898,18 @@ export default function Home() {
     liveMode,
     playingVariationIndex,
     selectedVariation,
+    showAudioToMidiModal,
+    showBpmDetect,
+    showCommandBar,
+    showDownloadMenu,
+    showEmbedModal,
+    showHistory,
+    showInspire,
+    showManual,
+    showMidiUploadModal,
+    showShareModal,
+    showShortcuts,
+    showUpgradeModal,
     startCompare,
     startVariationPlayback,
     stopCompare,
@@ -3611,38 +3927,11 @@ export default function Home() {
   return (
     <>
 
-      {/* ── ONBOARDING ── */}
-      <AnimatePresence>
-        {showOnboarding && (
-          <OnboardingTooltip
-            title={
-              onboardingStep === 0 ? 'Type what you want to create' :
-              onboardingStep === 1 ? 'Pick your genre and style' :
-              onboardingStep === 2 ? 'Hit Generate and get 3 variations' :
-              'Play, edit, download or share'
-            }
-            body={
-              onboardingStep === 0 ? 'Try “dark melodic techno, 128bpm, Am”. You can be specific or keep it vague.' :
-              onboardingStep === 1 ? 'Choose a genre, then tap a style tag to load a preset instantly.' :
-              onboardingStep === 2 ? 'Generate creates 3 variations. Click a card to select the one you like best.' :
-              'Press Play, tweak notes in the piano roll, download MIDI, or share the generation link.'
-            }
-            stepLabel={`STEP ${onboardingStep + 1} / 4`}
-            targetRect={onboardingTargetRect}
-            canNext={
-              onboardingStep < 2 ? true :
-              onboardingStep === 2 ? variations.length > 0 :
-              onboardingStep === 3 ? Boolean(result) :
-              true
-            }
-            onNext={() => {
-              if (onboardingStep >= 3) completeOnboarding();
-              else setOnboardingStep(s => Math.min(3, s + 1));
-            }}
-            onSkip={completeOnboarding}
-          />
-        )}
-      </AnimatePresence>
+      <OnboardingOverlay
+        promptRef={onboardingPromptRef}
+        pianoRef={onboardingPianoRef}
+        exportRef={onboardingExportRef}
+      />
 
       {/* ── COMMAND BAR ── */}
       <CommandBar
@@ -3663,7 +3952,8 @@ export default function Home() {
         {showShortcuts && (
           <>
             <motion.div
-              className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm"
+              className="fixed inset-0 z-40 backdrop-blur-md"
+              style={{ background: 'rgba(10,10,11,0.55)' }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3671,91 +3961,147 @@ export default function Home() {
               onClick={() => setShowShortcuts(false)}
             />
             <motion.div
-              className="fixed left-1/2 top-1/2 z-[41] w-[min(920px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6"
+              className="fixed left-1/2 top-1/2 z-[41] w-[min(920px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-48px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl p-6"
               style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                boxShadow: '0 32px 90px rgba(0,0,0,0.65)',
+                background: 'color-mix(in srgb, var(--surface) 78%, transparent)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                boxShadow: '0 24px 80px rgba(0,0,0,0.45)',
               }}
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+              transition={{ duration: 0.18, ease: EASE_UI }}
               role="dialog"
               aria-modal="true"
               aria-label="Keyboard shortcuts"
+              onClick={e => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, color: 'var(--text)' }}>
+                  <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
                     Keyboard shortcuts
                   </div>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-                    Press <span style={{ color: 'var(--accent)' }}>Esc</span> to close · Press <span style={{ color: 'var(--accent)' }}>?</span> anytime to open
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
+                    Press <span style={{ color: 'var(--accent)' }}>Esc</span> or click outside to close
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowShortcuts(false)}
-                  className="h-9 px-3 rounded-lg text-xs transition-all"
+                  className="h-9 px-3 rounded-lg text-xs transition-all shrink-0"
                   style={{
-                    border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
+                    border: '1px solid rgba(255,255,255,0.6)',
                     color: 'var(--text)',
                     fontFamily: 'JetBrains Mono, monospace',
-                    background: 'transparent',
+                    background: 'rgba(255,255,255,0.06)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
                   }}
                 >
                   Esc
                 </button>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-                {[
-                  { k: 'Space', d: 'Play/Stop current variation' },
-                  { k: 'G', d: 'Generate' },
-                  { k: 'R', d: 'Regenerate' },
-                  { k: 'I', d: 'Open Inspire' },
-                  { k: 'B', d: 'Open Blog' },
-                  { k: 'P', d: 'Go to pricing' },
-                  { k: 'S', d: 'Share' },
-                  { k: '1 / 2 / 3', d: 'Select variation 1, 2, 3' },
-                  { k: 'L', d: 'Toggle Live mode' },
-                  { k: 'C', d: 'Toggle Compare mode' },
-                  { k: 'E', d: 'Extend current variation' },
-                  { k: 'Ctrl/Cmd + D', d: 'Download MIDI (full)' },
-                  { k: 'Ctrl/Cmd + K', d: 'Open command bar' },
-                  { k: 'Esc', d: 'Close any open modal' },
-                  { k: '?', d: 'Open shortcuts' },
-                ].map((row) => (
-                  <div
-                    key={row.k}
-                    className="flex items-center justify-between gap-4 rounded-xl px-4 py-3"
-                    style={{ border: '1px solid var(--border)', background: 'color-mix(in srgb, var(--surface) 92%, transparent)' }}
-                  >
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                      {row.d}
-                    </span>
-                    <span
+              <div className="mt-6 space-y-8">
+                {SHORTCUT_OVERLAY_GROUPS.map(group => (
+                  <div key={group.title}>
+                    <div
                       style={{
-                        fontFamily: 'JetBrains Mono, monospace',
+                        fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                        fontWeight: 600,
                         fontSize: 12,
-                        color: 'var(--purple)',
-                        border: '1px solid rgba(167,139,250,0.35)',
-                        background: 'rgba(167,139,250,0.10)',
-                        padding: '4px 8px',
-                        borderRadius: 8,
-                        whiteSpace: 'nowrap',
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        color: 'rgba(255,255,255,0.45)',
+                        marginBottom: 12,
                       }}
                     >
-                      {row.k}
-                    </span>
+                      {group.title}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {group.rows.map(row => (
+                        <div
+                          key={`${group.title}-${row.k}`}
+                          className="flex items-start gap-4 rounded-xl px-4 py-3"
+                          style={{
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: 'rgba(255,255,255,0.04)',
+                          }}
+                        >
+                          <span
+                            className="shrink-0"
+                            style={{
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 11,
+                              lineHeight: 1.4,
+                              color: 'rgba(255,255,255,0.92)',
+                              border: '1px solid rgba(255,255,255,0.6)',
+                              background: 'rgba(255,255,255,0.06)',
+                              backdropFilter: 'blur(12px)',
+                              WebkitBackdropFilter: 'blur(12px)',
+                              padding: '6px 10px',
+                              borderRadius: 10,
+                            }}
+                          >
+                            {row.k}
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                              fontSize: 14,
+                              lineHeight: 1.45,
+                              color: 'var(--muted)',
+                              paddingTop: 2,
+                            }}
+                          >
+                            {row.d}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
+
+              <p
+                className="mt-8 text-center"
+                style={{
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                  fontSize: 12,
+                  color: 'rgba(255,255,255,0.38)',
+                }}
+              >
+                Press ? anytime to see shortcuts
+              </p>
             </motion.div>
           </>
         )}
       </AnimatePresence>
+
+      {showKbdShortcutsTrigger && (
+        <button
+          type="button"
+          aria-label="Keyboard shortcuts"
+          title="Shortcuts (?)"
+          className="fixed z-[38] flex h-10 w-10 items-center justify-center rounded-xl transition-opacity hover:opacity-95"
+          style={{
+            bottom: 24,
+            left: 24,
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 14,
+            color: 'rgba(255,255,255,0.85)',
+            border: '1px solid rgba(255,255,255,0.14)',
+            background: 'rgba(10,10,11,0.55)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+          onClick={() => setShowShortcuts(true)}
+        >
+          ⌘
+        </button>
+      )}
 
       <AnimatePresence>
         {showShareModal && variationIds[selectedVariation] && (
@@ -3774,7 +4120,8 @@ export default function Home() {
         {showEmbedModal && (
           <>
             <motion.div
-              className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm"
+              className="fixed inset-0 z-40 backdrop-blur-md"
+              style={{ background: 'rgba(10,10,11,0.55)' }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3786,19 +4133,20 @@ export default function Home() {
               style={{
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
-                boxShadow: '0 32px 90px rgba(0,0,0,0.65)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
               }}
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+              transition={{ duration: 0.18, ease: EASE_UI }}
               role="dialog"
               aria-modal="true"
               aria-label="Embed"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, color: 'var(--text)' }}>
+                  <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
                     Embed
                   </div>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
@@ -3839,19 +4187,21 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  className="btn-download btn-sm"
+                  className="btn-download btn-sm copy-label-stack"
+                  data-copied={embedCopied ? 'true' : 'false'}
                   onClick={async () => {
                     const code = `<iframe src="https://pulp-4ubq.vercel.app/embed" width="100%" height="400" frameborder="0"></iframe>`;
                     try {
                       await navigator.clipboard.writeText(code);
                       setEmbedCopied(true);
-                      window.setTimeout(() => setEmbedCopied(false), 1600);
+                      window.setTimeout(() => setEmbedCopied(false), 2000);
                     } catch {
                       // ignore
                     }
                   }}
                 >
-                  {embedCopied ? 'Copied!' : 'Copy code'}
+                  <span className="copy-label-stack__a">Copy code</span>
+                  <span className="copy-label-stack__b">Copied</span>
                 </button>
               </div>
             </motion.div>
@@ -3884,7 +4234,8 @@ export default function Home() {
         {showHistory && (
           <>
             <motion.div
-              className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-30 backdrop-blur-md"
+              style={{ background: 'rgba(10,10,11,0.50)' }}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setShowHistory(false)}
@@ -3911,7 +4262,7 @@ export default function Home() {
 
       <main className="min-h-screen" style={{ background: 'var(--bg)' }}>
       {/* ── HERO ── */}
-      <section className="relative overflow-hidden px-4 sm:px-8 pb-12 pt-24" style={{ background: 'var(--bg)' }}>
+      <section ref={heroRef} className="relative overflow-hidden px-4 sm:px-8 pb-28 pt-24" style={{ background: 'var(--bg)' }}>
         {/* Subtle depth: grid pattern + hero glow */}
         <div
           aria-hidden
@@ -3923,9 +4274,11 @@ export default function Home() {
               'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
             backgroundSize: '64px 64px',
             pointerEvents: 'none',
+            WebkitMaskImage: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 44%, rgba(0,0,0,0) 78%)',
+            maskImage: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 44%, rgba(0,0,0,0) 78%)',
           }}
         />
-        <div
+        <motion.div
           aria-hidden
           style={{
             position: 'absolute',
@@ -3936,46 +4289,51 @@ export default function Home() {
             transform: 'translateX(-50%)',
             background: 'radial-gradient(circle at 50% 35%, rgba(255,109,63,0.08), transparent 60%)',
             pointerEvents: 'none',
+            x: prefersReducedMotion ? 0 : heroGlowX,
+            y: prefersReducedMotion ? 0 : heroGlowY,
+            opacity: prefersReducedMotion ? 0.7 : heroGlowOpacity,
+            scale: prefersReducedMotion ? 1 : heroGlowScale,
           }}
         />
-        <div className="mx-auto max-w-[720px] text-center">
+        <div className="mx-auto max-w-[920px]">
           <motion.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: EASE_OUT }}
+            transition={{ duration: 0.4, ease: EASE_UI }}
           >
             <p
-              className="mb-6 text-[11px] font-medium uppercase tracking-[0.22em]"
-              style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: '#FF6D3F' }}
+              className="mb-6 text-[11px] font-medium uppercase tracking-[0.22em] text-left"
+              style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 500, color: 'var(--accent)' }}
             >
               AI MIDI Generator
             </p>
             <h1
-              className="font-extrabold leading-[1.05] tracking-tight"
+              className="font-extrabold leading-[1.05] tracking-tight text-left"
               style={{
-                fontFamily: "'Syne', sans-serif",
-                fontWeight: 800,
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 700,
                 fontSize: 'clamp(2.25rem, 6vw, 4rem)',
-                color: '#F5F5F5',
-                letterSpacing: '-0.03em',
+                color: 'var(--text)',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.12,
               }}
             >
-              MIDI from language, instantly.
+              Generate MIDI from text
             </h1>
             <p
-              className="mx-auto mt-6 max-w-[560px] text-[18px] leading-snug"
-              style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: '#8A8A9A' }}
+              className="mt-6 max-w-[620px] text-[16px] leading-snug sm:text-[18px] text-left"
+              style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400, color: 'var(--muted)', lineHeight: 1.6 }}
             >
-              Describe a track in text — pulp returns four-layer MIDI, keyed and tempo-locked, export-ready for any DAW.
+              Describe a genre, artist, or mood and get MIDI for melody, chords, bass, and drums.
             </p>
-            <div className="mt-10 flex flex-col items-stretch justify-center gap-4 sm:mt-12 sm:flex-row sm:items-center sm:justify-center">
+            <div className="mt-10 flex flex-col items-stretch justify-start gap-4 sm:mt-12 sm:flex-row sm:items-center sm:justify-start">
               {effectiveIsSignedIn ? (
                 <Link
                   href="/dashboard"
                   className="btn-primary btn-hero"
                   style={{ textDecoration: 'none' }}
                 >
-                  Start generating free
+                  Start generating
                 </Link>
               ) : (
                 <SignInButtonDeferred mode="modal">
@@ -3983,7 +4341,7 @@ export default function Home() {
                     type="button"
                     className="btn-primary btn-hero w-full sm:w-auto"
                   >
-                    Start generating free
+                    Start generating
                   </button>
                 </SignInButtonDeferred>
               )}
@@ -3996,16 +4354,47 @@ export default function Home() {
                   textDecoration: 'none',
                 }}
               >
-                See how it works
+                View demo
               </a>
             </div>
           </motion.div>
         </div>
       </section>
 
+      {/* Works with any DAW strip */}
+      <section ref={dawStripRef} className="relative px-4 sm:px-8 py-20">
+        <div aria-hidden className="noise-overlay" />
+        <motion.div
+          className="mx-auto max-w-[1200px] mobile-scroll-row"
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 12,
+            letterSpacing: '0.02em',
+            color: 'rgba(240,240,255,0.70)',
+            opacity: prefersReducedMotion ? 0.68 : dawSpotlightOpacity,
+          }}
+        >
+          <div className="row w-full items-center justify-start sm:justify-center" style={{ paddingTop: 2, paddingBottom: 2 }}>
+            <span>FL Studio</span>
+            <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+            <span>Ableton Live</span>
+            <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+            <span>Logic Pro</span>
+            <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+            <span>Cubase</span>
+            <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+            <span>Studio One</span>
+            <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+            <span>Bitwig</span>
+            <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+            <span>Reaper</span>
+          </div>
+        </motion.div>
+      </section>
+
       {/* ── STATS ── */}
       <motion.section
-        className="mt-24 px-4 sm:px-8 py-10"
+        className="mt-24 px-4 sm:px-8 py-24"
         style={{ background: 'rgba(17,17,24,0.65)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         {...scrollSection}
       >
@@ -4014,14 +4403,14 @@ export default function Home() {
             <div key={row.value + row.label} className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center sm:py-6">
               <p
                 style={{
-                  fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif',
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                   fontSize: 15,
                   lineHeight: 1.4,
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                <span style={{ color: '#F5F5F5', fontWeight: 600 }}>{row.value}</span>
-                <span style={{ color: '#8A8A9A' }}>{row.label}</span>
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{row.value}</span>
+                <span style={{ color: 'var(--muted)' }}>{row.label}</span>
               </p>
             </div>
           ))}
@@ -4029,87 +4418,155 @@ export default function Home() {
       </motion.section>
 
       {/* ── DEMO / FEATURES ── */}
-      <motion.section
-        id="demo"
-        className="mt-24 px-4 sm:px-8 pb-8"
-        style={{ background: '#09090B' }}
-        {...scrollSection}
-      >
+      <section id="demo" className="mt-24 px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} ref={demoFeaturesRef}>
         <div className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
           {[
             {
-              title: 'Artist-aware',
-              body: 'Steer grooves with artist-inspired prompts and style tags.',
+              title: 'Artist hints',
+              body: 'Use artist names and style tags to guide the pattern.',
               icon: (
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0">
-                  <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
-                  <path d="M4 20a8 8 0 0116 0" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
+                  <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M4 20a8 8 0 0116 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               ),
             },
             {
-              title: 'Piano Roll editor',
-              body: 'Tweak notes, velocity, and timing in a fast FL-style roll.',
+              title: 'Piano roll',
+              body: 'Edit notes, timing, and velocity before you export.',
               icon: (
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0">
-                  <rect x="3" y="5" width="18" height="14" rx="2" stroke="#FF6D3F" strokeWidth="1.5" />
-                  <path d="M7 15V9M10 15v-4M13 15V8M16 15v-6" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
+                  <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M7 15V9M10 15v-4M13 15V8M16 15v-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               ),
             },
             {
-              title: 'Instant MIDI export',
-              body: 'Download .mid or drag layers straight into your session.',
+              title: 'MIDI export',
+              body: 'Download a .mid file or drag layers into your DAW.',
               icon: (
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0">
-                  <path d="M12 4v12M8 12l4 4 4-4" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M5 20h14" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
+                  <path d="M12 4v12M8 12l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 20h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               ),
             },
-          ].map(card => (
-            <div
+          ].map((card, idx) => (
+            <motion.div
               key={card.title}
-              className="rounded-[14px] border border-[#1A1A2E] bg-[#111118] p-6 transition-[border-color] duration-200 hover:border-[#FF6D3F] md:p-8"
+              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 transition-[border-color] duration-200 hover:border-[rgba(255,109,63,0.45)] md:p-8"
+              style={{
+                opacity: prefersReducedMotion ? 1 : (idx === 0 ? demoCard0O : idx === 1 ? demoCard1O : demoCard2O),
+                x: prefersReducedMotion ? 0 : (idx === 0 ? demoCard0X : idx === 1 ? demoCard1X : demoCard2X),
+                y: prefersReducedMotion ? 0 : (idx === 0 ? demoCard0Y : idx === 1 ? demoCard1Y : demoCard2Y),
+                rotate: prefersReducedMotion ? 0 : (idx === 0 ? demoCard0R : idx === 1 ? demoCard1R : demoCard2R),
+              }}
             >
               <div className="mb-5 flex items-start gap-4">
                 {card.icon}
                 <h2
                   className="text-lg font-bold leading-tight"
-                  style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: '#F5F5F5' }}
+                  style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}
                 >
                   {card.title}
                 </h2>
               </div>
-              <p className="text-[15px] leading-relaxed" style={{ fontFamily: 'DM Sans, sans-serif', color: '#8A8A9A' }}>
+              <p className="text-[15px] leading-relaxed" style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--muted)' }}>
                 {card.body}
               </p>
-            </div>
+            </motion.div>
           ))}
         </div>
-      </motion.section>
+      </section>
 
       {/* ── GENERATOR ── */}
-      <motion.section className="mt-24 px-4 sm:px-8 pb-10" style={{ background: '#09090B' }} {...scrollSection}>
+      <motion.section className="mt-24 px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} {...scrollSection}>
         <div className="mx-auto max-w-[1280px]">
-          <motion.div id="generator" ref={toolRef} className="mx-auto w-full max-w-[720px]">
+          <motion.div id="generator" ref={toolRef} className="relative mx-auto w-full max-w-[720px]">
+            {genBar === 'loading' && (
+              <div className="generator-progress-host rounded-t-xl overflow-hidden" aria-hidden>
+                <div className="generator-progress-bar">
+                  <div className="generator-progress-bar__fill" />
+                </div>
+              </div>
+            )}
+            {genBar === 'complete' && (
+              <div className="generator-progress-host rounded-t-xl overflow-hidden" aria-hidden>
+                <div className="generator-progress-bar generator-progress-bar--success">
+                  <div className="generator-progress-bar__fill" />
+                </div>
+              </div>
+            )}
+            {genBar === 'error' && (
+              <div className="generator-progress-host rounded-t-xl overflow-hidden" aria-hidden>
+                <div className="generator-progress-bar generator-progress-bar--error">
+                  <div className="generator-progress-bar__fill" />
+                </div>
+              </div>
+            )}
             <div className="px-4 sm:px-0">
 
             {/* Prompt — primary Generate below */}
-            <div className="mb-4 hidden sm:block">
+            <div ref={onboardingPromptRef} className="mb-4 hidden sm:block">
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: '#FF6D3F' }}>✦</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: 'var(--accent)' }}>✦</span>
                 <input
                   ref={promptRef}
                   type="text"
                   value={prompt}
+                  readOnly={isGenerating}
                   onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); if (e.target.value.trim().length > 0) setPromptCardsDismissed(false); }}
                   onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
-                  placeholder="dark melodic techno, 128bpm, Am"
-                  className="input-field pr-4"
-                  style={{ paddingLeft: 40 }}
+                  placeholder="e.g. Deep house, 122 BPM, minor key"
+                  className="input-field pr-4 w-full"
+                  style={{ paddingLeft: 40, opacity: isGenerating ? 0.55 : 1 }}
+                  aria-busy={isGenerating}
                 />
               </div>
+
+              {templatesOpen && !isGenerating && (
+                <div className="mt-3">
+                  <div
+                    className="mb-2"
+                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.50)' }}
+                  >
+                    Start with a template
+                  </div>
+                  <div className="md:overflow-x-auto overflow-x-hidden scrollbar-none">
+                    <div className="flex flex-wrap md:flex-nowrap gap-2 pb-1">
+                      {QUICK_START_TEMPLATES.map(t => (
+                        <button
+                          key={t.name}
+                          type="button"
+                          onClick={() => runTemplate(t)}
+                          className="shrink-0 rounded-xl px-3 py-2 text-left transition-all"
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            backdropFilter: 'blur(16px)',
+                            WebkitBackdropFilter: 'blur(16px)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.01)';
+                            e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.borderColor = '';
+                          }}
+                        >
+                          <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>
+                            {t.name}
+                          </div>
+                          <div style={{ marginTop: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>
+                            {t.subtitle}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <AnimatePresence>
                 {!promptCardsDismissed && prompt.trim().length === 0 && !isGenerating && (
@@ -4118,7 +4575,7 @@ export default function Home() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    transition={{ duration: 0.18, ease: EASE_UI }}
                   >
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                       {[
@@ -4138,17 +4595,14 @@ export default function Home() {
                           type="button"
                           className="group rounded-xl px-3 py-3 text-left transition-all"
                           style={{
-                            background: '#111118',
-                            border: '1px solid #1A1A2E',
-                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#1A1A2E';
-                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                            e.currentTarget.style.borderColor = '';
                           }}
                           onClick={() => {
                             setPrompt(g);
@@ -4162,7 +4616,7 @@ export default function Home() {
                               style={{ width: 8, height: 8, background: 'rgba(255,109,63,0.9)' }}
                               aria-hidden
                             />
-                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#F0F0FF', fontWeight: 600 }}>
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
                               {g}
                             </span>
                           </div>
@@ -4184,17 +4638,14 @@ export default function Home() {
                           type="button"
                           className="group rounded-xl px-3 py-3 text-left transition-all"
                           style={{
-                            background: '#0D0D12',
-                            border: '1px solid #1A1A2E',
-                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                            background: 'var(--bg)',
+                            border: '1px solid var(--border)',
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#1A1A2E';
-                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                            e.currentTarget.style.borderColor = '';
                           }}
                           onClick={() => {
                             const base = (prompt ?? '').trim();
@@ -4207,10 +4658,10 @@ export default function Home() {
                           <div className="flex items-center gap-2">
                             <span
                               className="inline-block rounded-sm"
-                              style={{ width: 10, height: 2, background: 'rgba(0,184,148,0.9)' }}
+                              style={{ width: 10, height: 2, background: 'rgba(255,109,63,0.85)' }}
                               aria-hidden
                             />
-                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'rgba(240,240,255,0.92)', fontWeight: 600 }}>
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
                               {m}
                             </span>
                           </div>
@@ -4224,38 +4675,104 @@ export default function Home() {
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
                   {effectiveIsSignedIn ? 'Press Enter to generate' : 'Sign in to generate below'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowInspire(v => !v)}
-                  className="text-left shrink-0"
-                  style={{
-                    fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: 11,
-                    color: 'var(--foreground-muted)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    textUnderlineOffset: 3,
-                  }}
-                >
-                  Inspire
-                </button>
+                <div className="flex items-center gap-4">
+                  {!templatesOpen && variations.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTemplatesOpen(true)}
+                      className="text-left shrink-0"
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: 11,
+                        color: 'var(--foreground-muted)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: 3,
+                      }}
+                    >
+                      Templates
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowInspire(v => !v)}
+                    className="text-left shrink-0"
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                      color: 'var(--foreground-muted)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 3,
+                    }}
+                  >
+                    Inspire
+                  </button>
+                </div>
               </div>
             </div>
             <div className="sm:hidden flex flex-col gap-2 mb-4">
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: '#FF6D3F' }}>✦</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: 'var(--accent)' }}>✦</span>
                 <input
                   type="text"
                   value={prompt}
+                  readOnly={isGenerating}
                   onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); if (e.target.value.trim().length > 0) setPromptCardsDismissed(false); }}
                   onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
-                  placeholder="dark melodic techno, 128bpm, Am"
-                  className="input-field"
-                  style={{ paddingLeft: 40 }}
+                  placeholder="e.g. Deep house, 122 BPM, minor key"
+                  className="input-field w-full"
+                  style={{ paddingLeft: 40, opacity: isGenerating ? 0.55 : 1 }}
+                  aria-busy={isGenerating}
                 />
               </div>
+              {templatesOpen && !isGenerating && (
+                <div className="mt-3">
+                  <div
+                    className="mb-2"
+                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.50)' }}
+                  >
+                    Start with a template
+                  </div>
+                  <div className="mobile-scroll-row">
+                    <div className="row">
+                      {QUICK_START_TEMPLATES.map(t => (
+                        <button
+                          key={t.name}
+                          type="button"
+                          onClick={() => runTemplate(t)}
+                          className="shrink-0 rounded-xl px-3 py-2 text-left transition-all"
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            backdropFilter: 'blur(16px)',
+                            WebkitBackdropFilter: 'blur(16px)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.01)';
+                            e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.borderColor = '';
+                          }}
+                        >
+                          <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>
+                            {t.name}
+                          </div>
+                          <div style={{ marginTop: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>
+                            {t.subtitle}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
               <AnimatePresence>
                 {!promptCardsDismissed && prompt.trim().length === 0 && !isGenerating && (
                   <motion.div
@@ -4263,9 +4780,10 @@ export default function Home() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    transition={{ duration: 0.18, ease: EASE_UI }}
                   >
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="mobile-scroll-row">
+                      <div className="row">
                       {[
                         'Tech House',
                         'Deep House',
@@ -4281,19 +4799,17 @@ export default function Home() {
                         <button
                           key={g}
                           type="button"
-                          className="group rounded-xl px-3 py-3 text-left transition-all"
+                          className="group shrink-0 rounded-xl px-3 py-3 text-left transition-all"
                           style={{
-                            background: '#111118',
-                            border: '1px solid #1A1A2E',
-                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            minWidth: 148,
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#1A1A2E';
-                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                            e.currentTarget.style.borderColor = '';
                           }}
                           onClick={() => {
                             setPrompt(g);
@@ -4306,15 +4822,17 @@ export default function Home() {
                               style={{ width: 8, height: 8, background: 'rgba(255,109,63,0.9)' }}
                               aria-hidden
                             />
-                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#F0F0FF', fontWeight: 600 }}>
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
                               {g}
                             </span>
                           </div>
                         </button>
                       ))}
+                      </div>
                     </div>
 
-                    <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="mt-2 mobile-scroll-row">
+                      <div className="row">
                       {[
                         'Dark',
                         'Energetic',
@@ -4326,19 +4844,17 @@ export default function Home() {
                         <button
                           key={m}
                           type="button"
-                          className="group rounded-xl px-3 py-3 text-left transition-all"
+                          className="group shrink-0 rounded-xl px-3 py-3 text-left transition-all"
                           style={{
-                            background: '#0D0D12',
-                            border: '1px solid #1A1A2E',
-                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                            background: 'var(--bg)',
+                            border: '1px solid var(--border)',
+                            minWidth: 132,
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#1A1A2E';
-                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                            e.currentTarget.style.borderColor = '';
                           }}
                           onClick={() => {
                             const base = (prompt ?? '').trim();
@@ -4350,7 +4866,7 @@ export default function Home() {
                           <div className="flex items-center gap-2">
                             <span
                               className="inline-block rounded-sm"
-                              style={{ width: 10, height: 2, background: 'rgba(0,184,148,0.9)' }}
+                              style={{ width: 10, height: 2, background: 'rgba(255,109,63,0.85)' }}
                               aria-hidden
                             />
                             <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'rgba(240,240,255,0.92)', fontWeight: 600 }}>
@@ -4359,6 +4875,7 @@ export default function Home() {
                           </div>
                         </button>
                       ))}
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -4391,27 +4908,38 @@ export default function Home() {
               {effectiveIsSignedIn ? (
                 <SpotlightButton
                   type="button"
-                  className={`btn-primary btn-hero${isGenerating ? ' pulsing' : ''}`}
+                  className={`btn-primary btn-hero w-full${isGenerating ? ' pulsing' : ''}`}
                   onClick={() => void handleGenerate()}
                   disabled={isGenerating}
                 >
-                  {isGenerating ? (
-                    <span className="flex items-center gap-3">
-                      <span className="spinner" />
-                      {generatingStage || 'Generating…'}
-                    </span>
-                  ) : (
-                    'Generate now'
-                  )}
+                  {isGenerating ? <ButtonLoadingDots label="Generating" /> : 'Generate'}
                 </SpotlightButton>
               ) : (
                 <SignInButtonDeferred mode="modal">
-                  <SpotlightButton type="button" className="btn-primary btn-hero">
-                    Generate now
+                  <SpotlightButton type="button" className="btn-primary btn-hero w-full">
+                    Generate
                   </SpotlightButton>
                 </SignInButtonDeferred>
               )}
             </div>
+            {generationError && (
+              <div className="mb-4 px-2 text-center" role="alert">
+                <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+                  {generationError}
+                </p>
+                <button
+                  type="button"
+                  className="mt-2 text-sm font-medium"
+                  style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  onClick={() => {
+                    setGenerationError(null);
+                    setGenBar('idle');
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             {effectiveIsSignedIn && (
               <div className="mb-4 flex justify-center">
                 <div className="flex items-center gap-3">
@@ -4421,8 +4949,8 @@ export default function Home() {
                     className="rounded-xl border px-5 py-3 text-sm font-semibold transition-opacity"
                     style={{
                       fontFamily: 'DM Sans, sans-serif',
-                      borderColor: isStudio ? 'rgba(255,109,63,0.45)' : '#2A2A40',
-                      color: isStudio ? '#F5F5F5' : '#8A8A9A',
+                      borderColor: isStudio ? 'rgba(255,109,63,0.45)' : 'var(--border-weak)',
+                      color: isStudio ? 'var(--text)' : 'var(--muted)',
                       background: isStudio ? 'rgba(255,109,63,0.08)' : 'transparent',
                       opacity: isStudio ? 1 : 0.4,
                       cursor: isStudio ? 'pointer' : 'not-allowed',
@@ -4437,7 +4965,7 @@ export default function Home() {
                   </button>
                   <span
                     className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                    style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
+                    style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontFamily: 'DM Sans, sans-serif' }}
                   >
                     Studio only
                   </span>
@@ -4448,9 +4976,9 @@ export default function Home() {
                       className="rounded-xl border px-5 py-3 text-sm font-semibold transition-opacity"
                       style={{
                         fontFamily: 'DM Sans, sans-serif',
-                        borderColor: isStudio ? 'rgba(167,139,250,0.40)' : '#2A2A40',
-                        color: isStudio ? '#F5F5F5' : '#8A8A9A',
-                        background: isStudio ? 'rgba(167,139,250,0.10)' : 'transparent',
+                        borderColor: isStudio ? 'rgba(255,109,63,0.40)' : 'var(--border-weak)',
+                        color: isStudio ? 'var(--text)' : 'var(--muted)',
+                        background: isStudio ? 'rgba(255,109,63,0.10)' : 'transparent',
                         opacity: isStudio ? 1 : 0.4,
                         cursor: isStudio ? 'pointer' : 'not-allowed',
                       }}
@@ -4468,7 +4996,7 @@ export default function Home() {
                     </button>
                     <span
                       className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                      style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
+                      style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontFamily: 'DM Sans, sans-serif' }}
                     >
                       Studio only
                     </span>
@@ -4478,7 +5006,7 @@ export default function Home() {
             )}
             {!effectiveIsSignedIn && (
               <p className="-mt-2 mb-4 text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                No credit card required · 10 free generations per month
+                No card required · 10 generations per month
               </p>
             )}
 
@@ -4486,11 +5014,11 @@ export default function Home() {
               {showInspire && (
                 <motion.form
                   className="mb-4 rounded-xl p-3"
-                  style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  transition={{ duration: 0.18, ease: EASE_UI }}
                   onSubmit={e => {
                     e.preventDefault();
                     void handleInspire();
@@ -4500,10 +5028,11 @@ export default function Home() {
                     <input
                       value={inspireText}
                       onChange={e => setInspireText(e.target.value)}
-                      placeholder="Inspire from a song or artist..."
-                      className="input-field"
+                      placeholder="e.g. Burial, Archangel"
+                      className={`input-field${inspireFieldStatus === 'error' ? ' input-field--error' : ''}${inspireFieldStatus === 'success' ? ' input-field--success' : ''}`}
                       style={{ height: 40, paddingLeft: 14, paddingRight: 14 }}
                       disabled={isInspiring}
+                      aria-invalid={inspireFieldStatus === 'error'}
                     />
                     <SpotlightButton
                       type="submit"
@@ -4511,9 +5040,14 @@ export default function Home() {
                       style={{ whiteSpace: 'nowrap' }}
                       disabled={isInspiring || !inspireText.trim()}
                     >
-                      {isInspiring ? '…' : 'Apply'}
+                      {isInspiring ? <ButtonLoadingDots label="Applying" /> : 'Apply'}
                     </SpotlightButton>
                   </div>
+                  {inspireFieldStatus === 'error' && (
+                    <p className="mt-2 text-xs" style={{ color: 'var(--muted)' }}>
+                      Inspiration failed. Check your input and try again.
+                    </p>
+                  )}
 
                   {effectiveIsSignedIn && inspirationChips.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -4523,8 +5057,8 @@ export default function Home() {
                           type="button"
                           className="style-pill"
                           style={{
-                            borderColor: 'rgba(167,139,250,0.45)',
-                            color: '#A78BFA',
+                            borderColor: 'rgba(255,109,63,0.45)',
+                            color: 'var(--muted)',
                           }}
                           onClick={() => {
                             // Apply instantly without showing the input.
@@ -4579,7 +5113,7 @@ export default function Home() {
                                 if (promptSuggestion) setPrompt(promptSuggestion);
                                 setActiveStyleTag(styleTag && STYLE_TAGS[styleTag] ? styleTag : null);
 
-                                toast.toast(`Inspired by ${chip}`, 'success');
+                              toast.toast(`Loaded inspiration: ${chip}`, 'success');
                               } catch {
                                 toast.toast('Inspire failed', 'danger');
                               } finally {
@@ -4601,14 +5135,14 @@ export default function Home() {
             {/* Credits indicator */}
             {credits !== null && !credits.isPro && (
               <p className="text-xs mb-3 mt-1" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}>
-                <span style={{ color: credits.used >= credits.limit ? '#E94560' : 'var(--muted)' }}>
+                <span style={{ color: credits.used >= credits.limit ? 'var(--accent)' : 'var(--muted)' }}>
                   {Math.max(0, credits.limit - credits.used)} / {credits.limit}
                 </span>
                 {' '}
                 {effectiveIsSignedIn ? (
                   <>
                     generations remaining ·{' '}
-                    <a href="/pricing" style={{ color: '#FF6D3F', textDecoration: 'none' }}>Upgrade to Pro</a>
+                    <a href="/pricing" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Upgrade to Pro</a>
                   </>
                 ) : (
                   'guest generations left today'
@@ -4657,12 +5191,12 @@ export default function Home() {
                   style={{ borderBottom: '1px solid var(--border)' }}
                 >
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: '#FF6D3F' }} />
+                    <div className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em' }}>
                       EXAMPLE OUTPUT — Tech House 128 BPM · Am
                     </span>
                   </div>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.4)' }}>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
                     Generate yours →
                   </span>
                 </div>
@@ -4670,15 +5204,15 @@ export default function Home() {
                 {/* Fake piano rolls */}
                 <div className="grid grid-cols-2 gap-3 p-4">
                   {[
-                    { name: 'Melody', color: '#FF6D3F' },
-                    { name: 'Chords', color: '#A78BFA' },
-                    { name: 'Bass', color: '#00B894' },
-                    { name: 'Drums', color: '#E94560' },
+                    { name: 'Melody', color: LAYER_VIZ_COLORS.melody },
+                    { name: 'Chords', color: LAYER_VIZ_COLORS.chords },
+                    { name: 'Bass', color: LAYER_VIZ_COLORS.bass },
+                    { name: 'Drums', color: LAYER_VIZ_COLORS.drums },
                   ].map(layer => (
                     <div
                       key={layer.name}
                       className="rounded-xl overflow-hidden"
-                      style={{ border: `1px solid ${layer.color}22`, background: '#0A0A0F', height: 64, position: 'relative' }}
+                      style={{ border: '1px solid var(--border-weak)', background: 'var(--bg)', height: 64, position: 'relative' }}
                     >
                       {/* Layer label */}
                       <div className="absolute top-2 left-3 flex items-center gap-1.5">
@@ -4718,7 +5252,7 @@ export default function Home() {
                 {/* Overlay CTA */}
                 <div
                   className="absolute inset-0 flex items-center justify-center"
-                  style={{ background: 'linear-gradient(to top, rgba(9,9,11,0.7) 0%, transparent 100%)' }}
+                  style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 100%)' }}
                 >
                   <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(240,240,255,0.5)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
                     ↑ Hit Generate to create yours
@@ -4746,12 +5280,12 @@ export default function Home() {
             )}
 
             {/* Manual controls */}
-            <div className="mb-6 rounded-xl overflow-hidden" style={{ border: '1px solid #1A1A2E' }}>
+            <div className="mb-6 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
               <button
                 onClick={() => setShowManual(!showManual)}
                 className="w-full px-5 py-3 flex items-center justify-between transition-colors"
                 style={{ color: 'var(--text)', opacity: 0.6, fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#F0F0FF'; e.currentTarget.style.opacity = '1'; }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.opacity = '1'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.opacity = '0.6'; }}
               >
                 <span className="flex items-center gap-2"><span>⚙</span> Manual controls</span>
@@ -4764,11 +5298,11 @@ export default function Home() {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    transition={{ duration: 0.2, ease: EASE_UI }}
                     style={{ overflow: 'hidden' }}
                   >
                     <div className="px-5 pb-5 pt-4 flex flex-col gap-4"
-                      style={{ borderTop: '1px solid #1A1A2E' }}>
+                      style={{ borderTop: '1px solid var(--border)' }}>
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wider"
                           style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
@@ -4813,7 +5347,7 @@ export default function Home() {
                             style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Feel</label>
                           <span
                             className="text-xs tabular-nums"
-                            style={{ color: '#F0F0FF', fontFamily: 'JetBrains Mono, monospace' }}
+                            style={{ color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}
                           >
                             {params.humanization}%
                           </span>
@@ -4855,7 +5389,7 @@ export default function Home() {
                                 fontFamily: 'JetBrains Mono, monospace',
                                 background: 'rgba(255,109,63,0.10)',
                                 border: '1px solid rgba(255,109,63,0.25)',
-                                color: '#FFAB91',
+                                color: 'var(--muted)',
                               }}
                             >
                               {(variations.length > 0 ? variations[selectedVariation]?.params.key : null) ?? params.key}{' '}
@@ -4863,7 +5397,7 @@ export default function Home() {
                             </span>
                             <span
                               className="text-xs font-semibold"
-                              style={{ color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace' }}
+                              style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}
                             >
                               {params.bpm}
                             </span>
@@ -4884,7 +5418,7 @@ export default function Home() {
                             className="h-9 px-3 rounded-lg text-xs transition-all"
                             style={{
                               border: '1px solid rgba(255,255,255,0.12)',
-                              color: '#F0F0FF',
+                              color: 'var(--text)',
                               fontFamily: 'JetBrains Mono, monospace',
                               background: 'transparent',
                             }}
@@ -4904,7 +5438,7 @@ export default function Home() {
                             className="h-9 px-3 rounded-lg text-xs transition-all"
                             style={{
                               border: '1px solid rgba(255,255,255,0.12)',
-                              color: '#F0F0FF',
+                              color: 'var(--text)',
                               fontFamily: 'JetBrains Mono, monospace',
                               background: 'transparent',
                             }}
@@ -4925,14 +5459,14 @@ export default function Home() {
                               onChange={e => void handleDetectBpmFile(e.target.files?.[0] ?? null)}
                               disabled={isDetectingBpm}
                               className="block w-full text-xs"
-                              style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}
+                              style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}
                             />
                           </div>
                         )}
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block mb-2 text-xs uppercase tracking-wider"
-                          style={{ color: '#8A8A9A', fontFamily: 'JetBrains Mono, monospace' }}>Bars</label>
+                          style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Bars</label>
                         <select className="w-full" value={params.bars} onChange={e => setParams(p => ({ ...p, bars: parseInt(e.target.value) }))}>
                           {[2, 4, 8].map(b => <option key={b} value={b}>{b} bars</option>)}
                         </select>
@@ -4948,7 +5482,7 @@ export default function Home() {
             <AnimatePresence>
               {isGenerating && (
                 <div>
-                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#FF6D3F', textAlign: 'center', marginBottom: 16, letterSpacing: '0.06em' }}>
+                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--accent)', textAlign: 'center', marginBottom: 16, letterSpacing: '0.06em' }}>
                     {generatingStage}
                   </p>
                   <motion.div
@@ -4985,8 +5519,8 @@ export default function Home() {
                         </SpotlightButton>
                       )}
                       {compareMode && (
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A' }}>
-                          Comparing variations… <span style={{ color: '#FF6D3F' }}>V{compareIndex + 1}</span>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
+                          Comparing variations… <span style={{ color: 'var(--accent)' }}>V{compareIndex + 1}</span>
                         </span>
                       )}
                     </div>
@@ -5060,11 +5594,12 @@ export default function Home() {
             <AnimatePresence>
               {result && !isGenerating && (
                 <motion.div
+                  ref={onboardingExportRef}
                   className="flex gap-2 mb-5 flex-wrap items-center"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  transition={{ duration: 0.25, ease: EASE_UI }}
                 >
                   <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
                     {playingAll ? '■  Stop' : '▶  Play All'}
@@ -5086,20 +5621,19 @@ export default function Home() {
                       });
                     }}
                     className="btn-secondary btn-sm"
-                    style={liveMode ? { borderColor: 'rgba(233,69,96,0.45)' } : undefined}
+                    style={liveMode ? { borderColor: 'rgba(255,109,63,0.45)' } : undefined}
                   >
                     <span className="flex items-center gap-2">
                       <span
+                        className={liveMode ? 'animate-pulse' : ''}
                         style={{
                           width: 8,
                           height: 8,
                           borderRadius: 999,
-                          background: '#E94560',
-                          boxShadow: liveMode ? '0 0 0 4px rgba(233,69,96,0.20)' : 'none',
-                          animation: liveMode ? 'pulse-ring 1.2s ease-out infinite' : 'none',
+                          background: DS.accent,
                         }}
                       />
-                      <span style={{ color: liveMode ? '#E94560' : '#F0F0FF' }}>
+                      <span style={{ color: liveMode ? DS.accent : 'var(--text)' }}>
                         LIVE
                       </span>
                     </span>
@@ -5165,17 +5699,17 @@ export default function Home() {
                             />
                             <motion.div
                               className="absolute right-0 top-[calc(100%+8px)] z-[91] w-[220px] overflow-hidden rounded-xl"
-                              style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+                              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
                               initial={{ opacity: 0, y: -6, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                              transition={{ duration: 0.16, ease: 'easeOut' }}
+                              transition={{ duration: 0.16, ease: EASE_UI }}
                               onClick={e => e.stopPropagation()}
                             >
                               <button
                                 type="button"
                                 className="w-full px-4 py-3 text-left text-sm transition-colors"
-                                style={{ fontFamily: 'DM Sans, sans-serif', color: '#F0F0FF' }}
+                                style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--text)' }}
                                 onClick={() => {
                                   setShowDownloadMenu(false);
                                   handleDownloadAll();
@@ -5183,7 +5717,7 @@ export default function Home() {
                               >
                                 All tracks
                               </button>
-                              <div style={{ height: 1, background: '#1A1A2E' }} />
+                              <div style={{ height: 1, background: 'var(--border)' }} />
                               {([
                                 { k: 'melody' as const, label: 'Melody' },
                                 { k: 'chords' as const, label: 'Chords' },
@@ -5219,23 +5753,18 @@ export default function Home() {
                     disabled={isRenderingWav}
                     title="Render and download WAV"
                   >
-                    {isRenderingWav ? (
-                      <span className="flex items-center gap-2">
-                        <span className="spinner" />
-                        Rendering…
-                      </span>
-                    ) : (
-                      '↓  Download WAV'
-                    )}
+                    {isRenderingWav ? <ButtonLoadingDots label="Rendering WAV" /> : '↓  Download WAV'}
                   </SpotlightButton>
                   <SpotlightButton
                     type="button"
                     onClick={handleShare}
-                    className="btn-secondary btn-sm"
+                    className="btn-secondary btn-sm copy-label-stack"
+                    data-copied={shareCopied ? 'true' : 'false'}
                     disabled={!variationIds[selectedVariation]}
                     title="Copy share link"
                   >
-                    ⧉  Share
+                    <span className="copy-label-stack__a">⧉  Share</span>
+                    <span className="copy-label-stack__b">Copied</span>
                   </SpotlightButton>
                   <SpotlightButton
                     type="button"
@@ -5247,13 +5776,18 @@ export default function Home() {
                       setShowAudioToMidiModal(true);
                     }}
                     className="btn-secondary btn-sm"
-                    style={isStudio ? { borderColor: 'rgba(167,139,250,0.30)', color: '#E9D5FF' } : undefined}
+                    style={isStudio ? { borderColor: 'rgba(255,109,63,0.30)', color: 'var(--text)' } : undefined}
                     title={isStudio ? 'Convert audio to editable MIDI (Studio)' : 'Available on Studio plan'}
                   >
                     Audio to MIDI
                   </SpotlightButton>
-                  <SpotlightButton onClick={handleCreateCollab} className="btn-secondary btn-sm">
-                    {collabCopied ? 'Copied!' : 'Collab'}
+                  <SpotlightButton
+                    onClick={handleCreateCollab}
+                    className="btn-secondary btn-sm copy-label-stack"
+                    data-copied={collabCopied ? 'true' : 'false'}
+                  >
+                    <span className="copy-label-stack__a">Collab</span>
+                    <span className="copy-label-stack__b">Copied</span>
                   </SpotlightButton>
                   <SpotlightButton onClick={handleDownloadMusicXml} className="btn-secondary btn-sm">
                     ↓  Download MusicXML
@@ -5261,7 +5795,7 @@ export default function Home() {
                   <SpotlightButton onClick={handleDownloadJson} className="btn-secondary btn-sm">
                     ↓  Download JSON
                   </SpotlightButton>
-                  <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm">
+                  <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm" disabled={isGenerating}>
                     ↻  Regenerate
                   </SpotlightButton>
                   {variationIds[selectedVariation] && (
@@ -5284,17 +5818,18 @@ export default function Home() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  transition={{ duration: 0.35, ease: EASE_UI }}
                 >
-                  <div className="rounded-2xl px-5 py-4" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
+                  <div className="rounded-2xl px-5 py-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                     <p
                       className="leading-tight"
                       style={{
-                        fontFamily: 'Syne, sans-serif',
-                        fontWeight: 800,
+                        fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                        fontWeight: 700,
                         fontSize: 26,
-                        letterSpacing: '-0.01em',
-                        backgroundImage: 'linear-gradient(90deg, #FF6D3F 0%, #FFAB91 100%)',
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.2,
+                        backgroundImage: 'linear-gradient(90deg, rgba(255,109,63,0.95) 0%, rgba(255,109,63,0.35) 100%)',
                         WebkitBackgroundClip: 'text',
                         backgroundClip: 'text',
                         color: 'transparent',
@@ -5307,7 +5842,7 @@ export default function Home() {
                     </p>
                     <p
                       className="mt-2 text-xs"
-                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.6)' }}
+                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.50)' }}
                     >
                       {(variations[selectedVariation]?.params.key ?? params.key)} {(variations[selectedVariation]?.params.scale ?? params.scale)}
                     </p>
@@ -5356,7 +5891,7 @@ export default function Home() {
                     .filter(Boolean)
                     .map(tag => (
                       <span key={tag} className="px-2 py-1 rounded-md text-xs"
-                        style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A', background: '#111118', border: '1px solid #1A1A2E' }}>
+                        style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}>
                         {tag}
                       </span>
                     ))}
@@ -5373,14 +5908,14 @@ export default function Home() {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3, ease: 'easeOut' }}
-                  style={{ border: '1px solid #1A1A2E', borderRadius: 12, overflow: 'hidden' }}
+                  transition={{ duration: 0.3, ease: EASE_UI }}
+                  style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}
                 >
                   {/* Header: label + layer tabs */}
                   <div className="flex items-center justify-between px-4 py-3"
-                    style={{ background: '#111118', borderBottom: '1px solid #1A1A2E' }}>
+                    style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
                     <div className="flex items-center gap-2">
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.5)', letterSpacing: '0.06em' }}>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.30)', letterSpacing: '0.06em' }}>
                         EDITOR
                       </span>
                       <div className="flex gap-1">
@@ -5391,7 +5926,7 @@ export default function Home() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 11,
-                            color: editorView === 'piano' ? '#FF6D3F' : '#8A8A9A',
+                            color: editorView === 'piano' ? 'var(--accent)' : 'var(--muted)',
                             background: editorView === 'piano' ? 'rgba(255,109,63,0.14)' : 'transparent',
                             border: editorView === 'piano' ? '1px solid rgba(255,109,63,0.35)' : '1px solid transparent',
                           }}
@@ -5405,7 +5940,7 @@ export default function Home() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 11,
-                            color: editorView === 'sheet' ? '#FF6D3F' : '#8A8A9A',
+                            color: editorView === 'sheet' ? 'var(--accent)' : 'var(--muted)',
                             background: editorView === 'sheet' ? 'rgba(255,109,63,0.14)' : 'transparent',
                             border: editorView === 'sheet' ? '1px solid rgba(255,109,63,0.35)' : '1px solid transparent',
                           }}
@@ -5423,7 +5958,7 @@ export default function Home() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 11,
-                            color: '#F0F0FF',
+                            color: 'var(--text)',
                             border: '1px solid rgba(255,255,255,0.12)',
                             background: 'transparent',
                           }}
@@ -5442,7 +5977,7 @@ export default function Home() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 11,
-                            color: '#F0F0FF',
+                            color: 'var(--text)',
                             border: '1px solid rgba(255,255,255,0.12)',
                             background: 'transparent',
                           }}
@@ -5454,7 +5989,7 @@ export default function Home() {
                             const url = c.toDataURL('image/png');
                             const w = window.open('', '_blank');
                             if (!w) return;
-                            w.document.write(`<!doctype html><html><head><title>Print Sheet</title></head><body style="margin:0;background:#09090B;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%;height:auto;" /></body></html>`);
+                            w.document.write(`<!doctype html><html><head><title>Print Sheet</title></head><body style="margin:0;background:#0A0A0B;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%;height:auto;" /></body></html>`);
                             w.document.close();
                             w.focus();
                             w.print();
@@ -5470,7 +6005,7 @@ export default function Home() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 11,
-                            color: '#F0F0FF',
+                            color: 'var(--text)',
                             border: '1px solid rgba(255,255,255,0.12)',
                             background: 'transparent',
                           }}
@@ -5491,9 +6026,9 @@ export default function Home() {
                           style={{
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 11,
-                            color: editorLayer === layer ? LAYER_COLORS[layer] : '#8A8A9A',
-                            background: editorLayer === layer ? `${LAYER_COLORS[layer]}18` : 'transparent',
-                            border: editorLayer === layer ? `1px solid ${LAYER_COLORS[layer]}40` : '1px solid transparent',
+                            color: editorLayer === layer ? LAYER_COLORS[layer] : 'var(--muted)',
+                            background: editorLayer === layer ? 'rgba(255,255,255,0.06)' : 'transparent',
+                            border: editorLayer === layer ? '1px solid var(--border)' : '1px solid transparent',
                           }}
                         >
                           {layer === 'imported' ? 'imported' : layer}
@@ -5504,8 +6039,8 @@ export default function Home() {
                   </div>
 
                   {/* Hint bar */}
-                  <div className="px-4 py-1.5" style={{ background: '#0D0D12', borderBottom: '1px solid #1A1A2E' }}>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.35)' }}>
+                  <div className="px-4 py-1.5" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.30)' }}>
                       {editorView === 'piano'
                         ? 'FL-style piano roll — snap, quantize, velocity lane, rubber-band select, undo'
                         : 'basic canvas score · durations are approximate'}
@@ -5514,33 +6049,37 @@ export default function Home() {
 
                   {/* Canvas */}
                   {editorView === 'piano' ? (
-                    <PianoRollEditor
-                      key={`${selectedVariation}-${editorLayer}`}
-                      notes={editorLayer === 'imported' ? importedNotes : (result?.[editorLayer] ?? [])}
-                      color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
-                      bars={variations[selectedVariation]?.params.bars ?? params.bars}
-                      layerName={editorLayer === 'imported' ? 'imported' : editorLayer}
-                      isPlaying={playingVariationIndex === selectedVariation}
-                      playheadBeat={editorPlayheadBeat}
-                      gridHeightPx={isPianoFullscreen ? Math.max(360, viewportH - 310) : undefined}
-                      velocityHeightPx={isPianoFullscreen ? 120 : undefined}
-                      chordOverlayNotes={[
-                        ...(variations[selectedVariation]?.result.melody ?? []),
-                        ...(variations[selectedVariation]?.result.chords ?? []),
-                        ...(variations[selectedVariation]?.result.bass ?? []),
-                        ...(variations[selectedVariation]?.result.drums ?? []),
-                        ...(importedNotes ?? []),
-                      ]}
-                      onNotesChange={newNotes => {
-                        if (editorLayer === 'imported') setImportedNotes(newNotes);
-                        else handleEditorNotesChange(editorLayer, newNotes);
-                      }}
-                    />
+                    <div ref={onboardingPianoRef}>
+                      <PianoRollEditor
+                        key={`${selectedVariation}-${editorLayer}`}
+                        notes={editorLayer === 'imported' ? importedNotes : (result?.[editorLayer] ?? [])}
+                        color={LAYER_COLORS[editorLayer] ?? DS.accent}
+                        bars={variations[selectedVariation]?.params.bars ?? params.bars}
+                        layerName={editorLayer === 'imported' ? 'imported' : editorLayer}
+                        isPlaying={playingVariationIndex === selectedVariation}
+                        playheadBeat={editorPlayheadBeat}
+                        gridHeightPx={isPianoFullscreen ? Math.max(360, viewportH - 310) : undefined}
+                        velocityHeightPx={isPianoFullscreen ? 120 : undefined}
+                        chordOverlayNotes={[
+                          ...(variations[selectedVariation]?.result.melody ?? []),
+                          ...(variations[selectedVariation]?.result.chords ?? []),
+                          ...(variations[selectedVariation]?.result.bass ?? []),
+                          ...(variations[selectedVariation]?.result.drums ?? []),
+                          ...(importedNotes ?? []),
+                        ]}
+                        chordStripVisible={pianoChordStripVisible}
+                        onChordStripVisibleChange={setPianoChordStripVisible}
+                        onNotesChange={newNotes => {
+                          if (editorLayer === 'imported') setImportedNotes(newNotes);
+                          else handleEditorNotesChange(editorLayer, newNotes);
+                        }}
+                      />
+                    </div>
                   ) : (
-                    <div style={{ padding: 12, background: '#0D0D12' }}>
+                    <div style={{ padding: 12, background: 'var(--bg)' }}>
                       <canvas
                         ref={sheetCanvasRef}
-                        style={{ width: '100%', height: 320, borderRadius: 10, border: '1px solid #1A1A2E', background: '#0D0D12' }}
+                        style={{ width: '100%', height: 320, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg)' }}
                       />
                     </div>
                   )}
@@ -5550,7 +6089,7 @@ export default function Home() {
                     <>
                       <motion.div
                         className="fixed inset-0 z-[120]"
-                        style={{ background: 'rgba(9,9,11,0.92)' }}
+                        style={{ background: 'color-mix(in srgb, var(--bg) 92%, transparent)' }}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -5563,19 +6102,19 @@ export default function Home() {
                         initial={{ opacity: 0, scale: 0.985 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.985 }}
-                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        transition={{ duration: 0.18, ease: EASE_UI }}
                         onClick={e => e.stopPropagation()}
                       >
                         <div
                           className="h-full w-full overflow-hidden rounded-2xl"
-                          style={{ background: '#0D0D12', border: '1px solid #1A1A2E' }}
+                          style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                         >
                           <div
                             className="flex items-center justify-between px-4 py-3"
-                            style={{ background: '#111118', borderBottom: '1px solid #1A1A2E' }}
+                            style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
                           >
                             <div className="flex items-center gap-2">
-                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.5)', letterSpacing: '0.06em' }}>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.30)', letterSpacing: '0.06em' }}>
                                 PIANO ROLL — FULLSCREEN
                               </span>
                             </div>
@@ -5585,7 +6124,7 @@ export default function Home() {
                               style={{
                                 fontFamily: 'JetBrains Mono, monospace',
                                 fontSize: 11,
-                                color: '#F0F0FF',
+                                color: 'var(--text)',
                                 border: '1px solid rgba(255,255,255,0.12)',
                                 background: 'transparent',
                               }}
@@ -5601,7 +6140,7 @@ export default function Home() {
                             <PianoRollEditor
                               key={`fs-${selectedVariation}-${editorLayer}`}
                               notes={editorLayer === 'imported' ? importedNotes : (result?.[editorLayer] ?? [])}
-                              color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
+                              color={LAYER_COLORS[editorLayer] ?? DS.accent}
                               bars={variations[selectedVariation]?.params.bars ?? params.bars}
                               layerName={editorLayer === 'imported' ? 'imported' : editorLayer}
                               isPlaying={playingVariationIndex === selectedVariation}
@@ -5615,6 +6154,8 @@ export default function Home() {
                                 ...(variations[selectedVariation]?.result.drums ?? []),
                                 ...(importedNotes ?? []),
                               ]}
+                              chordStripVisible={pianoChordStripVisible}
+                              onChordStripVisibleChange={setPianoChordStripVisible}
                               onNotesChange={newNotes => {
                                 if (editorLayer === 'imported') setImportedNotes(newNotes);
                                 else handleEditorNotesChange(editorLayer, newNotes);
@@ -5641,7 +6182,7 @@ export default function Home() {
                 <span style={{
                   fontFamily: 'JetBrains Mono, monospace',
                   fontSize: 13,
-                  color: '#FF6D3F',
+                  color: 'var(--accent)',
                   fontWeight: 500,
                 }}>
                   {totalGenerations.toLocaleString()}
@@ -5649,7 +6190,7 @@ export default function Home() {
                 <span style={{
                   fontFamily: 'JetBrains Mono, monospace',
                   fontSize: 13,
-                  color: 'rgba(138,138,154,0.6)',
+                  color: 'rgba(255,255,255,0.50)',
                 }}>
                   {' '}MIDI patterns generated
                 </span>
@@ -5658,65 +6199,165 @@ export default function Home() {
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)', letterSpacing: '0.04em' }}>
               20 genres · 15 styles · 4 independent tracks · .mid export
             </p>
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
-              Press G to generate · ⌘K for commands
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.30)' }}>
+              Press G to generate · ? for shortcuts · ⌘K for commands
             </p>
           </div>
         </div>
       </motion.section>
 
-      {/* ── FOOTER ── */}
-      <footer className="mt-24 px-4 sm:px-8 py-16" style={{ borderTop: '1px solid var(--border)' }}>
-        <div className="max-w-[1280px] mx-auto">
-
-          {/* Top row */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 mb-8"
-            style={{ borderBottom: '1px solid var(--border)' }}>
-            <span className="text-gradient font-extrabold text-2xl" style={{ fontFamily: 'Syne, sans-serif' }}>
-              pulp
-            </span>
-            <span className="text-sm" style={{ color: 'var(--text)' }}>
-              <span style={{ opacity: 0.6 }}>a </span>
-              <span className="font-extrabold text-gradient" style={{ fontFamily: 'Syne, sans-serif' }}>papaya</span>
-              <span style={{ color: '#00B894' }}>●</span>
-              <span style={{ opacity: 0.6 }}> tool</span>
-            </span>
+      {/* ── COMPARISON ── */}
+      <section ref={compareRef} className="mt-20 px-4 sm:px-8 py-20" style={{ background: 'var(--bg)' }}>
+        <div className="mx-auto max-w-[1200px]">
+          <div className="mb-10">
+            <h2
+              style={{
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 700,
+                fontSize: 'clamp(1.5rem, 3.2vw, 2rem)',
+                lineHeight: 1.15,
+                color: 'var(--text)',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              How pulp compares
+            </h2>
           </div>
 
-          {/* Bottom row */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', opacity: 0.6 }}>
-              © 2026 PULP. MADE BY PAPAYA.
-            </span>
+          {(() => {
+            const cols = ['pulp', 'Staccato', 'AIVA', 'HookPad'] as const;
+            const rows: { label: string; values: [string, string, string, string] }[] = [
+              { label: 'Price', values: ['$7/mo', '$9.99/mo', '$15/mo', '$7.99/mo'] },
+              { label: 'Mix Engine', values: ['Built-in', '—', '—', '—'] },
+              { label: 'Artist Mapping', values: ['300+', 'Limited', '—', '—'] },
+              { label: 'MIDI + WAV Export', values: ['✓', '✓', '✓', '✓'] },
+              { label: 'Piano Roll Editor', values: ['✓', '—', '—', '✓'] },
+              { label: 'Web-based (no install)', values: ['✓', '✓', '✓', '✓'] },
+              { label: 'Audio to MIDI', values: ['✓', '—', '—', '—'] },
+            ];
 
-            <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', opacity: 0.6 }}>
-              <a href="/about" className="footer-link">About</a>
-              <CrispSupportLink className="footer-link" label="Support" />
-              <a href="/legal/terms" className="footer-link">
-                Terms
-              </a>
-              <a href="/legal/privacy" className="footer-link">
-                Privacy
-              </a>
-              <a href="/legal/license" className="footer-link">
-                License
-              </a>
-            </div>
+            const labelStyle: React.CSSProperties = {
+              fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+              fontSize: 14,
+              color: 'rgba(240,240,255,0.78)',
+              letterSpacing: 'normal',
+              fontWeight: 500,
+            };
 
-            {/* Live status */}
-            <div className="flex items-center gap-2">
-              <span className="status-dot" />
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text)', opacity: 0.6 }}>
-                All systems operational
-              </span>
-            </div>
+            const valueStyle = (v: string): React.CSSProperties => ({
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 13,
+              fontVariantNumeric: 'tabular-nums',
+              color: v === '—' ? 'rgba(255,255,255,0.30)' : 'rgba(240,240,255,0.84)',
+            });
 
-            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', opacity: 0.6 }}>
-              royalty-free. yours forever.
-            </span>
+            return (
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: 'rgba(17,17,24,0.62)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                }}
+              >
+                <div className="compare-scroll">
+                  <div className="compare-table">
+                    {/* Header row */}
+                    <div
+                      className="grid"
+                      style={{
+                        gridTemplateColumns: 'minmax(140px, 1.1fr) repeat(4, minmax(140px, 1fr))',
+                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <div className="compare-cell compare-label" style={{ padding: '16px 18px' }} />
+                      {cols.map((c, idx) => (
+                        <div
+                          key={c}
+                          className={idx === 0 ? 'compare-cell compare-pulp' : 'compare-cell'}
+                          style={{
+                            padding: '16px 18px',
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 12,
+                            letterSpacing: '0.08em',
+                            textTransform: 'uppercase',
+                            color: idx === 0 ? 'rgba(240,240,255,0.92)' : 'rgba(255,255,255,0.50)',
+                            background: idx === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+                          }}
+                        >
+                          {c}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Data rows */}
+                    {rows.map((r, ri) => (
+                      <motion.div
+                        key={r.label}
+                        className="grid"
+                        style={{
+                          gridTemplateColumns: 'minmax(140px, 1.1fr) repeat(4, minmax(140px, 1fr))',
+                          borderBottom: ri === rows.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                          opacity: prefersReducedMotion
+                            ? 1
+                            : (ri === 0 ? cmpRow0O : ri === 1 ? cmpRow1O : ri === 2 ? cmpRow2O : ri === 3 ? cmpRow3O : ri === 4 ? cmpRow4O : ri === 5 ? cmpRow5O : cmpRow6O),
+                          y: prefersReducedMotion
+                            ? 0
+                            : (ri === 0 ? cmpRow0Y : ri === 1 ? cmpRow1Y : ri === 2 ? cmpRow2Y : ri === 3 ? cmpRow3Y : ri === 4 ? cmpRow4Y : ri === 5 ? cmpRow5Y : cmpRow6Y),
+                        }}
+                      >
+                        <div className="compare-cell compare-label" style={{ padding: '14px 18px', ...labelStyle }}>{r.label}</div>
+                        {r.values.map((v, ci) => (
+                          <div
+                            key={`${r.label}-${ci}`}
+                            className={ci === 0 ? 'compare-cell compare-pulp' : 'compare-cell'}
+                            style={{
+                              padding: '14px 18px',
+                              background: ci === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+                            }}
+                          >
+                            <motion.span
+                              style={{
+                                ...valueStyle(v),
+                                display: 'inline-block',
+                                opacity: prefersReducedMotion
+                                  ? 1
+                                  : (ci === 0
+                                      ? (ri === 0 ? cmpPulp0O : ri === 1 ? cmpPulp1O : ri === 2 ? cmpPulp2O : ri === 3 ? cmpPulp3O : ri === 4 ? cmpPulp4O : ri === 5 ? cmpPulp5O : cmpPulp6O)
+                                      : (ri === 0 ? cmpOther0O : ri === 1 ? cmpOther1O : ri === 2 ? cmpOther2O : ri === 3 ? cmpOther3O : ri === 4 ? cmpOther4O : ri === 5 ? cmpOther5O : cmpOther6O)),
+                              }}
+                            >
+                              {v}
+                            </motion.span>
+                          </div>
+                        ))}
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          <div style={{ marginTop: 10, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.30)' }}>
+            All plans include features others charge extra for.
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 10,
+              color: 'rgba(255,255,255,0.30)',
+              opacity: 0.7,
+            }}
+          >
+            Pricing and features based on publicly available information as of April 2026. Subject to change.
           </div>
         </div>
-      </footer>
+      </section>
+
+      <SiteFooter />
       </main>
     </>
   );

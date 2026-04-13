@@ -1,4 +1,12 @@
 import { Navbar } from '@/components/Navbar'
+import { pageMeta } from '@/lib/seo-metadata'
+
+export const metadata = pageMeta({
+  title: 'Changelog',
+  description:
+    'Release notes for pulp: new MIDI features, billing, auth, performance, and export updates—listed newest first.',
+  path: '/changelog',
+})
 
 export default function ChangelogPage() {
   const entries = [
@@ -84,7 +92,7 @@ export default function ChangelogPage() {
     <div className="min-h-screen">
       <Navbar active="create" />
       <div className="max-w-[720px] mx-auto px-8 pt-32 pb-24">
-        <h1 className="font-extrabold mb-3" style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.02em', color: 'var(--foreground)' }}>
+        <h1 className="font-extrabold mb-3" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 40, letterSpacing: '-0.02em', color: 'var(--foreground)', lineHeight: 1.15 }}>
           Changelog
         </h1>
         <p className="mb-16" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--muted)' }}>
@@ -100,11 +108,11 @@ export default function ChangelogPage() {
                     <span style={{
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 12,
-                      color: '#A78BFA',
-                      border: '1px solid rgba(167,139,250,0.35)',
-                      background: 'rgba(167,139,250,0.10)',
+                      color: 'var(--accent)',
+                      border: '1px solid rgba(255,109,63,0.35)',
+                      background: 'rgba(255,109,63,0.10)',
                       padding: '3px 8px',
-                      borderRadius: 6,
+                      borderRadius: 8,
                     }}>
                       v{entry.version}
                     </span>
@@ -122,7 +130,7 @@ export default function ChangelogPage() {
                       </span>
                     )}
                   </div>
-                  <h2 className="font-extrabold" style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, color: 'var(--foreground)' }}>
+                  <h2 className="font-extrabold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 24, color: 'var(--foreground)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                     {entry.title}
                   </h2>
                 </div>
@@ -133,7 +141,7 @@ export default function ChangelogPage() {
               <ul className="space-y-2">
                 {entry.changes.map((change, j) => (
                   <li key={j} className="flex items-start gap-3">
-                    <span style={{ color: '#FF6D3F', marginTop: 2, flexShrink: 0 }}>✦</span>
+                    <span style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}>✦</span>
                     <span style={{ fontSize: 14, color: 'var(--foreground-muted)', lineHeight: 1.6 }}>{change}</span>
                   </li>
                 ))}

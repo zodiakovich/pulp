@@ -42,12 +42,12 @@ export function ExploreGallery({
       {/* Filter bar */}
       <div
         className="mt-20 mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
-        style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 16 }}
       >
         <div>
           <h1
             className="font-extrabold text-gradient"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 40, letterSpacing: '-0.02em', lineHeight: 1.1 }}
+            style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 32, letterSpacing: '-0.02em', lineHeight: 1.15 }}
           >
             Explore
           </h1>
@@ -79,9 +79,9 @@ export function ExploreGallery({
                 className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs transition-all"
                 style={{
                   fontFamily: 'JetBrains Mono, monospace',
-                  border: selectedGenre === genre ? '1px solid #FF6D3F' : '1px solid var(--border)',
+                  border: selectedGenre === genre ? '1px solid rgba(255,109,63,0.45)' : '1px solid var(--border)',
                   background: selectedGenre === genre ? 'rgba(255,109,63,0.1)' : 'transparent',
-                  color: selectedGenre === genre ? '#FF6D3F' : 'var(--foreground-muted)',
+                  color: selectedGenre === genre ? 'var(--accent)' : 'var(--foreground-muted)',
                 }}
               >
                 {genre}
@@ -96,7 +96,7 @@ export function ExploreGallery({
           style={{
             fontFamily: 'JetBrains Mono, monospace',
             fontSize: 10,
-            color: 'rgba(138,138,154,0.55)',
+            color: 'var(--text-micro)',
             marginBottom: 24,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
@@ -111,26 +111,26 @@ export function ExploreGallery({
         {filteredGenerations.length === 0 && !seedMode && (
           <div
             className="rounded-2xl p-8 lg:col-span-3"
-            style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
           >
-            <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, color: 'rgba(240,240,255,0.92)' }}>
+            <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
               No generations yet. Be the first to create one.
             </div>
-            <p className="mt-2" style={{ color: '#8A8A9A', lineHeight: 1.7 }}>
-              Start from a simple prompt like “tech house, 128bpm, Am” and generate three variations instantly.
+            <p className="mt-2" style={{ color: 'var(--muted)', lineHeight: 1.7 }}>
+              Start from a simple prompt like “tech house, 128bpm, Am” and generate three variations.
             </p>
             <Link
               href="/"
               className="inline-flex items-center justify-center mt-5 h-10 px-4 rounded-xl text-sm font-semibold transition-all"
               style={{
-                background: '#FF6D3F',
+                background: 'var(--accent)',
                 border: '1px solid rgba(255,109,63,0.45)',
-                color: '#fff',
+                color: 'var(--bg)',
                 textDecoration: 'none',
                 width: 'fit-content',
               }}
             >
-              Start generating →
+              Start generating
             </Link>
           </div>
         )}
@@ -147,8 +147,8 @@ export function ExploreGallery({
               href={href}
               className="block rounded-2xl p-6 transition-all"
               style={{
-                background: '#111118',
-                border: '1px solid #1A1A2E',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 textDecoration: 'none',
               }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
@@ -164,9 +164,9 @@ export function ExploreGallery({
                         fontSize: 9,
                         textTransform: 'uppercase',
                         letterSpacing: '0.1em',
-                        color: 'rgba(138,138,154,0.65)',
-                        background: 'rgba(138,138,154,0.08)',
-                        border: '1px solid rgba(138,138,154,0.18)',
+                        color: 'var(--muted)',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid var(--border-weak)',
                       }}
                     >
                       example
@@ -174,7 +174,7 @@ export function ExploreGallery({
                   )}
                   <p
                     className="text-sm font-semibold mb-2"
-                    style={{ fontFamily: 'Syne, sans-serif', color: 'rgba(240,240,255,0.92)' }}
+                    style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}
                     title={prompt || undefined}
                   >
                     {promptShort}
@@ -184,7 +184,7 @@ export function ExploreGallery({
                       className="px-2 py-1 rounded-md text-xs"
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
-                        color: '#FF6D3F',
+                        color: 'var(--accent)',
                         background: 'rgba(255,109,63,0.10)',
                         border: '1px solid rgba(255,109,63,0.25)',
                       }}
@@ -195,9 +195,9 @@ export function ExploreGallery({
                       className="px-2 py-1 rounded-md text-xs"
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
-                        color: '#8A8A9A',
-                        background: '#0D0D12',
-                        border: '1px solid #1A1A2E',
+                        color: 'var(--muted)',
+                        background: 'var(--surface-weak)',
+                        border: '1px solid var(--border)',
                       }}
                     >
                       {item.bpm} BPM
@@ -207,7 +207,7 @@ export function ExploreGallery({
                         className="px-2 py-1 rounded-md text-xs"
                         style={{
                           fontFamily: 'JetBrains Mono, monospace',
-                          color: '#FF6D3F',
+                          color: 'var(--accent)',
                           background: 'rgba(255,109,63,0.1)',
                           border: '1px solid rgba(255,109,63,0.25)',
                         }}
@@ -223,7 +223,7 @@ export function ExploreGallery({
                       className="inline-flex items-center gap-2 text-xs"
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
-                        color: '#FF6D3F',
+                        color: 'var(--accent)',
                         textDecoration: 'none',
                       }}
                       onClick={(e) => e.stopPropagation()}
@@ -234,7 +234,7 @@ export function ExploreGallery({
                 </div>
                 <span
                   className="text-xs flex-shrink-0"
-                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}
+                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-micro)' }}
                 >
                   {item.timeAgo}
                 </span>

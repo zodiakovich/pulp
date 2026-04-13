@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GENRES,
   generateTrack,
@@ -11,17 +11,12 @@ import {
   type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, downloadMidi } from '@/lib/midi-writer';
+import { getLayerVizColorsForCanvas, LAYER_VIZ_COLORS, readCssColor } from '@/lib/design-system';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
-/** Layer keys for GenerationResult (colors match home — not exported from music-engine). */
+/** Layer keys for GenerationResult (strict palette). */
 const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
 type LayerKey = (typeof LAYERS)[number];
-
-const LAYER_COLORS: Record<LayerKey, string> = {
-  melody: '#FF6D3F',
-  chords: '#A78BFA',
-  bass: '#00B894',
-  drums: '#E94560',
-};
 
 function normalizeGenreParam(raw: string | null): string | null {
   const v = (raw ?? '').trim();
@@ -49,6 +44,7 @@ function parseKeyParam(raw: string | null): { key?: string; scale?: string } {
 /** Copied from home `page.tsx` — canvas piano roll preview. */
 function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: string; height?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const colorScheme = useColorScheme();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -63,10 +59,10 @@ function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: s
     canvas.height = h * dpr;
     ctx.scale(dpr, dpr);
 
-    ctx.fillStyle = '#0A0A0F';
+    ctx.fillStyle = readCssColor('--piano-roll-bg', '#0A0A0B');
     ctx.fillRect(0, 0, w, h);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = readCssColor('--piano-roll-viz-grid', 'rgba(255,255,255,0.05)');
     ctx.lineWidth = 0.5;
     for (let x = 0; x < w; x += w / 16) {
       ctx.beginPath();
@@ -114,9 +110,9 @@ function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: s
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }, [notes, color, height]);
+  }, [notes, color, height, colorScheme]);
 
-  return <canvas ref={canvasRef} className="w-full rounded-md" style={{ height }} />;
+  return <canvas ref={canvasRef} className="w-full rounded-md piano-roll" style={{ height }} />;
 }
 
 const WATERMARK_HREF = 'https://pulp-git-main-sauloafm-2127s-projects.vercel.app';
@@ -135,15 +131,8 @@ export function EmbedIframeClient({
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [baseParams, setBaseParams] = useState<GenerationParams>(() => getDefaultParams());
-
-  useEffect(() => {
-    const html = document.documentElement;
-    const hadDark = html.classList.contains('dark');
-    html.classList.add('dark');
-    return () => {
-      if (!hadDark) html.classList.remove('dark');
-    };
-  }, []);
+  const colorScheme = useColorScheme();
+  const layerCanvasColors = useMemo(() => getLayerVizColorsForCanvas(), [colorScheme]);
 
   useEffect(() => {
     const g = normalizeGenreParam(initialGenre);
@@ -221,7 +210,7 @@ export function EmbedIframeClient({
   return (
     <div
       style={{
-        background: '#09090B',
+        background: 'var(--bg)',
         minHeight: '100vh',
         padding: 16,
         display: 'flex',
@@ -231,7 +220,7 @@ export function EmbedIframeClient({
       }}
     >
       <div className="flex items-center justify-between gap-2 flex-shrink-0">
-        <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 16, color: '#FF6D3F' }}>
+        <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em', color: '#FF6D3F' }}>
           pulp
         </span>
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(138,138,154,0.5)' }}>
@@ -248,10 +237,10 @@ export function EmbedIframeClient({
           style={{
             flex: 1,
             height: 40,
-            background: '#111118',
-            border: '1px solid #1A1A2E',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
             borderRadius: 8,
-            color: '#F0F0FF',
+            color: 'var(--text)',
             padding: '0 12px',
             fontSize: 13,
             fontFamily: 'DM Sans, sans-serif',
@@ -281,7 +270,7 @@ export function EmbedIframeClient({
       </div>
 
       {error ? (
-        <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#E94560', margin: 0 }}>
+        <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--accent)', margin: 0 }}>
           {error}
         </p>
       ) : null}
@@ -304,8 +293,8 @@ export function EmbedIframeClient({
               <div
                 key={layer}
                 style={{
-                  background: '#111118',
-                  border: '1px solid #1A1A2E',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
                   borderRadius: 8,
                   padding: 10,
                 }}
@@ -313,10 +302,10 @@ export function EmbedIframeClient({
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span
                     style={{
-                      fontFamily: 'Syne, sans-serif',
+                      fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                       fontWeight: 700,
                       fontSize: 11,
-                      color: LAYER_COLORS[layer],
+                      color: LAYER_VIZ_COLORS[layer],
                       textTransform: 'capitalize',
                     }}
                   >
@@ -327,7 +316,7 @@ export function EmbedIframeClient({
                     onClick={() => handleDownloadLayer(layer, notes)}
                     style={{
                       fontSize: 11,
-                      color: '#8A8A9A',
+                      color: 'var(--muted)',
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
@@ -337,7 +326,7 @@ export function EmbedIframeClient({
                     ↓
                   </button>
                 </div>
-                <PianoRoll notes={notes} color={LAYER_COLORS[layer]} height={48} />
+                <PianoRoll notes={notes} color={layerCanvasColors[layer]} height={48} />
               </div>
             );
           })}

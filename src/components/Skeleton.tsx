@@ -7,7 +7,7 @@ type SkeletonProps = HTMLAttributes<HTMLDivElement> & {
   style?: CSSProperties;
 };
 
-/** Base block with animated shimmer (#1A1A2E → #222230, see `.skeleton` in globals.css). */
+/** Shimmer block; colors from `.skeleton` in globals.css. */
 export function Skeleton({ className = '', style, ...rest }: SkeletonProps) {
   return (
     <div
@@ -40,7 +40,7 @@ export function SkeletonText({
           style={{
             height: 14,
             width: lines > 1 && i === lines - 1 ? lastLineWidth : '100%',
-            borderRadius: 4,
+            borderRadius: 8,
           }}
         />
       ))}
@@ -56,20 +56,20 @@ export function SkeletonCard({ className = '' }: { className?: string }) {
       style={{
         borderRadius: 16,
         padding: 24,
-        background: '#111118',
-        border: '1px solid #1A1A2E',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
       }}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <Skeleton style={{ height: 16, width: '100%', marginBottom: 12, borderRadius: 4 }} />
+          <Skeleton style={{ height: 16, width: '100%', marginBottom: 12, borderRadius: 8 }} />
           <div className="flex flex-wrap gap-2">
-            <Skeleton style={{ height: 26, width: 88, borderRadius: 6 }} />
-            <Skeleton style={{ height: 26, width: 72, borderRadius: 6 }} />
-            <Skeleton style={{ height: 26, width: 64, borderRadius: 6 }} />
+            <Skeleton style={{ height: 26, width: 88, borderRadius: 8 }} />
+            <Skeleton style={{ height: 26, width: 72, borderRadius: 8 }} />
+            <Skeleton style={{ height: 26, width: 64, borderRadius: 8 }} />
           </div>
         </div>
-        <Skeleton style={{ height: 12, width: 48, flexShrink: 0, borderRadius: 4 }} />
+        <Skeleton style={{ height: 12, width: 48, flexShrink: 0, borderRadius: 8 }} />
       </div>
     </div>
   );
@@ -77,5 +77,5 @@ export function SkeletonCard({ className = '' }: { className?: string }) {
 
 /** Button / control placeholder (e.g. filter dropdown, play). */
 export function SkeletonButton({ className = '', style }: { className?: string; style?: CSSProperties }) {
-  return <Skeleton className={className} style={{ height: 40, width: 128, borderRadius: 10, ...style }} />;
+  return <Skeleton className={className} style={{ height: 40, width: 128, borderRadius: 12, ...style }} />;
 }

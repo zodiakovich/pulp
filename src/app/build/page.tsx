@@ -1,6 +1,14 @@
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
 import { GENRES } from '@/lib/music-engine';
+import { pageMeta } from '@/lib/seo-metadata';
+
+export const metadata = pageMeta({
+  title: 'Build',
+  description:
+    'How to turn pulp MIDI into a finished track: layer roles, groove, arrangement, and sample search tips—built for electronic producers in any DAW.',
+  path: '/build',
+});
 
 type LayerKey = 'melody' | 'chords' | 'bass' | 'drums';
 
@@ -17,15 +25,15 @@ const LAYER_PURPOSE: Record<LayerKey, { color: string; body: string }> = {
     body: 'Your hook and topline. Use it as the main synth/lead or layer it with a second instrument for width.',
   },
   chords: {
-    color: '#A78BFA',
+    color: 'rgba(255,255,255,0.50)',
     body: 'Harmony and mood. Great for pads, stabs, or piano. Use inversions to keep the movement smooth.',
   },
   bass: {
-    color: '#00B894',
+    color: 'rgba(255,255,255,0.40)',
     body: 'Low-end foundation. Keep it tight with the kick and simplify notes when the arrangement gets busy.',
   },
   drums: {
-    color: '#E94560',
+    color: 'rgba(255,255,255,0.28)',
     body: 'Groove and energy. Swap sounds, add ghost hits, and automate fills to create transitions.',
   },
 };
@@ -104,7 +112,7 @@ function TimelineStep({
       <div className="flex-1 pb-10">
         <h2
           className="font-extrabold mb-3"
-          style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, letterSpacing: '-0.01em' }}
+          style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2 }}
         >
           {title}
         </h2>
@@ -120,7 +128,7 @@ export default function BuildMyTrackPage() {
   const exampleTerms = getSpliceTerms(exampleGenre, exampleBpm);
 
   return (
-    <div className="min-h-screen" style={{ background: '#0A0A0F' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <Navbar active="build" />
 
       {/* Header */}
@@ -134,11 +142,11 @@ export default function BuildMyTrackPage() {
           </p>
           <h1
             className="font-extrabold text-gradient mb-4"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(40px, 5vw, 56px)', letterSpacing: '-0.02em', lineHeight: 1.1 }}
+            style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 'clamp(32px, 5vw, 44px)', letterSpacing: '-0.02em', lineHeight: 1.12 }}
           >
             Build My Track
           </h1>
-          <p style={{ color: '#8A8A9A', fontSize: 16, maxWidth: 720, lineHeight: 1.7 }}>
+          <p style={{ color: 'var(--muted)', fontSize: 16, maxWidth: 720, lineHeight: 1.7 }}>
             A step-by-step workflow to turn a generated MIDI idea into a finished arrangement using your DAW and samples.
           </p>
         </div>
@@ -147,9 +155,9 @@ export default function BuildMyTrackPage() {
       {/* Timeline */}
       <section className="pb-24 px-8">
         <div className="max-w-[960px] mx-auto">
-          <div className="rounded-2xl p-8" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
+          <div className="rounded-2xl p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <TimelineStep num="1" title="Generate">
-              <p style={{ color: '#8A8A9A', lineHeight: 1.7, marginBottom: 16 }}>
+              <p style={{ color: 'var(--muted)', lineHeight: 1.7, marginBottom: 16 }}>
                 Start by generating a track idea. Pick a genre + tempo, then audition variations until one feels right.
               </p>
               <Link
@@ -167,7 +175,7 @@ export default function BuildMyTrackPage() {
             </TimelineStep>
 
             <TimelineStep num="2" title="Your MIDI layers">
-              <p style={{ color: '#8A8A9A', lineHeight: 1.7, marginBottom: 20 }}>
+              <p style={{ color: 'var(--muted)', lineHeight: 1.7, marginBottom: 20 }}>
                 Pulp gives you four layers. Treat them like a blueprint: keep the notes, swap the instruments, and build a mix around them.
               </p>
 
@@ -176,17 +184,17 @@ export default function BuildMyTrackPage() {
                   <div
                     key={layer}
                     className="rounded-2xl p-5"
-                    style={{ background: '#0D0D12', border: '1px solid #1A1A2E' }}
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p
                           className="font-bold mb-2"
-                          style={{ fontFamily: 'Syne, sans-serif', color: '#F0F0FF' }}
+                          style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}
                         >
                           <span style={{ color: LAYER_PURPOSE[layer].color }}>{LAYER_LABELS[layer]}</span>
                         </p>
-                        <p style={{ color: '#8A8A9A', fontSize: 13, lineHeight: 1.7 }}>
+                        <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.7 }}>
                           {LAYER_PURPOSE[layer].body}
                         </p>
                       </div>
@@ -203,7 +211,7 @@ export default function BuildMyTrackPage() {
                         href={spliceSearchUrl(exampleTerms[layer])}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8A8A9A', textDecoration: 'none' }}
+                        style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}
                       >
                         {exampleTerms[layer]} ↗
                       </a>
@@ -214,7 +222,7 @@ export default function BuildMyTrackPage() {
             </TimelineStep>
 
             <TimelineStep num="3" title="Arrange in your DAW">
-              <p style={{ color: '#8A8A9A', lineHeight: 1.7, marginBottom: 20 }}>
+              <p style={{ color: 'var(--muted)', lineHeight: 1.7, marginBottom: 20 }}>
                 Import the MIDI, assign instruments, and build sections (intro → groove → break → drop → outro). Keep transitions simple and repeatable.
               </p>
 
@@ -248,14 +256,14 @@ export default function BuildMyTrackPage() {
                   <div
                     key={card.title}
                     className="rounded-2xl p-5"
-                    style={{ background: '#0D0D12', border: '1px solid #1A1A2E' }}
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                   >
-                    <p className="font-bold mb-3" style={{ fontFamily: 'Syne, sans-serif', color: '#F0F0FF' }}>
+                    <p className="font-bold mb-3" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
                       {card.title}
                     </p>
                     <ul className="space-y-2">
                       {card.tips.map(t => (
-                        <li key={t} style={{ color: '#8A8A9A', fontSize: 13, lineHeight: 1.6 }}>
+                        <li key={t} style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>
                           <span style={{ color: 'rgba(255,109,63,0.9)', marginRight: 8 }}>✦</span>
                           {t}
                         </li>
@@ -267,7 +275,7 @@ export default function BuildMyTrackPage() {
             </TimelineStep>
 
             <TimelineStep num="4" title="Add samples">
-              <p style={{ color: '#8A8A9A', lineHeight: 1.7, marginBottom: 20 }}>
+              <p style={{ color: 'var(--muted)', lineHeight: 1.7, marginBottom: 20 }}>
                 Replace placeholder sounds with high-quality samples. Below are three Splice search ideas per layer based on popular genres.
               </p>
 
@@ -276,10 +284,10 @@ export default function BuildMyTrackPage() {
                   <div
                     key={layer}
                     className="rounded-2xl p-5"
-                    style={{ background: '#0D0D12', border: '1px solid #1A1A2E' }}
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
                   >
                     <div className="flex items-center justify-between mb-4">
-                      <p className="font-bold" style={{ fontFamily: 'Syne, sans-serif', color: '#F0F0FF' }}>
+                      <p className="font-bold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
                         {LAYER_LABELS[layer]}
                       </p>
                       <span
@@ -308,12 +316,12 @@ export default function BuildMyTrackPage() {
                               display: 'block',
                               padding: '10px 12px',
                               borderRadius: 12,
-                              border: '1px solid #1A1A2E',
-                              background: '#111118',
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
                               textDecoration: 'none',
                               fontFamily: 'JetBrains Mono, monospace',
                               fontSize: 12,
-                              color: '#8A8A9A',
+                              color: 'var(--muted)',
                             }}
                           >
                             <span style={{ color: 'rgba(240,240,255,0.85)' }}>
@@ -329,11 +337,11 @@ export default function BuildMyTrackPage() {
                 ))}
               </div>
 
-              <div className="mt-6 rounded-2xl p-5" style={{ background: '#111118', border: '1px solid #1A1A2E' }}>
-                <p style={{ color: 'rgba(240,240,255,0.85)', fontFamily: 'Syne, sans-serif', fontWeight: 700, marginBottom: 8 }}>
+              <div className="mt-6 rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <p style={{ color: 'rgba(240,240,255,0.85)', fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, marginBottom: 8 }}>
                   Pro tip
                 </p>
-                <p style={{ color: '#8A8A9A', lineHeight: 1.7, fontSize: 14 }}>
+                <p style={{ color: 'var(--muted)', lineHeight: 1.7, fontSize: 14 }}>
                   Keep the MIDI, change the sound. The fastest way to level up is replacing instruments with genre-correct samples and presets.
                 </p>
               </div>

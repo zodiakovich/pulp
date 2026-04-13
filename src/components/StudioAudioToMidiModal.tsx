@@ -5,12 +5,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { NoteEvent } from '@/lib/music-engine';
 import * as Pitchfinder from 'pitchfinder';
 
-const PANEL = '#111118';
-const BORDER = '#1A1A2E';
-const DASH = '#2A2A40';
+const PANEL = 'var(--surface)';
+const BORDER = 'var(--border)';
+const DASH = 'rgba(255,255,255,0.12)';
 const ACCENT = '#FF6D3F';
-const MUTED = '#8A8A9A';
-const CTA_TEXT = '#09090B';
+const MUTED = 'var(--muted)';
+const CTA_TEXT = 'var(--on-accent)';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_SECONDS = 30;
@@ -326,7 +326,7 @@ export function StudioAudioToMidiModal({
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h2 id="a2m-title" className="text-lg font-bold" style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: '#F5F5F5' }}>
+                <h2 id="a2m-title" className="text-lg font-bold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)' }}>
                   Audio to MIDI
                 </h2>
                 <p className="mt-1 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: MUTED }}>
@@ -346,7 +346,7 @@ export function StudioAudioToMidiModal({
 
             {!canUse && (
               <div className="mb-5 rounded-xl p-4" style={{ border: `1px solid ${DASH}`, background: 'rgba(9,9,11,0.35)' }}>
-                <p style={{ fontFamily: 'DM Sans, sans-serif', color: '#F0F0FF', fontWeight: 700, marginBottom: 6 }}>
+                <p style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--text)', fontWeight: 700, marginBottom: 6 }}>
                   Studio plan required
                 </p>
                 <p style={{ fontFamily: 'DM Sans, sans-serif', color: MUTED, fontSize: 13 }}>
@@ -386,7 +386,7 @@ export function StudioAudioToMidiModal({
                 Drag & drop .wav / .mp3 (max 10 MB, max 30s)
               </p>
               {fileName && (
-                <p className="mt-2 text-sm font-medium" style={{ fontFamily: 'DM Sans, sans-serif', color: '#F5F5F5' }}>
+                <p className="mt-2 text-sm font-medium" style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--text)' }}>
                   {fileName}
                 </p>
               )}
@@ -409,7 +409,7 @@ export function StudioAudioToMidiModal({
             </div>
 
             {error && (
-              <p className="mb-4 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: '#E94560' }}>
+              <p className="mb-4 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: ACCENT }}>
                 {error}
               </p>
             )}

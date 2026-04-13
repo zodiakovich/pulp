@@ -3,41 +3,22 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Moon, Sun } from 'lucide-react';
 import { useAuth, SignedIn, SignedOut } from '@clerk/nextjs';
 import { SignInButtonDeferred, UserButtonDeferred } from '@/components/ClerkAuthDeferred';
 import { WhatsNew } from '@/components/WhatsNew';
 
 const STORAGE_KEY = 'pulp_theme';
 
-function SunIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M12 2.5v2.2M12 19.3v2.2M4.7 4.7l1.6 1.6M17.7 17.7l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.7 19.3l1.6-1.6M17.7 6.3l1.6-1.6"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+function syncThemeColorMeta(isLight: boolean) {
+  const meta = document.getElementById('theme-color');
+  if (meta) meta.setAttribute('content', isLight ? '#FAFAFA' : '#0A0A0B');
 }
 
-function MoonIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M21 14.6A8.5 8.5 0 0 1 9.4 3a7 7 0 1 0 11.6 11.6Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+function beginThemeTransition() {
+  const html = document.documentElement;
+  html.classList.add('theme-is-transitioning');
+  window.setTimeout(() => html.classList.remove('theme-is-transitioning'), 320);
 }
 
 export function Navbar({
@@ -59,14 +40,8 @@ export function Navbar({
   };
 
   useEffect(() => {
-    try {
-      const t = localStorage.getItem(STORAGE_KEY);
-      const resolved: 'dark' | 'light' = t === 'light' ? 'light' : 'dark';
-      setTheme(resolved);
-      document.documentElement.classList.toggle('dark', resolved === 'dark');
-    } catch {
-      setTheme('dark');
-    }
+    const resolved = document.documentElement.classList.contains('light') ? 'light' : 'dark';
+    setTheme(resolved);
   }, []);
 
   const navClass = (isActive: boolean) =>
@@ -79,9 +54,6 @@ export function Navbar({
       </Link>
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
-      </Link>
-      <Link href="/changelog" className={navClass(active === 'changelog')}>
-        Changelog
       </Link>
       <Link href="/pricing" className={navClass(active === 'pricing')}>
         Pricing
@@ -99,9 +71,6 @@ export function Navbar({
       </Link>
       <Link href="/build" className={navClass(active === 'build')}>
         Build
-      </Link>
-      <Link href="/changelog" className={navClass(active === 'changelog')}>
-        Changelog
       </Link>
 
       {onHistory ? (
@@ -169,14 +138,18 @@ export function Navbar({
           <WhatsNew />
           <button
             type="button"
-            aria-label="Toggle theme"
-            className="h-9 w-9 rounded-lg flex items-center justify-center transition-all text-foreground"
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            className="h-9 w-9 rounded-lg flex items-center justify-center transition-opacity hover:opacity-90"
+            style={{ color: 'var(--foreground-muted)', border: '1px solid var(--border-weak)', background: 'var(--surface-weak)' }}
             onClick={() => {
               const html = document.documentElement;
-              const nextIsDark = !html.classList.contains('dark');
-              html.classList.toggle('dark', nextIsDark);
-              const next: 'dark' | 'light' = nextIsDark ? 'dark' : 'light';
+              const next: 'dark' | 'light' = theme === 'dark' ? 'light' : 'dark';
+              beginThemeTransition();
+              html.classList.remove('dark', 'light');
+              html.classList.add(next);
               setTheme(next);
+              syncThemeColorMeta(next === 'light');
               try {
                 localStorage.setItem(STORAGE_KEY, next);
               } catch {
@@ -184,7 +157,7 @@ export function Navbar({
               }
             }}
           >
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            {theme === 'dark' ? <Sun size={16} strokeWidth={1.75} aria-hidden /> : <Moon size={16} strokeWidth={1.75} aria-hidden />}
           </button>
           <SignedIn>
             {pathname === '/' ? (
@@ -201,7 +174,7 @@ export function Navbar({
           <SignedOut>
             <SignInButtonDeferred mode="modal">
               <button type="button" className="btn-primary btn-sm">
-                Start free
+                Start generating
               </button>
             </SignInButtonDeferred>
           </SignedOut>
@@ -218,7 +191,6 @@ export function Navbar({
               <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>
               <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
               <a href="/build" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Build</a>
-              <a href="/changelog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Changelog</a>
               <a href="/profile" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
               <a href="/pricing" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               <a href="/blog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Blog</a>

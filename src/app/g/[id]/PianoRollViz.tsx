@@ -2,17 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import type { GenerationResult, NoteEvent } from '@/lib/music-engine';
-
-const BG = '#0A0A0F';
-const BORDER = '#1A1A2E';
-
-const COLORS: Record<keyof GenerationResult, string> = {
-  melody: '#FF6D3F',
-  chords: '#A78BFA',
-  bass: '#00B894',
-  drums: '#E94560',
-  params: '#8A8A9A' as any,
-};
+import { getLayerVizColorsForCanvas, readCssColor } from '@/lib/design-system';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
 function allNotes(layers: GenerationResult): Array<{ layer: 'melody' | 'chords' | 'bass' | 'drums'; n: NoteEvent }> {
   return (['melody', 'chords', 'bass', 'drums'] as const).flatMap(layer =>
@@ -28,6 +19,7 @@ export function PianoRollViz({
   bars?: number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const colorScheme = useColorScheme();
 
   useEffect(() => {
     const canvas = ref.current;
@@ -42,11 +34,13 @@ export function PianoRollViz({
     canvas.height = Math.floor(hCss * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    ctx.fillStyle = BG;
+    const COLORS = getLayerVizColorsForCanvas();
+
+    ctx.fillStyle = readCssColor('--piano-roll-bg', '#0A0A0B');
     ctx.fillRect(0, 0, wCss, hCss);
 
     // Simple grid
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.strokeStyle = readCssColor('--piano-roll-viz-grid', 'rgba(255,255,255,0.05)');
     for (let b = 0; b <= bars * 4; b++) {
       const x = (b / (bars * 4)) * wCss;
       ctx.beginPath();
@@ -75,12 +69,11 @@ export function PianoRollViz({
       ctx.fillRect(x0, y - h / 2, w, h);
       ctx.globalAlpha = 1;
     }
-  }, [layers, bars]);
+  }, [layers, bars, colorScheme]);
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#111118', border: `1px solid ${BORDER}` }}>
-      <canvas ref={ref} style={{ width: '100%', height: 220, display: 'block' }} />
+    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <canvas ref={ref} className="w-full block piano-roll" style={{ height: 220 }} />
     </div>
   );
 }
-
