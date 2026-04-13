@@ -138,12 +138,7 @@ export function Navbar({
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-50"
-      style={{
-        borderBottom: '1px solid var(--border)',
-        background: 'color-mix(in srgb, var(--bg) 85%, transparent)',
-        backdropFilter: 'blur(12px)',
-      }}
+      className="fixed top-0 left-0 right-0 z-50 glass"
     >
       <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between gap-4">
         <Link

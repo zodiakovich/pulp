@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 
-const BG = '#09090B';
-const CARD = '#111118';
-const BORDER = '#1A1A2E';
+const BG = 'var(--bg)';
+const CARD = 'rgba(17,17,24,0.72)';
+const BORDER = 'rgba(255,255,255,0.06)';
 const ACCENT = '#FF6D3F';
 const ACTIVE = '#00B894';
-const INACTIVE = '#1A1A2E';
+const INACTIVE = 'rgba(255,255,255,0.08)';
 const CTA_TEXT = '#09090B';
 const STUDIO_BG = '#14120F';
 
@@ -47,7 +48,7 @@ function PaidPlanPriceBlock({ baseMonthly, billing }: { baseMonthly: number; bil
         >
           {formatMoney(display)}
         </span>
-        <span className="pb-2 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.9)' }}>
+        <span className="pb-2 text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.9)' }}>
           /month
         </span>
       </div>
@@ -58,7 +59,7 @@ function PaidPlanPriceBlock({ baseMonthly, billing }: { baseMonthly: number; bil
     <div className="mb-2 flex flex-col items-start gap-1">
       <span
         style={{
-          fontFamily: 'DM Sans, sans-serif',
+          fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif',
           fontSize: 14,
           fontWeight: 400,
           color: '#4A4A5A',
@@ -78,7 +79,7 @@ function PaidPlanPriceBlock({ baseMonthly, billing }: { baseMonthly: number; bil
       >
         {formatMoney(display)}
       </span>
-      <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#8A8A9A', lineHeight: 1.2 }}>/month</span>
+      <span style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', fontSize: 13, color: '#8A8A9A', lineHeight: 1.2 }}>/month</span>
     </div>
   );
 }
@@ -109,8 +110,8 @@ function CheckoutCta({
     <div className="w-full">
       <button
         type="button"
-        className="w-full rounded-xl px-8 py-4 text-base font-semibold transition-all min-h-[56px] disabled:opacity-45"
-        style={{ background: ACCENT, color: CTA_TEXT }}
+        className="w-full rounded-lg px-8 py-4 text-base font-semibold transition-all min-h-[56px] disabled:opacity-45 active:scale-[0.98]"
+        style={{ background: `linear-gradient(135deg, ${ACCENT} 0%, #FF8A65 55%, #FFAB91 100%)`, color: CTA_TEXT }}
         disabled={loading}
         onClick={async () => {
           if (loading) return;
@@ -140,7 +141,7 @@ function CheckoutCta({
         {loading ? 'Redirecting…' : label}
       </button>
       {error && (
-        <p className="mt-3 text-center text-xs" style={{ color: 'rgba(233,69,96,0.95)', fontFamily: 'DM Sans, sans-serif' }}>
+        <p className="mt-3 text-center text-xs" style={{ color: 'rgba(233,69,96,0.95)', fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif' }}>
           {error}
         </p>
       )}
@@ -174,7 +175,7 @@ export function PricingPlansClient() {
       <section className="px-4 sm:px-8 pt-32 pb-16 text-center">
         <p
           className="mb-4 text-xs uppercase tracking-[0.14em]"
-          style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.9)' }}
+          style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.9)' }}
         >
           Pricing
         </p>
@@ -193,23 +194,37 @@ export function PricingPlansClient() {
         </h1>
         <p
           className="mx-auto max-w-[520px] mb-12 text-base leading-relaxed"
-          style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.95)' }}
+          style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.95)' }}
         >
           Pick a monthly allowance that fits your workflow. Upgrade or downgrade anytime.
         </p>
 
         <div
-          className="inline-flex rounded-full p-1 gap-0"
-          style={{ background: CARD, border: `1px solid ${BORDER}` }}
+          className="relative inline-flex rounded-full p-1 gap-0"
+          style={{ background: CARD, border: `1px solid ${BORDER}`, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
           role="group"
           aria-label="Billing period"
         >
+          <motion.div
+            aria-hidden
+            layout
+            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+            style={{
+              position: 'absolute',
+              top: 4,
+              bottom: 4,
+              left: billing === 'monthly' ? 4 : '50%',
+              width: 'calc(50% - 4px)',
+              borderRadius: 999,
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          />
           <button
             type="button"
-            className="rounded-full px-8 py-3 text-sm font-medium transition-colors min-h-[48px]"
+            className="relative z-10 rounded-full px-8 py-3 text-sm font-medium transition-colors min-h-[48px]"
             style={{
-              fontFamily: 'DM Sans, sans-serif',
-              background: billing === 'monthly' ? BORDER : 'transparent',
+              fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif',
               color: billing === 'monthly' ? '#F0F0FF' : 'rgba(138,138,154,0.9)',
             }}
             onClick={() => setBilling('monthly')}
@@ -218,15 +233,14 @@ export function PricingPlansClient() {
           </button>
           <button
             type="button"
-            className="rounded-full px-8 py-3 text-sm font-medium transition-colors min-h-[48px]"
+            className="relative z-10 rounded-full px-8 py-3 text-sm font-medium transition-colors min-h-[48px]"
             style={{
-              fontFamily: 'DM Sans, sans-serif',
-              background: billing === 'annual' ? BORDER : 'transparent',
+              fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif',
               color: billing === 'annual' ? '#F0F0FF' : 'rgba(138,138,154,0.9)',
             }}
             onClick={() => setBilling('annual')}
           >
-            Annual <span style={{ color: ACTIVE }}>(−20%)</span>
+            Annual <span style={{ color: ACTIVE, fontWeight: 600 }}>Save 20%</span>
           </button>
         </div>
       </section>
@@ -236,12 +250,12 @@ export function PricingPlansClient() {
           {/* Free */}
           <div
             className="flex flex-col rounded-2xl p-10"
-            style={{ background: CARD, border: `1px solid ${BORDER}` }}
+            style={{ background: CARD, border: `1px solid ${BORDER}`, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
           >
             <div className="mb-10">
               <p
                 className="mb-6 text-xs uppercase tracking-[0.12em]"
-                style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}
+                style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}
               >
                 Free
               </p>
@@ -257,17 +271,17 @@ export function PricingPlansClient() {
                 >
                   $0
                 </span>
-                <span className="pb-2 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.9)' }}>
+                <span className="pb-2 text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.9)' }}>
                   /month
                 </span>
               </div>
-              <p className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
+              <p className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                 10 generations / month
               </p>
             </div>
             <ul className="mb-10 flex flex-col gap-5 flex-1">
               {FREE_FEATURES.map(f => (
-                <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+                <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif' }}>
                   <span
                     className="h-5 w-5 flex-shrink-0 rounded-full"
                     style={{ background: ACTIVE }}
@@ -279,12 +293,12 @@ export function PricingPlansClient() {
             </ul>
             <Link
               href="/dashboard"
-              className="mt-auto block w-full rounded-xl border py-4 text-center text-base font-semibold transition-colors min-h-[56px] flex items-center justify-center"
+              className="mt-auto block w-full rounded-lg border py-4 text-center text-base font-semibold transition-colors min-h-[56px] flex items-center justify-center active:scale-[0.98]"
               style={{
                 borderColor: 'rgba(255,255,255,0.14)',
                 color: '#F0F0FF',
                 textDecoration: 'none',
-                fontFamily: 'DM Sans, sans-serif',
+                fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif',
               }}
             >
               Go to dashboard
@@ -299,19 +313,19 @@ export function PricingPlansClient() {
             <div className="mb-10">
               <p
                 className="mb-6 text-xs uppercase tracking-[0.12em]"
-                style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}
+                style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}
               >
                 Pro
               </p>
               <PaidPlanPriceBlock baseMonthly={PRO_MONTHLY} billing={billing} />
-              <p className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
+              <p className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                 150 generations / month
                 {billing === 'annual' ? ' · billed annually' : ''}
               </p>
             </div>
             <ul className="mb-10 flex flex-col gap-5 flex-1">
               {[...FREE_FEATURES, ...PRO_EXTRA].map(f => (
-                <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+                <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif' }}>
                   <span className="h-5 w-5 flex-shrink-0 rounded-full" style={{ background: ACTIVE }} aria-hidden />
                   {f}
                 </li>
@@ -326,26 +340,26 @@ export function PricingPlansClient() {
               <div>
               <p
                 className="mb-6 text-xs uppercase tracking-[0.12em]"
-                style={{ fontFamily: 'DM Sans, sans-serif', color: ACCENT }}
+                style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: ACCENT }}
               >
                 Studio
               </p>
               <PaidPlanPriceBlock baseMonthly={STUDIO_MONTHLY} billing={billing} />
-              <p className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
+              <p className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                 600 generations / month
                 {billing === 'annual' ? ' · billed annually' : ''}
               </p>
               </div>
               <span
                 className="shrink-0 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider"
-                style={{ background: ACCENT, color: CTA_TEXT, fontFamily: 'DM Sans, sans-serif' }}
+                style={{ background: `linear-gradient(135deg, ${ACCENT} 0%, #FF8A65 55%, #FFAB91 100%)`, color: CTA_TEXT, fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif' }}
               >
                 Most popular
               </span>
             </div>
             <ul className="mb-10 flex flex-col gap-5 flex-1">
               {[...FREE_FEATURES, ...PRO_EXTRA, ...STUDIO_EXTRA].map(f => (
-                <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+                <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif' }}>
                   <span className="h-5 w-5 flex-shrink-0 rounded-full" style={{ background: ACTIVE }} aria-hidden />
                   {f}
                 </li>
@@ -374,16 +388,16 @@ export function PricingPlansClient() {
             <table className="w-full min-w-[640px] border-collapse text-left">
               <thead>
                 <tr style={{ background: CARD }}>
-                  <th className="px-6 py-5 text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
+                  <th className="px-6 py-5 text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                     Feature
                   </th>
-                  <th className="px-4 py-5 text-center text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
+                  <th className="px-4 py-5 text-center text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                     Free
                   </th>
-                  <th className="px-4 py-5 text-center text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
+                  <th className="px-4 py-5 text-center text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                     Pro
                   </th>
-                  <th className="px-4 py-5 text-center text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'DM Sans, sans-serif', color: ACCENT }}>
+                  <th className="px-4 py-5 text-center text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: ACCENT }}>
                     Studio
                   </th>
                 </tr>
@@ -391,20 +405,20 @@ export function PricingPlansClient() {
               <tbody>
                 {COMPARE_ROWS.map((row, i) => (
                   <tr key={row.label} style={{ background: i % 2 === 0 ? CARD : 'transparent' }}>
-                    <td className="px-6 py-4 align-middle text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.88)' }}>
+                    <td className="px-6 py-4 align-middle text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(240,240,255,0.88)' }}>
                       {row.label}
                     </td>
                     <td className="px-4 py-4 text-center align-middle">
                       {row.label === 'Monthly generations' ? (
-                        <span className="text-sm font-medium" style={{ fontFamily: 'DM Sans, sans-serif', color: '#F0F0FF' }}>
+                        <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: '#F0F0FF' }}>
                           10
                         </span>
                       ) : row.label === 'Genre library (5 → all)' ? (
-                        <span className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
+                        <span className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
                           5 genres
                         </span>
                       ) : row.label === 'Piano roll depth' ? (
-                        <span className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
+                        <span className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
                           Basic
                         </span>
                       ) : (
@@ -415,15 +429,15 @@ export function PricingPlansClient() {
                     </td>
                     <td className="px-4 py-4 text-center align-middle">
                       {row.label === 'Monthly generations' ? (
-                        <span className="text-sm font-medium" style={{ fontFamily: 'DM Sans, sans-serif', color: '#F0F0FF' }}>
+                        <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: '#F0F0FF' }}>
                           150
                         </span>
                       ) : row.label === 'Genre library (5 → all)' ? (
-                        <span className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
+                        <span className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
                           All + artists
                         </span>
                       ) : row.label === 'Piano roll depth' ? (
-                        <span className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
+                        <span className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
                           Full
                         </span>
                       ) : (
@@ -434,15 +448,15 @@ export function PricingPlansClient() {
                     </td>
                     <td className="px-4 py-4 text-center align-middle">
                       {row.label === 'Monthly generations' ? (
-                        <span className="text-sm font-medium" style={{ fontFamily: 'DM Sans, sans-serif', color: '#F0F0FF' }}>
+                        <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: '#F0F0FF' }}>
                           600
                         </span>
                       ) : row.label === 'Genre library (5 → all)' ? (
-                        <span className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
+                        <span className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
                           All + artists
                         </span>
                       ) : row.label === 'Piano roll depth' ? (
-                        <span className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
+                        <span className="text-sm" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: 'rgba(240,240,255,0.85)' }}>
                           Full
                         </span>
                       ) : (

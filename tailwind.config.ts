@@ -15,7 +15,7 @@ const config: Config = {
       },
       fontFamily: {
         display: ['Syne', 'sans-serif'],
-        body: ['DM Sans', 'sans-serif'],
+        body: ['var(--font-inter)', 'Inter', 'system-ui', 'Segoe UI', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
     },

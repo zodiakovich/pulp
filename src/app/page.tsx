@@ -58,9 +58,9 @@ const scrollSection = {
 } as const;
 
 const LANDING_STATS: { value: string; label: string }[] = [
+  { value: '10,000+', label: ' generations' },
   { value: '300+', label: ' artists' },
-  { value: '20', label: ' genres' },
-  { value: 'MIDI-ready', label: ' in seconds' },
+  { value: '50+', label: ' genres' },
 ];
 
 // ─── TYPES ───────────────────────────────────────────────────
@@ -3909,9 +3909,35 @@ export default function Home() {
         historyCount={history.length}
       />
 
-      <main className="min-h-screen" style={{ background: '#09090B' }}>
+      <main className="min-h-screen" style={{ background: 'var(--bg)' }}>
       {/* ── HERO ── */}
-      <section className="px-4 sm:px-8 pb-8 pt-24" style={{ background: '#09090B' }}>
+      <section className="relative overflow-hidden px-4 sm:px-8 pb-12 pt-24" style={{ background: 'var(--bg)' }}>
+        {/* Subtle depth: grid pattern + hero glow */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            opacity: 0.025,
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
+            backgroundSize: '64px 64px',
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: -220,
+            width: 1200,
+            height: 1200,
+            transform: 'translateX(-50%)',
+            background: 'radial-gradient(circle at 50% 35%, rgba(255,109,63,0.08), transparent 60%)',
+            pointerEvents: 'none',
+          }}
+        />
         <div className="mx-auto max-w-[720px] text-center">
           <motion.div
             initial={{ opacity: 0, y: 14 }}
@@ -3920,7 +3946,7 @@ export default function Home() {
           >
             <p
               className="mb-6 text-[11px] font-medium uppercase tracking-[0.22em]"
-              style={{ fontFamily: 'DM Sans, sans-serif', color: '#FF6D3F' }}
+              style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: '#FF6D3F' }}
             >
               AI MIDI Generator
             </p>
@@ -3938,7 +3964,7 @@ export default function Home() {
             </h1>
             <p
               className="mx-auto mt-6 max-w-[560px] text-[18px] leading-snug"
-              style={{ fontFamily: 'DM Sans, sans-serif', color: '#8A8A9A' }}
+              style={{ fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif', color: '#8A8A9A' }}
             >
               Describe a track in text — pulp returns four-layer MIDI, keyed and tempo-locked, export-ready for any DAW.
             </p>
@@ -3946,8 +3972,8 @@ export default function Home() {
               {effectiveIsSignedIn ? (
                 <Link
                   href="/dashboard"
-                  className="inline-flex min-h-[56px] items-center justify-center rounded-xl px-10 py-4 text-base font-semibold transition-transform active:scale-[0.98]"
-                  style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
+                  className="btn-primary btn-hero"
+                  style={{ textDecoration: 'none' }}
                 >
                   Start generating free
                 </Link>
@@ -3955,8 +3981,7 @@ export default function Home() {
                 <SignInButtonDeferred mode="modal">
                   <button
                     type="button"
-                    className="inline-flex min-h-[56px] w-full items-center justify-center rounded-xl px-10 py-4 text-base font-semibold transition-transform active:scale-[0.98] sm:w-auto"
-                    style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
+                    className="btn-primary btn-hero w-full sm:w-auto"
                   >
                     Start generating free
                   </button>
@@ -3964,12 +3989,11 @@ export default function Home() {
               )}
               <a
                 href="#demo"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-xl border px-8 py-3 text-sm font-medium transition-colors"
+                className="btn-secondary btn-sm"
                 style={{
-                  fontFamily: 'DM Sans, sans-serif',
-                  color: '#F5F5F5',
-                  borderColor: 'rgba(255,255,255,0.12)',
-                  background: 'transparent',
+                  height: 48,
+                  padding: '0 22px',
+                  textDecoration: 'none',
                 }}
               >
                 See how it works
@@ -3982,13 +4006,20 @@ export default function Home() {
       {/* ── STATS ── */}
       <motion.section
         className="mt-24 px-4 sm:px-8 py-10"
-        style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
+        style={{ background: 'rgba(17,17,24,0.65)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         {...scrollSection}
       >
-        <div className="mx-auto flex max-w-[960px] flex-col divide-y divide-[#1A1A2E] sm:flex-row sm:divide-x sm:divide-y-0">
+        <div className="mx-auto flex max-w-[960px] flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
           {LANDING_STATS.map(row => (
             <div key={row.value + row.label} className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center sm:py-6">
-              <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, lineHeight: 1.4 }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter), Inter, system-ui, Segoe UI, sans-serif',
+                  fontSize: 15,
+                  lineHeight: 1.4,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
                 <span style={{ color: '#F5F5F5', fontWeight: 600 }}>{row.value}</span>
                 <span style={{ color: '#8A8A9A' }}>{row.label}</span>
               </p>

@@ -29,9 +29,9 @@
 .dark {
   --foreground: #F0F0FF;
   --foreground-muted: #8A8A9A;
-  --background: #09090B;
+  --background: #0A0A0B;
   --surface: #111118;
-  --border: #1A1A2E;
+  --border: rgba(255,255,255,0.06);
   --color-muted: #8A8A9A;
 
   --button-text: #F0F0FF;
@@ -50,7 +50,7 @@
   --muted: #8A8A9A;
   --background: #111118;
   --surface: #14141c;
-  --border: #1A1A2E;
+  --border: rgba(255,255,255,0.06);
   background: #111118;
   color: var(--foreground-muted);
 }
@@ -101,10 +101,28 @@ button.nav-link {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   font-size: 16px;
   line-height: 1.6;
+  letter-spacing: -0.01em;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+}
+
+label, .label, .field-label {
+  font-weight: 500;
+}
+
+section h2, .section-title {
+  font-weight: 600;
 }
 
 /* ─── TEXT EFFECTS ─── */
@@ -126,9 +144,10 @@ body {
 
 /* ─── GLASS NAV ─── */
 .glass {
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(17,17,24,0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.06);
 }
 
 /* ─── PIANO ROLL ─── */
@@ -220,24 +239,23 @@ body {
   min-height: 48px;
   height: auto;
   padding: 12px 32px;
-  border-radius: 10px;
-  background: #FF6D3F;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #FF6D3F 0%, #FF8A65 55%, #FFAB91 100%);
   color: #0a0a0f;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   font-weight: 600;
   font-size: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+  border: 1px solid rgba(255, 255, 255, 0.10);
   cursor: pointer;
-  transition: all 180ms ease-out;
+  transition: transform 160ms ease-out, box-shadow 180ms ease-out, filter 180ms ease-out, border-color 180ms ease-out;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .btn-primary:hover:not(:disabled) {
   filter: brightness(1.08);
-  box-shadow: 0 0 28px rgba(255, 109, 63, 0.38), 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+  box-shadow: 0 0 34px rgba(255, 109, 63, 0.22);
 }
-.btn-primary:active:not(:disabled) { transform: scale(0.97); }
+.btn-primary:active:not(:disabled) { transform: scale(0.98); }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary.pulsing { animation: pulse-ring 1.4s ease-out infinite; }
 
@@ -260,21 +278,20 @@ body {
   gap: 8px;
   height: 52px;
   padding: 0 28px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   font-weight: 500;
   font-size: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15) inset;
+  border: 1px solid rgba(255,255,255,0.08);
   cursor: pointer;
-  transition: all 180ms ease-out;
+  transition: transform 160ms ease-out, background 180ms ease-out, border-color 180ms ease-out;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); }
-.btn-secondary:active:not(:disabled) { transform: scale(0.97); }
+.btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.10); }
+.btn-secondary:active:not(:disabled) { transform: scale(0.98); }
 .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
 
 html:not(.dark) .btn-secondary {
@@ -289,23 +306,23 @@ html:not(.dark) .btn-secondary {
   gap: 8px;
   height: 52px;
   padding: 0 28px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #00B894;
   color: #fff;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   font-weight: 600;
   font-size: 15px;
   border: none;
   cursor: pointer;
-  transition: all 180ms ease-out;
+  transition: transform 160ms ease-out, box-shadow 180ms ease-out, filter 180ms ease-out;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .btn-download:hover:not(:disabled) {
   filter: brightness(1.1);
-  box-shadow: 0 0 24px rgba(0,184,148,0.35);
+  box-shadow: 0 0 28px rgba(0,184,148,0.22);
 }
-.btn-download:active:not(:disabled) { transform: scale(0.97); }
+.btn-download:active:not(:disabled) { transform: scale(0.98); }
 
 /* Compact variants — apply alongside btn-* */
 .btn-sm {
@@ -330,13 +347,14 @@ html:not(.dark) .btn-secondary.btn-sm {
   width: 100%;
   height: 52px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
   color: var(--text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   font-size: 15px;
   padding: 0 16px;
   transition: border-color 180ms ease-out, box-shadow 180ms ease-out;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.30);
 }
 .input-field::placeholder { color: var(--muted); }
 .input-field:focus {
@@ -348,7 +366,7 @@ html:not(.dark) .btn-secondary.btn-sm {
 /* ─── LAYER CARDS ─── */
 .layer-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255,255,255,0.06);
   border-radius: 12px;
   padding: 24px;
   transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
@@ -362,9 +380,7 @@ html:not(.dark) .btn-secondary.btn-sm {
   width: 3px;
   border-radius: 12px 0 0 12px;
 }
-.layer-card:hover {
-  border-color: rgba(255,109,63,0.25);
-}
+.layer-card:hover { border-color: rgba(255,255,255,0.10); }
 .layer-card.active-melody::before  { background: #FF6D3F; }
 .layer-card.active-chords::before  { background: #A78BFA; }
 .layer-card.active-bass::before    { background: #00B894; }
@@ -381,7 +397,7 @@ html:not(.dark) .btn-secondary.btn-sm {
   align-items: center;
   padding: 6px 14px;
   font-size: 13px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
   color: var(--foreground-muted);
@@ -409,7 +425,7 @@ html:not(.dark) .btn-secondary.btn-sm {
   align-items: center;
   padding: 6px 14px;
   font-size: 13px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   font-weight: 500;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -431,12 +447,12 @@ html:not(.dark) .btn-secondary.btn-sm {
 /* ─── SELECT OVERRIDES ─── */
 select {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255,255,255,0.08);
   color: var(--text);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 13px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, 'Segoe UI', sans-serif;
   transition: border-color 180ms ease-out;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238A8A9A' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
@@ -481,16 +497,16 @@ input[type="range"]::-moz-range-thumb {
 /* ─── GENRE CARD ─── */
 .genre-card {
   padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
   text-align: left;
   background: transparent;
   color: var(--foreground);
   cursor: pointer;
-  transition: all 180ms ease-out;
+  transition: border-color 180ms ease-out, background 180ms ease-out, transform 180ms ease-out;
 }
 .genre-card:hover {
-  border-color: rgba(255,109,63,0.35);
+  border-color: rgba(255,255,255,0.10);
   background: var(--surface);
   transform: translateY(-1px);
 }
