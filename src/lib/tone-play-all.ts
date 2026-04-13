@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { NoteEvent } from '@/lib/music-engine';
+import { bassPresets, chordPresets, melodyPresets, pickPresetIndex } from '@/lib/synth-presets';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -32,57 +33,52 @@ export async function playAll(
   const spb = 60 / Math.max(60, Math.min(200, bpm));
   const now = Tone.now() + 0.05;
   let maxEnd = 0;
+  const seed = Math.round(bpm) + (tracks.melody?.length ?? 0) + (tracks.chords?.length ?? 0) + (tracks.bass?.length ?? 0);
 
-  // MELODY — warm sine + reverb
+  // MELODY — richer layered FM/AM presets + FX
   if (tracks.melody?.length) {
     const rev = new Tone.Reverb({ decay: 1.8, wet: 0.2 }).toDestination();
     const dly = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.15, wet: 0.08 }).connect(rev);
-    const mel = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.04, decay: 0.2, sustain: 0.6, release: 1.0 },
-      volume: -10,
-    }).connect(dly);
-    activeNodes.push(rev, dly, mel);
+    const idx = pickPresetIndex(seed, melodyPresets.length);
+    const inst = melodyPresets[idx]!();
+    (inst.output as any).connect(dly);
+    activeNodes.push(rev, dly, ...inst.nodes);
     for (const n of tracks.melody) {
       const t = now + n.startTime * spb;
       const d = Math.max(0.1, n.duration * spb * 0.9);
-      mel.triggerAttackRelease(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+      inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
       maxEnd = Math.max(maxEnd, n.startTime * spb + d);
     }
   }
 
-  // CHORDS — pad with chorus + reverb
+  // CHORDS — pad-like layered FM/AM presets + chorus + reverb
   if (tracks.chords?.length) {
     const rev = new Tone.Reverb({ decay: 3, wet: 0.35 }).toDestination();
     const cho = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.25 }).connect(rev);
     cho.start();
-    const chd = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle' },
-      envelope: { attack: 0.15, decay: 0.5, sustain: 0.7, release: 2.0 },
-      volume: -14,
-    }).connect(cho);
-    activeNodes.push(rev, cho, chd);
+    const idx = pickPresetIndex(seed + 11, chordPresets.length);
+    const inst = chordPresets[idx]!();
+    (inst.output as any).connect(cho);
+    activeNodes.push(rev, cho, ...inst.nodes);
     for (const n of tracks.chords) {
       const t = now + n.startTime * spb;
       const d = Math.max(0.1, n.duration * spb * 0.9);
-      chd.triggerAttackRelease(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+      inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
       maxEnd = Math.max(maxEnd, n.startTime * spb + d);
     }
   }
 
-  // BASS — filtered sawtooth
+  // BASS — layered bass presets (includes 808) + filter
   if (tracks.bass?.length) {
     const flt = new Tone.Filter({ frequency: 600, type: 'lowpass', rolloff: -24 }).toDestination();
-    const bas = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sawtooth' },
-      envelope: { attack: 0.01, decay: 0.15, sustain: 0.4, release: 0.3 },
-      volume: -8,
-    }).connect(flt);
-    activeNodes.push(flt, bas);
+    const idx = pickPresetIndex(seed + 29, bassPresets.length);
+    const inst = bassPresets[idx]!();
+    (inst.output as any).connect(flt);
+    activeNodes.push(flt, ...inst.nodes);
     for (const n of tracks.bass) {
       const t = now + n.startTime * spb;
       const d = Math.max(0.1, n.duration * spb * 0.9);
-      bas.triggerAttackRelease(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+      inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
       maxEnd = Math.max(maxEnd, n.startTime * spb + d);
     }
   }

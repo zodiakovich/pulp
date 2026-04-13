@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { playNotes, stopAllPlayback } from '@/lib/audio-engine';
+import { playAll, stopPlayAll } from '@/lib/tone-play-all';
 import type { GenerationResult } from '@/lib/music-engine';
 
 export function PlayButton({
@@ -17,21 +17,22 @@ export function PlayButton({
 
   const onToggle = () => {
     if (playing) {
-      stopAllPlayback();
+      stopPlayAll();
       setPlaying(false);
       return;
     }
 
     setPlaying(true);
-    playNotes({
-      melody: layers.melody?.length ? layers.melody : undefined,
-      chords: layers.chords?.length ? layers.chords : undefined,
-      bass: layers.bass?.length ? layers.bass : undefined,
-      drums: layers.drums?.length ? layers.drums : undefined,
+    void playAll(
+      {
+        melody: layers.melody?.length ? layers.melody : undefined,
+        chords: layers.chords?.length ? layers.chords : undefined,
+        bass: layers.bass?.length ? layers.bass : undefined,
+        drums: layers.drums?.length ? layers.drums : undefined,
+      },
       bpm,
-      genre,
-      onComplete: () => setPlaying(false),
-    });
+      () => setPlaying(false),
+    );
   };
 
   return (

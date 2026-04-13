@@ -11,14 +11,17 @@ export interface PianoRollEditorProps {
   onNotesChange: (notes: NoteEvent[]) => void;
   isPlaying?: boolean;
   playheadBeat?: number;
+  gridHeightPx?: number;
+  velocityHeightPx?: number;
+  chordOverlayNotes?: NoteEvent[];
 }
 
 const MIDI_MIN = 36;
 const MIDI_MAX = 84;
 const PITCH_ROWS = MIDI_MAX - MIDI_MIN;
 const PIANO_W = 48;
-const GRID_H = 240;
-const VELOCITY_H = 80;
+const GRID_H_DEFAULT = 240;
+const VELOCITY_H_DEFAULT = 80;
 const MIN_PX_PER_BEAT = 40;
 const MAX_PX_PER_BEAT = 200;
 const DEF_PX_PER_BEAT = 80;
@@ -31,6 +34,37 @@ const BG = '#0A0A0F';
 const SURFACE = '#111118';
 const PRIMARY = '#FF6D3F';
 const MUTED = '#8A8A9A';
+const CHORD_H = 24;
+
+const CHORD_QUALITY: Record<string, string> = {
+  '0,3,7': 'm',
+  '0,4,7': 'maj',
+  '0,3,6': 'dim',
+  '0,4,8': 'aug',
+  '0,3,7,10': 'm7',
+  '0,4,7,10': '7',
+  '0,4,7,11': 'maj7',
+  '0,3,7,11': 'm(maj7)',
+  '0,2,7': 'sus2',
+  '0,5,7': 'sus4',
+};
+
+function pcsToChordName(pcs: number[]): string | null {
+  if (pcs.length < 3) return null;
+  const uniq = [...new Set(pcs.map(p => ((p % 12) + 12) % 12))].sort((a, b) => a - b);
+  if (uniq.length < 3) return null;
+  for (const root of uniq) {
+    const intervals = uniq.map(c => (c - root + 12) % 12).sort((a, b) => a - b);
+    const key = intervals.join(',');
+    const q = CHORD_QUALITY[key];
+    if (!q) continue;
+    const rootName = NOTE_NAMES[root] ?? 'C';
+    if (q === 'maj') return rootName;
+    if (q === 'm(maj7)') return `${rootName}mMaj7`;
+    return `${rootName}${q}`;
+  }
+  return null;
+}
 
 type SnapStep = 0.25 | 0.125 | 0.0625 | 0.03125;
 
@@ -118,6 +152,8 @@ type DragState =
       mode: 'vel';
       snapshot: NoteEvent[];
       index: number;
+      indices: number[];
+      anchorVelocity: number;
     }
   | {
       mode: 'pendingAdd';
@@ -134,14 +170,20 @@ export function PianoRollEditor({
   onNotesChange,
   isPlaying = false,
   playheadBeat = 0,
+  gridHeightPx,
+  velocityHeightPx,
+  chordOverlayNotes,
 }: PianoRollEditorProps) {
   const totalBeats = bars * 4;
+  const GRID_H = gridHeightPx ?? GRID_H_DEFAULT;
+  const VELOCITY_H = velocityHeightPx ?? VELOCITY_H_DEFAULT;
   const [pxPerBeat, setPxPerBeat] = useState(DEF_PX_PER_BEAT);
   const [snapStep, setSnapStep] = useState<SnapStep>(0.0625);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [hoverVelIdx, setHoverVelIdx] = useState<number | null>(null);
   const [velTooltip, setVelTooltip] = useState<{ x: number; y: number; v: number } | null>(null);
+  const [showChords, setShowChords] = useState(true);
 
   const historyRef = useRef<NoteEvent[][]>([]);
   const futureRef = useRef<NoteEvent[][]>([]);
@@ -160,9 +202,12 @@ export function PianoRollEditor({
 
   const commitHistory = useCallback((snapshot: NoteEvent[]) => {
     historyRef.current.push(snapshot.map(n => ({ ...n })));
-    if (historyRef.current.length > 20) historyRef.current.shift();
+    if (historyRef.current.length > 50) historyRef.current.shift();
     futureRef.current = [];
   }, []);
+
+  const undoCount = historyRef.current.length;
+  const redoCount = futureRef.current.length;
 
   const undo = useCallback(() => {
     const h = historyRef.current;
@@ -272,6 +317,7 @@ export function PianoRollEditor({
       ctx.setLineDash([]);
     }
 
+    const yOff = showChords ? CHORD_H : 0;
     const sorted = [...notes].sort((a, b) => a.startTime - b.startTime || a.pitch - b.pitch);
     for (const note of sorted) {
       if (note.pitch < MIDI_MIN || note.pitch >= MIDI_MAX) continue;
@@ -279,13 +325,16 @@ export function PianoRollEditor({
       const x0 = (note.startTime / totalBeats) * w;
       let nw = (note.duration / totalBeats) * w;
       nw = Math.max(MIN_NOTE_RENDER_W, nw);
-      const y = pi * rowH + 1;
+      const y = pi * rowH + 1 + yOff;
       const nh = Math.max(2, rowH - 2);
       const k = noteKey(note);
       const sel = selectedKeys.has(k);
-      const alpha = 0.4 + (note.velocity / 127) * 0.6;
+      const vNorm = Math.max(0, Math.min(1, note.velocity / 127));
+      const alpha = 0.25 + vNorm * 0.75;
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = color;
+      // Slight brightness lift on higher velocities (subtle)
+      const bright = 0.75 + vNorm * 0.25;
+      ctx.fillStyle = vNorm < 0.5 ? `${color}` : `${color}`;
       const r = Math.min(3, nh / 2, nw / 2);
       ctx.beginPath();
       ctx.moveTo(x0 + r, y);
@@ -299,6 +348,12 @@ export function PianoRollEditor({
       ctx.quadraticCurveTo(x0, y, x0 + r, y);
       ctx.closePath();
       ctx.fill();
+      // Overlay highlight for higher velocities without changing base hue.
+      if (vNorm > 0.5) {
+        ctx.globalAlpha = (vNorm - 0.5) * 0.35;
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+      }
       if (sel) {
         ctx.globalAlpha = 1;
         ctx.strokeStyle = 'rgba(255,255,255,0.95)';
@@ -324,7 +379,7 @@ export function PianoRollEditor({
       ctx.lineTo(px, h);
       ctx.stroke();
     }
-  }, [notes, color, totalBeats, wPx, selectedKeys, isPlaying, playheadBeat, rowH]);
+  }, [notes, color, totalBeats, wPx, selectedKeys, isPlaying, playheadBeat, rowH, showChords]);
 
   const drawVelocity = useCallback(() => {
     const canvas = velCanvasRef.current;
@@ -352,6 +407,7 @@ export function PianoRollEditor({
 
     const pad = 8;
     const chartH = h - pad * 2;
+    const hasSelection = selectedKeys.size > 0;
     for (let i = 0; i < notes.length; i++) {
       const note = notes[i]!;
       const xCenter = (note.startTime / totalBeats) * w;
@@ -360,6 +416,7 @@ export function PianoRollEditor({
       const vh = (note.velocity / 127) * chartH;
       const k = noteKey(note);
       const sel = selectedKeys.has(k);
+      if (hasSelection && !sel) continue;
       ctx.fillStyle = sel ? color : `${color}99`;
       ctx.globalAlpha = sel ? 1 : 0.78;
       ctx.fillRect(x, pad + chartH - vh, barW, vh);
@@ -601,11 +658,23 @@ export function PianoRollEditor({
       }
     }
     if (best < 0) return;
+    const hitKey = noteKey(notesRef.current[best]!);
+    if (!selectedKeys.has(hitKey)) {
+      setSelectedKeys(new Set([hitKey]));
+    }
     commitHistory(notesRef.current);
+    const activeSel = selectedKeys.has(hitKey) ? selectedKeys : new Set([hitKey]);
+    const indices = notesRef.current
+      .map((n, i) => ({ k: noteKey(n), i }))
+      .filter(x => activeSel.has(x.k))
+      .map(x => x.i);
+    const anchorVelocity = notesRef.current[best]!.velocity;
     dragRef.current = {
       mode: 'vel',
       snapshot: notesRef.current.map(n => ({ ...n })),
       index: best,
+      indices,
+      anchorVelocity,
     };
   };
 
@@ -621,7 +690,11 @@ export function PianoRollEditor({
       const pad = 8;
       const rel = 1 - (y - pad) / chartH;
       const v = clampVel(rel * 127);
-      const next = d.snapshot.map((n, i) => (i === d.index ? { ...n, velocity: v } : { ...n }));
+      const delta = v - d.anchorVelocity;
+      const next = d.snapshot.map((n, i) => {
+        if (!d.indices.includes(i)) return { ...n };
+        return { ...n, velocity: clampVel(n.velocity + delta) };
+      });
       onNotesChange(next);
     }
     let best = -1;
@@ -661,11 +734,12 @@ export function PianoRollEditor({
       e.preventDefault();
       setSelectedKeys(new Set(notesRef.current.map(noteKey)));
     }
-    if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    const isCombo = e.ctrlKey || e.metaKey;
+    if (isCombo && e.key.toLowerCase() === 'z' && !e.shiftKey) {
       e.preventDefault();
       undo();
     }
-    if ((e.ctrlKey && e.key.toLowerCase() === 'y') || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z')) {
+    if (isCombo && e.shiftKey && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       redo();
     }
@@ -673,6 +747,42 @@ export function PianoRollEditor({
 
   const zoomIn = () => setPxPerBeat(v => Math.min(MAX_PX_PER_BEAT, Math.round(v + 10)));
   const zoomOut = () => setPxPerBeat(v => Math.max(MIN_PX_PER_BEAT, Math.round(v - 10)));
+
+  const chordSegments = useMemo(() => {
+    if (!showChords) return [];
+    const all = chordOverlayNotes && chordOverlayNotes.length ? chordOverlayNotes : notes;
+    if (!all || all.length === 0) return [];
+
+    const segs: Array<{ startBeat: number; endBeat: number; name: string }> = [];
+    const beatCount = totalBeats;
+    let cur: { startBeat: number; name: string } | null = null;
+
+    const getPcsAtBeat = (b: number): number[] => {
+      const pcs: number[] = [];
+      const t = b;
+      for (const n of all) {
+        const st = n.startTime;
+        const en = n.startTime + n.duration;
+        if (t + 1e-6 >= st && t < en - 1e-6) pcs.push(n.pitch % 12);
+      }
+      return pcs;
+    };
+
+    for (let b = 0; b < beatCount; b++) {
+      const name = pcsToChordName(getPcsAtBeat(b)) ?? '—';
+      if (!cur) {
+        cur = { startBeat: b, name };
+        continue;
+      }
+      if (name === cur.name) continue;
+      segs.push({ startBeat: cur.startBeat, endBeat: b, name: cur.name });
+      cur = { startBeat: b, name };
+    }
+    if (cur) segs.push({ startBeat: cur.startBeat, endBeat: beatCount, name: cur.name });
+
+    // Drop long runs of unknowns to reduce noise; keep short dashes for context.
+    return segs.filter(s => !(s.name === '—' && s.endBeat - s.startBeat >= 4));
+  }, [showChords, chordOverlayNotes, notes, totalBeats]);
 
   endGlobalDragRef.current = () => {
     finishGridInteraction();
@@ -709,6 +819,58 @@ export function PianoRollEditor({
         <span className="text-[10px] uppercase tracking-wider font-mono" style={{ color: MUTED }}>
           {layerName}
         </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="relative px-2 h-7 rounded-md text-xs font-mono border transition-colors"
+            style={{
+              borderColor: undoCount > 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)',
+              color: undoCount > 0 ? '#F0F0FF' : 'rgba(138,138,154,0.6)',
+              opacity: undoCount > 0 ? 1 : 0.55,
+              cursor: undoCount > 0 ? 'pointer' : 'not-allowed',
+            }}
+            onClick={() => {
+              if (undoCount === 0) return;
+              undo();
+            }}
+            title="Undo (Ctrl/Cmd+Z)"
+          >
+            ↶
+            {undoCount > 0 && (
+              <span
+                className="absolute -right-1 -top-1 rounded px-1 text-[9px] font-mono"
+                style={{ background: 'rgba(255,255,255,0.10)', color: 'rgba(240,240,255,0.9)' }}
+              >
+                {Math.min(99, undoCount)}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            className="relative px-2 h-7 rounded-md text-xs font-mono border transition-colors"
+            style={{
+              borderColor: redoCount > 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)',
+              color: redoCount > 0 ? '#F0F0FF' : 'rgba(138,138,154,0.6)',
+              opacity: redoCount > 0 ? 1 : 0.55,
+              cursor: redoCount > 0 ? 'pointer' : 'not-allowed',
+            }}
+            onClick={() => {
+              if (redoCount === 0) return;
+              redo();
+            }}
+            title="Redo (Ctrl/Cmd+Shift+Z)"
+          >
+            ↷
+            {redoCount > 0 && (
+              <span
+                className="absolute -right-1 -top-1 rounded px-1 text-[9px] font-mono"
+                style={{ background: 'rgba(255,255,255,0.10)', color: 'rgba(240,240,255,0.9)' }}
+              >
+                {Math.min(99, redoCount)}
+              </span>
+            )}
+          </button>
+        </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -756,6 +918,19 @@ export function PianoRollEditor({
         >
           Clear all
         </button>
+        <button
+          type="button"
+          className="px-2 h-7 rounded-md text-[10px] font-mono border transition-colors"
+          style={{
+            borderColor: showChords ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
+            color: showChords ? '#FF6D3F' : '#8A8A9A',
+            background: showChords ? 'rgba(255,109,63,0.10)' : 'transparent',
+          }}
+          onClick={() => setShowChords(v => !v)}
+          title="Toggle chord overlay"
+        >
+          Chords
+        </button>
       </div>
 
       <div className="flex flex-1 min-h-0 min-w-0">
@@ -763,9 +938,15 @@ export function PianoRollEditor({
           className="shrink-0 border-r border-[#1A1A2E] relative select-none"
           style={{ width: PIANO_W, height: GRID_H, background: BG }}
         >
+          {showChords && (
+            <div
+              className="absolute left-0 top-0 w-full border-b border-[#1A1A2E]"
+              style={{ height: CHORD_H, background: '#0D0D12' }}
+            />
+          )}
           {pianoKeys.map(({ midi, isBlack }) => {
             const row = MIDI_MAX - 1 - midi;
-            const top = (row / PITCH_ROWS) * GRID_H;
+            const top = (row / PITCH_ROWS) * GRID_H + (showChords ? CHORD_H : 0);
             const h = GRID_H / PITCH_ROWS;
             const isC = midi % 12 === 0;
             const label = isC ? pitchLabel(midi) : '';
@@ -819,6 +1000,46 @@ export function PianoRollEditor({
 
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-hidden min-w-0" style={{ background: BG }}>
           <div style={{ width: wPx, minWidth: '100%' }}>
+            {showChords && (
+              <div
+                className="relative border-b border-[#1A1A2E]"
+                style={{ height: CHORD_H, background: '#0D0D12' }}
+              >
+                {chordSegments.map(seg => {
+                  const left = (seg.startBeat / totalBeats) * wPx;
+                  const width = ((seg.endBeat - seg.startBeat) / totalBeats) * wPx;
+                  if (width < 14) return null;
+                  return (
+                    <div
+                      key={`${seg.startBeat}-${seg.name}`}
+                      className="absolute top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-mono"
+                      style={{
+                        left,
+                        width,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: seg.name === '—' ? 'rgba(138,138,154,0.55)' : 'rgba(240,240,255,0.92)',
+                      }}
+                    >
+                      <span
+                        className="px-2 py-0.5 rounded-full"
+                        style={{
+                          background: seg.name === '—' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {seg.name === '—' ? '—' : seg.name}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <canvas
               ref={gridCanvasRef}
               className="block cursor-crosshair touch-none"

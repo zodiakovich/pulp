@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ToastProvider } from '@/components/toast/ToastProvider';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
+import CrispChat from '@/components/CrispChat';
 import './fonts.css';
 import './globals.css';
 
@@ -70,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }}
           />
           <ServiceWorkerRegister />
+          <CrispChat />
           <ToastProvider>{children}</ToastProvider>
           <Analytics />
           <SpeedInsights />

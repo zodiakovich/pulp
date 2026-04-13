@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { PricingFAQ } from './PricingFAQ';
 import { PricingPlansClient } from './PricingPlansClient';
+import { CrispSupportLink } from '@/components/CrispSupportLink';
 
 export const metadata: Metadata = {
   title: 'Pricing — Pulp',
@@ -60,6 +61,7 @@ export default function PricingPage() {
           className="mb-3 flex flex-wrap items-center justify-center gap-4 text-xs"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}
         >
+          <CrispSupportLink className="footer-link" label="Support" />
           <Link href="/legal/terms" className="footer-link">
             Terms
           </Link>

@@ -250,3 +250,83 @@ export function playNotesWithMix(options: PlaybackOptions) {
     mixTimeouts.push(id);
   }
 }
+
+function audioBufferToWav16(buffer: AudioBuffer, targetSampleRate = 44100): ArrayBuffer {
+  // OfflineAudioContext will already render at the requested sample rate (we request 44.1kHz),
+  // so we only support passthrough here.
+  const sampleRate = buffer.sampleRate;
+  if (sampleRate !== targetSampleRate) {
+    throw new Error(`Unexpected sample rate ${sampleRate} (expected ${targetSampleRate})`);
+  }
+
+  const numChannels = Math.min(2, buffer.numberOfChannels);
+  const numFrames = buffer.length;
+
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numFrames * blockAlign;
+  const out = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(out);
+
+  let o = 0;
+  const writeU16 = (v: number) => { view.setUint16(o, v, true); o += 2; };
+  const writeU32 = (v: number) => { view.setUint32(o, v, true); o += 4; };
+  const writeStr = (s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(o++, s.charCodeAt(i));
+  };
+
+  writeStr('RIFF');
+  writeU32(36 + dataSize);
+  writeStr('WAVE');
+
+  writeStr('fmt ');
+  writeU32(16);
+  writeU16(1); // PCM
+  writeU16(numChannels);
+  writeU32(sampleRate);
+  writeU32(byteRate);
+  writeU16(blockAlign);
+  writeU16(16); // bits
+
+  writeStr('data');
+  writeU32(dataSize);
+
+  const chData: Float32Array[] = [];
+  for (let ch = 0; ch < numChannels; ch++) chData.push(buffer.getChannelData(ch));
+
+  for (let i = 0; i < numFrames; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const x = Math.max(-1, Math.min(1, chData[ch]![i]!));
+      const s = x < 0 ? Math.round(x * 0x8000) : Math.round(x * 0x7fff);
+      view.setInt16(o, s, true);
+      o += 2;
+    }
+  }
+
+  return out;
+}
+
+export async function renderNotesWithMixToWav(options: PlaybackOptions): Promise<Blob> {
+  const sr = 44100;
+  const tailSec = 2.25; // reverb + release tail to match playback feel
+
+  // Estimate duration by scheduling once with a throwaway context.
+  // `scheduleNotesToLayerBuses` schedules relative to ctx.currentTime + 0.1.
+  const probeCtx = new OfflineAudioContext(2, sr, sr);
+  const probeCtxCompat = probeCtx as unknown as AudioContext;
+  const probeBuses = buildMixGraph(probeCtxCompat);
+  const probe = scheduleNotesToLayerBuses(probeCtxCompat, probeBuses, options);
+  const mainSec = Math.max(0.1, probe.maxEndTime - probe.currentTime);
+  const totalSec = mainSec + tailSec;
+
+  const length = Math.max(1, Math.ceil(totalSec * sr));
+  const ctx = new OfflineAudioContext(2, length, sr);
+  const ctxCompat = ctx as unknown as AudioContext;
+  const buses = buildMixGraph(ctxCompat);
+  scheduleNotesToLayerBuses(ctxCompat, buses, options);
+
+  const rendered = await ctx.startRendering();
+  const wav = audioBufferToWav16(rendered, sr);
+  return new Blob([wav], { type: 'audio/wav' });
+}

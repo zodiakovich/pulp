@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { NoteEvent } from '@/lib/music-engine';
+import { bassPresets, chordPresets, melodyPresets, pickPresetIndex } from '@/lib/synth-presets';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -42,16 +43,15 @@ export async function playTonePreview(
 
   const secondsPerBeat = 60 / Math.max(60, Math.min(200, bpm));
   const now = Tone.now() + 0.05;
+  const seed = Math.round(bpm) + notes.length;
 
   if (layer === 'melody') {
     const reverb = new Tone.Reverb({ decay: 1.8, wet: 0.25 }).toDestination();
     const delay = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.2, wet: 0.1 }).connect(reverb);
-    const poly = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.04, decay: 0.2, sustain: 0.6, release: 1.0 },
-      volume: -8,
-    }).connect(delay);
-    activeNodes.push(reverb, delay, poly);
+    const idx = pickPresetIndex(seed, melodyPresets.length);
+    const inst = melodyPresets[idx]!();
+    (inst.output as any).connect(delay);
+    activeNodes.push(reverb, delay, ...inst.nodes);
 
     let maxEnd = 0;
     for (const note of notes) {
@@ -59,7 +59,7 @@ export async function playTonePreview(
       const duration = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
       const noteName = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
       const velocity = note.velocity / 127;
-      poly.triggerAttackRelease(noteName, duration, startTime, velocity);
+      inst.trigger(noteName, duration, startTime, velocity);
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
     }
     if (onComplete) {
@@ -75,12 +75,10 @@ export async function playTonePreview(
     const reverb = new Tone.Reverb({ decay: 3, wet: 0.4 }).toDestination();
     const chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.3 }).connect(reverb);
     chorus.start();
-    const poly = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle' },
-      envelope: { attack: 0.15, decay: 0.5, sustain: 0.7, release: 2.0 },
-      volume: -12,
-    }).connect(chorus);
-    activeNodes.push(reverb, chorus, poly);
+    const idx = pickPresetIndex(seed + 11, chordPresets.length);
+    const inst = chordPresets[idx]!();
+    (inst.output as any).connect(chorus);
+    activeNodes.push(reverb, chorus, ...inst.nodes);
 
     let maxEnd = 0;
     for (const note of notes) {
@@ -88,7 +86,7 @@ export async function playTonePreview(
       const duration = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
       const noteName = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
       const velocity = note.velocity / 127;
-      poly.triggerAttackRelease(noteName, duration, startTime, velocity);
+      inst.trigger(noteName, duration, startTime, velocity);
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
     }
     if (onComplete) {
@@ -103,12 +101,10 @@ export async function playTonePreview(
   if (layer === 'bass') {
     const filter = new Tone.Filter({ frequency: 500, type: 'lowpass', rolloff: -24 }).toDestination();
     const distortion = new Tone.Distortion({ distortion: 0.15, wet: 0.2 }).connect(filter);
-    const poly = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sawtooth' },
-      envelope: { attack: 0.01, decay: 0.15, sustain: 0.4, release: 0.3 },
-      volume: -6,
-    }).connect(distortion);
-    activeNodes.push(filter, distortion, poly);
+    const idx = pickPresetIndex(seed + 29, bassPresets.length);
+    const inst = bassPresets[idx]!();
+    (inst.output as any).connect(distortion);
+    activeNodes.push(filter, distortion, ...inst.nodes);
 
     let maxEnd = 0;
     for (const note of notes) {
@@ -116,7 +112,7 @@ export async function playTonePreview(
       const duration = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
       const noteName = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
       const velocity = note.velocity / 127;
-      poly.triggerAttackRelease(noteName, duration, startTime, velocity);
+      inst.trigger(noteName, duration, startTime, velocity);
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
     }
     if (onComplete) {

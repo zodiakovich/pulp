@@ -10,7 +10,7 @@ import {
   type GenerationParams, type GenerationResult, type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
-import { playNotesWithMix as playNotes, stopAllPlayback } from '@/lib/mix-engine';
+import { playNotesWithMix as playNotes, renderNotesWithMixToWav, stopAllPlayback } from '@/lib/mix-engine';
 import { playAll, stopPlayAll } from '@/lib/tone-play-all';
 import { playTonePreview, stopTonePreview } from '@/lib/tone-preview';
 import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
@@ -22,6 +22,8 @@ import { mapArtistProfileToHints, resolveArtistPromptChain } from '@/lib/artist-
 import { Navbar } from '@/components/Navbar';
 import { PianoRollEditor } from '@/components/PianoRollEditor';
 import { StudioMidiUploadModal, type MidiUploadSuccessPayload } from '@/components/StudioMidiUploadModal';
+import { StudioAudioToMidiModal } from '@/components/StudioAudioToMidiModal';
+import { CrispSupportLink } from '@/components/CrispSupportLink';
 import type { PlanType } from '@/lib/credits';
 import Link from 'next/link';
 
@@ -85,6 +87,70 @@ function formatTimeAgo(date: Date): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   return `${d}d ago`;
+}
+
+function guessKeyFromLayers(layers: GenerationResult): string {
+  const pitches = [
+    ...(layers.melody ?? []).map(n => n.pitch),
+    ...(layers.chords ?? []).map(n => n.pitch),
+    ...(layers.bass ?? []).map(n => n.pitch),
+  ];
+  if (pitches.length === 0) return '—';
+  const counts = new Array(12).fill(0) as number[];
+  for (const p of pitches) counts[((p % 12) + 12) % 12] += 1;
+  const best = counts.reduce((bi, v, i) => (v > counts[bi]! ? i : bi), 0);
+  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  return names[best] ?? '—';
+}
+
+function MiniPianoRollThumb({ layers }: { layers: GenerationResult }) {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 220;
+    const h = canvas.clientHeight || 48;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#0A0A0F';
+    ctx.fillRect(0, 0, w, h);
+
+    const all = [
+      ...(layers.melody ?? []).map(n => ({ n, c: '#FF6D3F' })),
+      ...(layers.chords ?? []).map(n => ({ n, c: '#A78BFA' })),
+      ...(layers.bass ?? []).map(n => ({ n, c: '#00B894' })),
+      ...(layers.drums ?? []).map(n => ({ n, c: '#E94560' })),
+    ];
+    if (all.length === 0) return;
+    const bars = 4;
+    const totalBeats = bars * 4;
+    const pitches = all.map(x => x.n.pitch);
+    const minP = Math.max(24, Math.min(...pitches));
+    const maxP = Math.min(108, Math.max(...pitches));
+    const range = Math.max(1, maxP - minP + 1);
+    for (const { n, c } of all) {
+      const x0 = (n.startTime / totalBeats) * w;
+      const x1 = ((n.startTime + n.duration) / totalBeats) * w;
+      const y = (1 - (n.pitch - minP) / range) * (h - 10) + 5;
+      const ww = Math.max(1.5, x1 - x0);
+      const hh = 3.5;
+      ctx.globalAlpha = 0.2 + (n.velocity / 127) * 0.8;
+      ctx.fillStyle = c;
+      ctx.fillRect(x0, y - hh / 2, ww, hh);
+      ctx.globalAlpha = 1;
+    }
+  }, [layers]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: '100%', height: 48, display: 'block', borderRadius: 10, background: '#0A0A0F', border: '1px solid rgba(26,26,46,0.7)' }}
+    />
+  );
 }
 
 // ─── ONBOARDING TOOLTIP ───────────────────────────────────────
@@ -835,7 +901,7 @@ function drawSheetMusic(
   }
 }
 
-// ─── AUDIO → MIDI (FFT) ────────────────────────────────────────
+// ─── AUDIO → MIDI (legacy FFT impl; kept for now) ────────────────────────────────────────
 function freqToMidi(freq: number): number {
   return Math.round(69 + 12 * Math.log2(freq / 440));
 }
@@ -1334,13 +1400,113 @@ function CommandBar({
 
 // ─── HISTORY SIDEBAR ──────────────────────────────────────────
 function HistorySidebar({
-  history, loading, onRestore, onClose,
+  history, loading, onRestore, onClose, isSignedIn, userId, supabase,
 }: {
   history: HistoryEntry[];
   loading: boolean;
   onRestore: (entry: HistoryEntry) => void;
   onClose: () => void;
+  isSignedIn: boolean;
+  userId: string | null;
+  supabase: any;
 }) {
+  const [query, setQuery] = React.useState('');
+  const [tab, setTab] = React.useState<'all' | 'favorites'>('all');
+  const [genreFilter, setGenreFilter] = React.useState<string | null>(null);
+  const [rows, setRows] = React.useState<Array<{
+    id: string;
+    prompt: string;
+    genre: string;
+    bpm: number;
+    created_at: string;
+    layers: GenerationResult;
+    inspiration_source: string | null;
+    is_favorite: boolean;
+  }>>([]);
+  const [page, setPage] = React.useState(0);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [fetching, setFetching] = React.useState(false);
+  const listRef = React.useRef<HTMLDivElement>(null);
+
+  const PAGE_SIZE = 20;
+
+  const resetAndLoad = React.useCallback(() => {
+    setRows([]);
+    setPage(0);
+    setHasMore(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (!isSignedIn || !userId) return;
+    resetAndLoad();
+  }, [isSignedIn, userId, tab, genreFilter, resetAndLoad]);
+
+  const loadMore = React.useCallback(async () => {
+    if (!isSignedIn || !userId) return;
+    if (fetching || !hasMore) return;
+    setFetching(true);
+    try {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      let q = supabase
+        .from('generations')
+        .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (tab === 'favorites') q = q.eq('is_favorite', true);
+      if (genreFilter) q = q.eq('genre', genreFilter);
+      const { data, error } = await q.range(from, to);
+      if (error) return;
+      const next = (data ?? []) as any[];
+      setRows(prev => [...prev, ...next]);
+      setPage(p => p + 1);
+      if (next.length < PAGE_SIZE) setHasMore(false);
+    } finally {
+      setFetching(false);
+    }
+  }, [isSignedIn, userId, supabase, tab, genreFilter, fetching, hasMore, page]);
+
+  React.useEffect(() => {
+    if (!isSignedIn || !userId) return;
+    void loadMore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn, userId, tab, genreFilter]);
+
+  const displayed = React.useMemo(() => {
+    const ql = query.trim().toLowerCase();
+    const base = rows;
+    if (!ql) return base;
+    return base.filter(r => {
+      const genreName = (GENRES[r.genre]?.name || r.genre || '').toLowerCase();
+      const insp = (r.inspiration_source || '').toLowerCase();
+      const key = guessKeyFromLayers(r.layers).toLowerCase();
+      const bpm = String(r.bpm);
+      return (
+        genreName.includes(ql) ||
+        (r.genre || '').toLowerCase().includes(ql) ||
+        insp.includes(ql) ||
+        key.includes(ql) ||
+        bpm.includes(ql)
+      );
+    });
+  }, [rows, query]);
+
+  const availableGenres = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) if (r.genre) set.add(r.genre);
+    return [...set].sort((a, b) => (GENRES[a]?.name || a).localeCompare(GENRES[b]?.name || b));
+  }, [rows]);
+
+  const toggleFavorite = React.useCallback(async (id: string, next: boolean) => {
+    setRows(prev => prev.map(r => (r.id === id ? { ...r, is_favorite: next } : r)));
+    try {
+      await supabase.from('generations').update({ is_favorite: next }).eq('id', id);
+    } catch {
+      // revert on failure
+      setRows(prev => prev.map(r => (r.id === id ? { ...r, is_favorite: !next } : r)));
+    }
+  }, [supabase]);
+
   return (
     <motion.div
       className="fixed right-0 top-0 h-full w-80 z-40 flex flex-col"
@@ -1386,55 +1552,182 @@ function HistorySidebar({
             </div>
           ))}
         </div>
-      ) : history.length === 0 ? (
+      ) : !isSignedIn ? (
+        <div className="flex-1 flex flex-col items-center justify-center px-8 gap-4">
+          <p className="text-sm text-center leading-relaxed" style={{ color: '#8A8A9A' }}>
+            Sign in to view your generation history.
+          </p>
+          <a
+            href="/sign-in"
+            className="btn-primary btn-sm"
+            style={{ textDecoration: 'none' }}
+          >
+            Sign in
+          </a>
+        </div>
+      ) : displayed.length === 0 ? (
         <div className="flex-1 flex items-center justify-center px-8">
           <p className="text-sm text-center leading-relaxed" style={{ color: '#8A8A9A' }}>
-            Generate a track to see your history here.
+            {rows.length === 0 ? 'Generate a track to see your history here.' : 'No matches.'}
           </p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
-          {history.map(entry => (
-            <button
-              key={entry.id}
-              onClick={() => onRestore(entry)}
-              className="w-full text-left px-6 py-4 transition-colors"
-              style={{ borderBottom: '1px solid rgba(26,26,46,0.5)' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm mb-2" style={{ color: 'rgba(240,240,255,0.85)' }}>
-                    {(entry.prompt || '—').length > 40
-                      ? `${(entry.prompt || '—').slice(0, 40).trimEnd()}…`
-                      : (entry.prompt || '—')}
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF6D3F' }}>
-                      {GENRES[entry.genre]?.name || entry.genre}
+        <div className="flex-1 overflow-y-auto" ref={listRef}
+          onScroll={() => {
+            const el = listRef.current;
+            if (!el) return;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 280) void loadMore();
+          }}
+        >
+          <div className="px-6 py-4" style={{ borderBottom: '1px solid rgba(26,26,46,0.5)' }}>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search genre, artist, key, BPM…"
+              className="input-field"
+              style={{ height: 40, fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}
+            />
+            <div className="mt-3 flex gap-2">
+              {(['all', 'favorites'] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  className="px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
+                  style={{
+                    borderColor: tab === t ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
+                    color: tab === t ? '#FF6D3F' : '#8A8A9A',
+                    background: tab === t ? 'rgba(255,109,63,0.10)' : 'transparent',
+                  }}
+                  onClick={() => setTab(t)}
+                >
+                  {t === 'all' ? 'All' : 'Favorites'}
+                </button>
+              ))}
+            </div>
+            {availableGenres.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
+                  style={{
+                    borderColor: !genreFilter ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.10)',
+                    color: !genreFilter ? '#F0F0FF' : '#8A8A9A',
+                    background: !genreFilter ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  }}
+                  onClick={() => setGenreFilter(null)}
+                >
+                  Any genre
+                </button>
+                {availableGenres.slice(0, 10).map(g => (
+                  <button
+                    key={g}
+                    type="button"
+                    className="px-2.5 h-7 rounded-md text-[10px] font-mono border transition-colors"
+                    style={{
+                      borderColor: genreFilter === g ? 'rgba(0,184,148,0.45)' : 'rgba(255,255,255,0.10)',
+                      color: genreFilter === g ? '#00B894' : '#8A8A9A',
+                      background: genreFilter === g ? 'rgba(0,184,148,0.10)' : 'transparent',
+                    }}
+                    onClick={() => setGenreFilter(g)}
+                    title={GENRES[g]?.name || g}
+                  >
+                    {(GENRES[g]?.name || g).slice(0, 14)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {displayed.map(row => {
+            const ts = new Date(row.created_at);
+            const keyGuess = guessKeyFromLayers(row.layers);
+            const genreName = GENRES[row.genre]?.name || row.genre;
+            return (
+              <button
+                key={row.id}
+                onClick={() => {
+                  const entry: HistoryEntry = {
+                    id: row.id,
+                    prompt: row.prompt,
+                    genre: row.genre,
+                    key: keyGuess === '—' ? 'C' : keyGuess,
+                    scale: 'minor',
+                    bpm: row.bpm,
+                    bars: 4,
+                    result: row.layers,
+                    params: { ...getDefaultParams(), genre: row.genre, bpm: row.bpm },
+                    timestamp: ts,
+                  };
+                  onRestore(entry);
+                }}
+                className="w-full text-left px-6 py-4 transition-colors"
+                style={{ borderBottom: '1px solid rgba(26,26,46,0.5)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF6D3F' }}>
+                        {genreName}
+                      </span>
+                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.75)' }}>
+                        {keyGuess} · {row.bpm} BPM
+                      </span>
+                    </div>
+                    {row.inspiration_source && (
+                      <p className="mt-1 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
+                        {row.inspiration_source}
+                      </p>
+                    )}
+                    <div className="mt-2">
+                      <MiniPianoRollThumb layers={row.layers} />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span
+                      className="text-xs"
+                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}
+                    >
+                      {formatTimeAgo(ts)}
                     </span>
-                    <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}>
-                      {entry.bpm} BPM
-                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void toggleFavorite(row.id, !row.is_favorite);
+                      }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
+                      style={{
+                        borderColor: row.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
+                        background: row.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
+                        color: row.is_favorite ? '#FF6D3F' : 'rgba(138,138,154,0.85)',
+                        cursor: 'pointer',
+                      }}
+                      title={row.is_favorite ? 'Unfavorite' : 'Favorite'}
+                      aria-label="Toggle favorite"
+                    >
+                      {row.is_favorite ? '★' : '☆'}
+                    </button>
                   </div>
                 </div>
-                <span
-                  className="text-xs flex-shrink-0"
-                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}
-                >
-                  {formatTimeAgo(entry.timestamp)}
-                </span>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
+
+          {fetching && (
+            <div className="px-6 py-4">
+              <SkeletonText lines={2} gap={8} lastLineWidth="75%" />
+            </div>
+          )}
         </div>
       )}
 
       <div className="px-6 py-4" style={{ borderTop: '1px solid #1A1A2E' }}>
         <p className="text-xs text-center"
           style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
-          Last 10 generations · synced to account
+          Showing {displayed.length} · {tab === 'favorites' ? 'favorites' : 'latest'} · loads 20 at a time
         </p>
       </div>
     </motion.div>
@@ -1807,6 +2100,10 @@ export default function Home() {
   const [showEmbedModal, setShowEmbedModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [isRenderingWav, setIsRenderingWav] = useState(false);
+  const [isPianoFullscreen, setIsPianoFullscreen] = useState(false);
+  const [viewportH, setViewportH] = useState<number>(() => (typeof window !== 'undefined' ? window.innerHeight : 800));
   const [editorLayer, setEditorLayer] = useState<typeof EDITOR_LAYERS[number]>('melody');
   const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
@@ -1824,8 +2121,8 @@ export default function Home() {
   const [isExtending, setIsExtending] = useState(false);
   const [editorView, setEditorView] = useState<'piano' | 'sheet'>('piano');
   const [importedNotes, setImportedNotes] = useState<NoteEvent[]>([]);
-  const [showAudioToMidi, setShowAudioToMidi] = useState(false);
-  const [isConvertingAudio, setIsConvertingAudio] = useState(false);
+  const [showAudioToMidiModal, setShowAudioToMidiModal] = useState(false);
+  const [promptCardsDismissed, setPromptCardsDismissed] = useState(false);
 
   const result = variations[selectedVariation]?.result ?? null;
 
@@ -1853,7 +2150,7 @@ export default function Home() {
     setShowHistory(false);
     setShowInspire(false);
     setShowBpmDetect(false);
-    setShowAudioToMidi(false);
+    setShowAudioToMidiModal(false);
     setShowOnboarding(false);
   }, []);
   const liveTimerRef = useRef<number | null>(null);
@@ -1890,30 +2187,13 @@ export default function Home() {
     };
   }, [playingVariationIndex, selectedVariation, variations, params.bpm]);
 
-  const audioToMidiInputRef = useRef<HTMLInputElement>(null);
-
-  const handleAudioToMidiFile = useCallback(async (file: File | null) => {
-    if (!file) return;
-    setIsConvertingAudio(true);
-    try {
-      const arr = await file.arrayBuffer();
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const audio = await ctx.decodeAudioData(arr.slice(0));
-      await ctx.close().catch(() => {});
-
-      const detected = detectNotesFromAudio(audio, params.bpm);
-      setImportedNotes(detected);
-      setEditorLayer('imported');
-      setEditorView('piano');
-
-      toast.toast(`Audio converted to MIDI — ${detected.length} notes detected`, 'success');
-    } catch {
-      toast.toast('Audio to MIDI failed', 'danger');
-    } finally {
-      setIsConvertingAudio(false);
-      if (audioToMidiInputRef.current) audioToMidiInputRef.current.value = '';
-    }
-  }, [params.bpm, toast]);
+  const handleAudioToMidiSuccess = useCallback((detected: NoteEvent[]) => {
+    setImportedNotes(detected);
+    setEditorLayer('imported');
+    setEditorView('piano');
+    toast.toast(`Audio converted to MIDI — ${detected.length} notes detected`, 'success');
+    window.setTimeout(() => toolRef.current?.scrollIntoView({ behavior: 'smooth' }), 120);
+  }, [toast]);
   const generateBtnWrapRef = useRef<HTMLDivElement>(null);
   const styleTagsRef = useRef<HTMLDivElement>(null);
   const genreSelectRef = useRef<HTMLSelectElement>(null);
@@ -1958,6 +2238,13 @@ export default function Home() {
     } catch {
       // ignore
     }
+  }, []);
+
+  // Track viewport height for fullscreen editor sizing
+  useEffect(() => {
+    const onResize = () => setViewportH(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   // Cmd+K / Ctrl+K
@@ -2169,6 +2456,7 @@ export default function Home() {
   // ── GENERATE ─────────────────────────────────────────────────
 
   const handleGenerate = useCallback(async (overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
+    setPromptCardsDismissed(true);
     stopPlayAll();
     stopAllPlayback();
     setPlayingAll(false);
@@ -2661,6 +2949,60 @@ export default function Home() {
     downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
   };
 
+  const handleDownloadTrackOnly = (layer: 'melody' | 'chords' | 'bass' | 'drums') => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const { result: r, params: p } = sel;
+    const notes =
+      layer === 'melody' ? r.melody :
+      layer === 'chords' ? r.chords :
+      layer === 'bass' ? r.bass :
+      r.drums;
+
+    if (!notes || notes.length === 0) {
+      toast.toast(`No notes in ${layer}`, 'danger');
+      return;
+    }
+
+    const channel = layer === 'drums' ? 9 : layer === 'bass' ? 2 : layer === 'chords' ? 1 : 0;
+    const name = layer.charAt(0).toUpperCase() + layer.slice(1);
+    const midi = generateMidiFormat1([{ name, notes, channel }], p.bpm);
+    const genre = GENRES[p.genre]?.name || 'track';
+    track('midi_downloaded', { genre: p.genre, layer });
+    downloadMidi(midi, `pulp-${layer}-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
+  };
+
+  const handleDownloadWav = async () => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    if (isRenderingWav) return;
+
+    const { result: r, params: p } = sel;
+    setIsRenderingWav(true);
+    try {
+      const genreLabel = (GENRES[p.genre]?.name || p.genre || 'track').toLowerCase().replace(/\s/g, '-');
+      const key = (p.key || 'A').toLowerCase().replace(/[^a-g#b]/g, '');
+      const bpm = Math.round(p.bpm);
+      const filename = `pulp-${genreLabel}-${key}-${bpm}.wav`;
+
+      const blob = await renderNotesWithMixToWav({
+        melody: params.layers.melody ? r.melody : undefined,
+        chords: params.layers.chords ? r.chords : undefined,
+        bass: params.layers.bass ? r.bass : undefined,
+        drums: params.layers.drums ? r.drums : undefined,
+        bpm: p.bpm,
+        genre: p.genre,
+      });
+
+      await downloadBlob(blob, filename);
+      toast.toast('WAV exported', 'success');
+    } catch {
+      toast.toast('WAV export failed', 'danger');
+    } finally {
+      setIsRenderingWav(false);
+    }
+  };
+
   const handleExportAbleton = useCallback(async () => {
     const sel = variations[selectedVariation];
     if (!sel) return;
@@ -2807,11 +3149,40 @@ export default function Home() {
 
   const handleShare = useCallback(() => {
     const id = variationIds[selectedVariation];
-    if (!id) return;
+    if (!id) {
+      toast.toast('Generate first to share', 'info');
+      return;
+    }
     const genreKey = variations[selectedVariation]?.params.genre ?? params.genre;
     track('generation_shared', { genre: genreKey });
-    setShowShareModal(true);
-  }, [variationIds, selectedVariation, variations, params.genre]);
+
+    const url = `https://pulp.bypapaya.com/g/${id}`;
+    void (async () => {
+      try {
+        // Mark as public (best-effort; copy still works even if DB update fails in dev)
+        try {
+          await supabase.from('generations').update({ is_public: true }).eq('id', id);
+        } catch {
+          // ignore
+        }
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+        toast.toast('Link copied!', 'success');
+      } catch {
+        toast.toast('Copy failed', 'danger');
+      }
+    })();
+  }, [variationIds, selectedVariation, variations, params.genre, toast, supabase]);
 
   const handleExtendSelected = useCallback(async () => {
     const sel = variations[selectedVariation];
@@ -3066,6 +3437,11 @@ export default function Home() {
     const onKeyDown = (e: KeyboardEvent) => {
       // ESC closes any open modal
       if (e.key === 'Escape') {
+        if (isPianoFullscreen) {
+          e.preventDefault();
+          setIsPianoFullscreen(false);
+          return;
+        }
         e.preventDefault();
         stopCompare({ stopAudio: true });
         stopPlayAll();
@@ -3153,6 +3529,13 @@ export default function Home() {
         void handleGenerate();
         return;
       }
+      if (key === 'f' && !isCombo) {
+        if (editorView !== 'piano') return;
+        if (variations.length === 0) return;
+        e.preventDefault();
+        setIsPianoFullscreen(true);
+        return;
+      }
       if (key === 'l') {
         e.preventDefault();
         setLiveMode(v => {
@@ -3201,9 +3584,11 @@ export default function Home() {
     closeAllModals,
     compareIndex,
     compareMode,
+    editorView,
     handleDownloadAll,
     handleExtendSelected,
     handleGenerate,
+    isPianoFullscreen,
     setShowInspire,
     setShowShareModal,
     liveMode,
@@ -3487,6 +3872,13 @@ export default function Home() {
         onSuccess={handleMidiUploadSuccess}
       />
 
+      <StudioAudioToMidiModal
+        open={showAudioToMidiModal}
+        onClose={() => setShowAudioToMidiModal(false)}
+        onSuccess={handleAudioToMidiSuccess}
+        mode={isStudio ? 'studio' : 'locked'}
+      />
+
       {/* ── HISTORY SIDEBAR ── */}
       <AnimatePresence>
         {showHistory && (
@@ -3502,6 +3894,9 @@ export default function Home() {
               loading={historyLoading}
               onRestore={handleRestoreHistory}
               onClose={() => setShowHistory(false)}
+              isSignedIn={Boolean(effectiveIsSignedIn)}
+              userId={effectiveUserId ?? null}
+              supabase={supabase}
             />
           </>
         )}
@@ -3677,13 +4072,123 @@ export default function Home() {
                   ref={promptRef}
                   type="text"
                   value={prompt}
-                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
+                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); if (e.target.value.trim().length > 0) setPromptCardsDismissed(false); }}
                   onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
                   placeholder="dark melodic techno, 128bpm, Am"
                   className="input-field pr-4"
                   style={{ paddingLeft: 40 }}
                 />
               </div>
+
+              <AnimatePresence>
+                {!promptCardsDismissed && prompt.trim().length === 0 && !isGenerating && (
+                  <motion.div
+                    className="mt-3"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                  >
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                      {[
+                        'Tech House',
+                        'Deep House',
+                        'Afro House',
+                        'Hip Hop',
+                        'Trap',
+                        'Lo-Fi',
+                        'Pop',
+                        'R&B',
+                        'Drum & Bass',
+                        'Ambient',
+                      ].map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          className="group rounded-xl px-3 py-3 text-left transition-all"
+                          style={{
+                            background: '#111118',
+                            border: '1px solid #1A1A2E',
+                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
+                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#1A1A2E';
+                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                          }}
+                          onClick={() => {
+                            setPrompt(g);
+                            setActiveStyleTag(null);
+                            window.setTimeout(() => promptRef.current?.focus(), 0);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block rounded-full"
+                              style={{ width: 8, height: 8, background: 'rgba(255,109,63,0.9)' }}
+                              aria-hidden
+                            />
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#F0F0FF', fontWeight: 600 }}>
+                              {g}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 md:grid-cols-6 gap-2">
+                      {[
+                        'Dark',
+                        'Energetic',
+                        'Chill',
+                        'Melancholic',
+                        'Euphoric',
+                        'Groovy',
+                      ].map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className="group rounded-xl px-3 py-3 text-left transition-all"
+                          style={{
+                            background: '#0D0D12',
+                            border: '1px solid #1A1A2E',
+                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
+                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#1A1A2E';
+                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                          }}
+                          onClick={() => {
+                            const base = (prompt ?? '').trim();
+                            const next = base.length === 0 ? m : `${base} ${m}`;
+                            setPrompt(next);
+                            setActiveStyleTag(null);
+                            window.setTimeout(() => promptRef.current?.focus(), 0);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block rounded-sm"
+                              style={{ width: 10, height: 2, background: 'rgba(0,184,148,0.9)' }}
+                              aria-hidden
+                            />
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'rgba(240,240,255,0.92)', fontWeight: 600 }}>
+                              {m}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div className="mt-2 flex items-center justify-between gap-4 px-1">
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
                   {effectiveIsSignedIn ? 'Press Enter to generate' : 'Sign in to generate below'}
@@ -3713,13 +4218,120 @@ export default function Home() {
                 <input
                   type="text"
                   value={prompt}
-                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); }}
+                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); if (e.target.value.trim().length > 0) setPromptCardsDismissed(false); }}
                   onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
                   placeholder="dark melodic techno, 128bpm, Am"
                   className="input-field"
                   style={{ paddingLeft: 40 }}
                 />
               </div>
+              <AnimatePresence>
+                {!promptCardsDismissed && prompt.trim().length === 0 && !isGenerating && (
+                  <motion.div
+                    className="mt-3"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                  >
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        'Tech House',
+                        'Deep House',
+                        'Afro House',
+                        'Hip Hop',
+                        'Trap',
+                        'Lo-Fi',
+                        'Pop',
+                        'R&B',
+                        'Drum & Bass',
+                        'Ambient',
+                      ].map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          className="group rounded-xl px-3 py-3 text-left transition-all"
+                          style={{
+                            background: '#111118',
+                            border: '1px solid #1A1A2E',
+                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
+                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#1A1A2E';
+                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                          }}
+                          onClick={() => {
+                            setPrompt(g);
+                            setActiveStyleTag(null);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block rounded-full"
+                              style={{ width: 8, height: 8, background: 'rgba(255,109,63,0.9)' }}
+                              aria-hidden
+                            />
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#F0F0FF', fontWeight: 600 }}>
+                              {g}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {[
+                        'Dark',
+                        'Energetic',
+                        'Chill',
+                        'Melancholic',
+                        'Euphoric',
+                        'Groovy',
+                      ].map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className="group rounded-xl px-3 py-3 text-left transition-all"
+                          style={{
+                            background: '#0D0D12',
+                            border: '1px solid #1A1A2E',
+                            boxShadow: '0 0 0 0 rgba(255,109,63,0)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'rgba(255,109,63,0.55)';
+                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,109,63,0.10)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#1A1A2E';
+                            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(255,109,63,0)';
+                          }}
+                          onClick={() => {
+                            const base = (prompt ?? '').trim();
+                            const next = base.length === 0 ? m : `${base} ${m}`;
+                            setPrompt(next);
+                            setActiveStyleTag(null);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block rounded-sm"
+                              style={{ width: 10, height: 2, background: 'rgba(0,184,148,0.9)' }}
+                              aria-hidden
+                            />
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'rgba(240,240,255,0.92)', fontWeight: 600 }}>
+                              {m}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div className="flex items-center justify-between gap-4 px-1">
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
                   {effectiveIsSignedIn ? 'Enter to generate' : 'Sign in to generate below'}
@@ -3771,7 +4383,8 @@ export default function Home() {
             </div>
             {effectiveIsSignedIn && (
               <div className="mb-4 flex justify-center">
-                <div className="relative inline-block">
+                <div className="flex items-center gap-3">
+                  <div className="relative inline-block">
                   <button
                     type="button"
                     className="rounded-xl border px-5 py-3 text-sm font-semibold transition-opacity"
@@ -3797,6 +4410,38 @@ export default function Home() {
                   >
                     Studio only
                   </span>
+                </div>
+                  <div className="relative inline-block">
+                    <button
+                      type="button"
+                      className="rounded-xl border px-5 py-3 text-sm font-semibold transition-opacity"
+                      style={{
+                        fontFamily: 'DM Sans, sans-serif',
+                        borderColor: isStudio ? 'rgba(167,139,250,0.40)' : '#2A2A40',
+                        color: isStudio ? '#F5F5F5' : '#8A8A9A',
+                        background: isStudio ? 'rgba(167,139,250,0.10)' : 'transparent',
+                        opacity: isStudio ? 1 : 0.4,
+                        cursor: isStudio ? 'pointer' : 'not-allowed',
+                      }}
+                      title={isStudio ? undefined : 'Available on Studio plan'}
+                      disabled={!isStudio}
+                      onClick={() => {
+                        if (!isStudio) {
+                          setShowUpgradeModal(true);
+                          return;
+                        }
+                        setShowAudioToMidiModal(true);
+                      }}
+                    >
+                      Audio to MIDI
+                    </button>
+                    <span
+                      className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                      style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
+                    >
+                      Studio only
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -4450,25 +5095,129 @@ export default function Home() {
                     }}
                     title="Drag directly into your DAW"
                   >
-                    <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
-                      ↓  Download MIDI
-                    </SpotlightButton>
+                    <div className="relative inline-flex">
+                      <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
+                        ↓  Download MIDI
+                      </SpotlightButton>
+                      <button
+                        type="button"
+                        className="btn-download btn-sm"
+                        aria-label="Download options"
+                        style={{
+                          marginLeft: 8,
+                          minWidth: 44,
+                          paddingLeft: 0,
+                          paddingRight: 0,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        onClick={(ev) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          setShowDownloadMenu(v => !v);
+                        }}
+                      >
+                        ▾
+                      </button>
+
+                      <AnimatePresence>
+                        {showDownloadMenu && (
+                          <>
+                            <motion.div
+                              className="fixed inset-0 z-[90]"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              onClick={() => setShowDownloadMenu(false)}
+                              aria-hidden
+                            />
+                            <motion.div
+                              className="absolute right-0 top-[calc(100%+8px)] z-[91] w-[220px] overflow-hidden rounded-xl"
+                              style={{ background: '#111118', border: '1px solid #1A1A2E' }}
+                              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                              transition={{ duration: 0.16, ease: 'easeOut' }}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                className="w-full px-4 py-3 text-left text-sm transition-colors"
+                                style={{ fontFamily: 'DM Sans, sans-serif', color: '#F0F0FF' }}
+                                onClick={() => {
+                                  setShowDownloadMenu(false);
+                                  handleDownloadAll();
+                                }}
+                              >
+                                All tracks
+                              </button>
+                              <div style={{ height: 1, background: '#1A1A2E' }} />
+                              {([
+                                { k: 'melody' as const, label: 'Melody' },
+                                { k: 'chords' as const, label: 'Chords' },
+                                { k: 'bass' as const, label: 'Bass' },
+                                { k: 'drums' as const, label: 'Drums' },
+                              ]).map(opt => (
+                                <button
+                                  key={opt.k}
+                                  type="button"
+                                  className="w-full px-4 py-3 text-left text-sm transition-colors"
+                                  style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.88)' }}
+                                  onClick={() => {
+                                    setShowDownloadMenu(false);
+                                    handleDownloadTrackOnly(opt.k);
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                   <SpotlightButton onClick={() => void handleExportAbleton()} className="btn-download btn-sm">
                     ↓  Export to Ableton
                   </SpotlightButton>
                   <SpotlightButton
                     type="button"
+                    onClick={() => void handleDownloadWav()}
+                    className="btn-download btn-sm"
+                    disabled={isRenderingWav}
+                    title="Render and download WAV"
+                  >
+                    {isRenderingWav ? (
+                      <span className="flex items-center gap-2">
+                        <span className="spinner" />
+                        Rendering…
+                      </span>
+                    ) : (
+                      '↓  Download WAV'
+                    )}
+                  </SpotlightButton>
+                  <SpotlightButton
+                    type="button"
+                    onClick={handleShare}
+                    className="btn-secondary btn-sm"
+                    disabled={!variationIds[selectedVariation]}
+                    title="Copy share link"
+                  >
+                    ⧉  Share
+                  </SpotlightButton>
+                  <SpotlightButton
+                    type="button"
                     onClick={() => {
-                      setShowAudioToMidi(v => {
-                        const next = !v;
-                        if (next) window.setTimeout(() => audioToMidiInputRef.current?.click(), 0);
-                        return next;
-                      });
+                      if (!isStudio) {
+                        setShowUpgradeModal(true);
+                        return;
+                      }
+                      setShowAudioToMidiModal(true);
                     }}
                     className="btn-secondary btn-sm"
-                    style={showAudioToMidi ? { borderColor: 'rgba(167,139,250,0.45)' } : undefined}
-                    disabled={isConvertingAudio}
+                    style={isStudio ? { borderColor: 'rgba(167,139,250,0.30)', color: '#E9D5FF' } : undefined}
+                    title={isStudio ? 'Convert audio to editable MIDI (Studio)' : 'Available on Studio plan'}
                   >
                     Audio to MIDI
                   </SpotlightButton>
@@ -4485,73 +5234,15 @@ export default function Home() {
                     ↻  Regenerate
                   </SpotlightButton>
                   {variationIds[selectedVariation] && (
-                    <>
-                      <SpotlightButton onClick={handleShare} className="btn-secondary btn-sm">
-                        Share
-                      </SpotlightButton>
-                      <SpotlightButton onClick={() => setShowEmbedModal(true)} className="btn-secondary btn-sm">
-                        Embed
-                      </SpotlightButton>
-                    </>
+                    <SpotlightButton onClick={() => setShowEmbedModal(true)} className="btn-secondary btn-sm">
+                      Embed
+                    </SpotlightButton>
                   )}
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <AnimatePresence>
-              {showAudioToMidi && (
-                <motion.div
-                  className="mb-5 rounded-xl p-3 flex items-center gap-3 flex-wrap"
-                  style={{ background: '#111118', border: '1px solid #1A1A2E' }}
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.6)', letterSpacing: '0.06em' }}>
-                      AUDIO → MIDI
-                    </span>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#A78BFA' }}>
-                      Imported layer
-                    </span>
-                  </div>
-
-                  <input
-                    ref={audioToMidiInputRef}
-                    type="file"
-                    accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/x-wav"
-                    onChange={e => void handleAudioToMidiFile(e.target.files?.[0] ?? null)}
-                    disabled={isConvertingAudio}
-                    className="block text-xs"
-                    style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8A8A9A' }}
-                  />
-
-                  <div className="flex items-center gap-2 ml-auto">
-                    <SpotlightButton
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      style={{ borderColor: 'rgba(167,139,250,0.30)', color: '#A78BFA' }}
-                      disabled={importedNotes.length === 0}
-                      onClick={() => {
-                        if (importedNotes.length === 0) return;
-                        const midi = generateMidiFormat0(importedNotes, params.bpm, 'pulp-imported');
-                        downloadMidi(midi, `pulp-imported-${params.bpm}bpm.mid`);
-                      }}
-                    >
-                      ↓ Download Imported .mid
-                    </SpotlightButton>
-                    <SpotlightButton
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      onClick={() => setShowAudioToMidi(false)}
-                    >
-                      Close
-                    </SpotlightButton>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Audio → MIDI is now a Studio modal next to Upload MIDI */}
 
             {/* Chord progression (prominent) */}
             <AnimatePresence>
@@ -4645,6 +5336,7 @@ export default function Home() {
             {/* Piano Roll Editor */}
             <AnimatePresence>
               {variations.length > 0 && !isGenerating && (
+                <>
                 <motion.div
                   className="mt-6"
                   initial={{ opacity: 0, y: 16 }}
@@ -4740,6 +5432,25 @@ export default function Home() {
                           Print
                         </button>
                       )}
+                      {editorView === 'piano' && (
+                        <button
+                          type="button"
+                          className="px-3 h-7 rounded-md transition-all"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: '#F0F0FF',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            background: 'transparent',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                          onClick={() => setIsPianoFullscreen(true)}
+                          title="Fullscreen (F)"
+                        >
+                          ⤢
+                        </button>
+                      )}
                       <div className="flex gap-1">
                       {EDITOR_LAYERS.map(layer => (
                         <button
@@ -4780,6 +5491,15 @@ export default function Home() {
                       layerName={editorLayer === 'imported' ? 'imported' : editorLayer}
                       isPlaying={playingVariationIndex === selectedVariation}
                       playheadBeat={editorPlayheadBeat}
+                      gridHeightPx={isPianoFullscreen ? Math.max(360, viewportH - 310) : undefined}
+                      velocityHeightPx={isPianoFullscreen ? 120 : undefined}
+                      chordOverlayNotes={[
+                        ...(variations[selectedVariation]?.result.melody ?? []),
+                        ...(variations[selectedVariation]?.result.chords ?? []),
+                        ...(variations[selectedVariation]?.result.bass ?? []),
+                        ...(variations[selectedVariation]?.result.drums ?? []),
+                        ...(importedNotes ?? []),
+                      ]}
                       onNotesChange={newNotes => {
                         if (editorLayer === 'imported') setImportedNotes(newNotes);
                         else handleEditorNotesChange(editorLayer, newNotes);
@@ -4794,6 +5514,88 @@ export default function Home() {
                     </div>
                   )}
                 </motion.div>
+                <AnimatePresence>
+                  {isPianoFullscreen && editorView === 'piano' && (
+                    <>
+                      <motion.div
+                        className="fixed inset-0 z-[120]"
+                        style={{ background: 'rgba(9,9,11,0.92)' }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        onClick={() => setIsPianoFullscreen(false)}
+                        aria-hidden
+                      />
+                      <motion.div
+                        className="fixed inset-0 z-[121] p-4"
+                        initial={{ opacity: 0, scale: 0.985 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.985 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div
+                          className="h-full w-full overflow-hidden rounded-2xl"
+                          style={{ background: '#0D0D12', border: '1px solid #1A1A2E' }}
+                        >
+                          <div
+                            className="flex items-center justify-between px-4 py-3"
+                            style={{ background: '#111118', borderBottom: '1px solid #1A1A2E' }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.5)', letterSpacing: '0.06em' }}>
+                                PIANO ROLL — FULLSCREEN
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className="px-3 h-7 rounded-md transition-all"
+                              style={{
+                                fontFamily: 'JetBrains Mono, monospace',
+                                fontSize: 11,
+                                color: '#F0F0FF',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                background: 'transparent',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                              onClick={() => setIsPianoFullscreen(false)}
+                              title="Exit fullscreen (Esc)"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <div style={{ height: 'calc(100% - 44px)' }}>
+                            <PianoRollEditor
+                              key={`fs-${selectedVariation}-${editorLayer}`}
+                              notes={editorLayer === 'imported' ? importedNotes : (result?.[editorLayer] ?? [])}
+                              color={LAYER_COLORS[editorLayer] ?? '#FF6D3F'}
+                              bars={variations[selectedVariation]?.params.bars ?? params.bars}
+                              layerName={editorLayer === 'imported' ? 'imported' : editorLayer}
+                              isPlaying={playingVariationIndex === selectedVariation}
+                              playheadBeat={editorPlayheadBeat}
+                              gridHeightPx={Math.max(420, viewportH - 220)}
+                              velocityHeightPx={140}
+                              chordOverlayNotes={[
+                                ...(variations[selectedVariation]?.result.melody ?? []),
+                                ...(variations[selectedVariation]?.result.chords ?? []),
+                                ...(variations[selectedVariation]?.result.bass ?? []),
+                                ...(variations[selectedVariation]?.result.drums ?? []),
+                                ...(importedNotes ?? []),
+                              ]}
+                              onNotesChange={newNotes => {
+                                if (editorLayer === 'imported') setImportedNotes(newNotes);
+                                else handleEditorNotesChange(editorLayer, newNotes);
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+                </>
               )}
             </AnimatePresence>
             </div>
@@ -4858,6 +5660,7 @@ export default function Home() {
 
             <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', opacity: 0.6 }}>
               <a href="/about" className="footer-link">About</a>
+              <CrispSupportLink className="footer-link" label="Support" />
               <a href="/legal/terms" className="footer-link">
                 Terms
               </a>
