@@ -29,6 +29,60 @@ function effectiveMonthly(base: number, billing: Billing) {
   return base * (1 - ANNUAL_DISCOUNT);
 }
 
+/** Pro / Studio price display: annual = stacked strikethrough + active + /month; monthly = inline row. */
+function PaidPlanPriceBlock({ baseMonthly, billing }: { baseMonthly: number; billing: Billing }) {
+  const display = effectiveMonthly(baseMonthly, billing);
+
+  if (billing === 'monthly') {
+    return (
+      <div className="mb-2 flex flex-wrap items-end gap-2">
+        <span
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontWeight: 800,
+            fontSize: 'clamp(2.75rem, 6vw, 3.5rem)',
+            lineHeight: 1,
+            color: '#F0F0FF',
+          }}
+        >
+          {formatMoney(display)}
+        </span>
+        <span className="pb-2 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.9)' }}>
+          /month
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-2 flex flex-col items-start gap-1">
+      <span
+        style={{
+          fontFamily: 'DM Sans, sans-serif',
+          fontSize: 14,
+          fontWeight: 400,
+          color: '#4A4A5A',
+          textDecoration: 'line-through',
+          lineHeight: 1.2,
+        }}
+      >
+        {formatMoney(baseMonthly)}
+      </span>
+      <span
+        className="text-[40px] leading-none sm:text-[48px]"
+        style={{
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 800,
+          color: '#F5F5F5',
+        }}
+      >
+        {formatMoney(display)}
+      </span>
+      <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#8A8A9A', lineHeight: 1.2 }}>/month</span>
+    </div>
+  );
+}
+
 function StatusDot({ active }: { active: boolean }) {
   return (
     <span
@@ -114,9 +168,6 @@ const COMPARE_ROWS: { label: string; free: boolean; pro: boolean; studio: boolea
 
 export function PricingPlansClient() {
   const [billing, setBilling] = useState<Billing>('monthly');
-
-  const proDisplay = effectiveMonthly(PRO_MONTHLY, billing);
-  const studioDisplay = effectiveMonthly(STUDIO_MONTHLY, billing);
 
   return (
     <div style={{ background: BG, color: 'rgba(240,240,255,0.92)' }}>
@@ -252,30 +303,7 @@ export function PricingPlansClient() {
               >
                 Pro
               </p>
-              <div className="mb-2 flex flex-wrap items-end gap-2">
-                {billing === 'annual' && (
-                  <span
-                    className="mr-2 pb-2 text-lg line-through decoration-[rgba(138,138,154,0.5)]"
-                    style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: 'rgba(138,138,154,0.65)' }}
-                  >
-                    {formatMoney(PRO_MONTHLY)}
-                  </span>
-                )}
-                <span
-                  style={{
-                    fontFamily: "'Syne', sans-serif",
-                    fontWeight: 800,
-                    fontSize: 'clamp(2.75rem, 6vw, 3.5rem)',
-                    lineHeight: 1,
-                    color: '#F0F0FF',
-                  }}
-                >
-                  {formatMoney(proDisplay)}
-                </span>
-                <span className="pb-2 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.9)' }}>
-                  /month
-                </span>
-              </div>
+              <PaidPlanPriceBlock baseMonthly={PRO_MONTHLY} billing={billing} />
               <p className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                 150 generations / month
                 {billing === 'annual' ? ' · billed annually' : ''}
@@ -302,30 +330,7 @@ export function PricingPlansClient() {
               >
                 Studio
               </p>
-              <div className="mb-2 flex flex-wrap items-end gap-2">
-                {billing === 'annual' && (
-                  <span
-                    className="mr-2 pb-2 text-lg line-through decoration-[rgba(138,138,154,0.5)]"
-                    style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: 'rgba(138,138,154,0.65)' }}
-                  >
-                    {formatMoney(STUDIO_MONTHLY)}
-                  </span>
-                )}
-                <span
-                  style={{
-                    fontFamily: "'Syne', sans-serif",
-                    fontWeight: 800,
-                    fontSize: 'clamp(2.75rem, 6vw, 3.5rem)',
-                    lineHeight: 1,
-                    color: '#F0F0FF',
-                  }}
-                >
-                  {formatMoney(studioDisplay)}
-                </span>
-                <span className="pb-2 text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.9)' }}>
-                  /month
-                </span>
-              </div>
+              <PaidPlanPriceBlock baseMonthly={STUDIO_MONTHLY} billing={billing} />
               <p className="text-sm" style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(138,138,154,0.85)' }}>
                 600 generations / month
                 {billing === 'annual' ? ' · billed annually' : ''}

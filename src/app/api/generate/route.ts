@@ -252,7 +252,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Generation failed' }, { status: 500 });
   }
 
-  let creditsPayload: { credits_used: number; limit: number; is_pro: boolean };
+  let creditsPayload: { credits_used: number; limit: number; is_pro: boolean; plan_type: string };
   try {
     if (userId) {
       await incrementCredits(userId);
@@ -261,6 +261,7 @@ export async function POST(req: NextRequest) {
         credits_used: fin.credits_used,
         limit: fin.limit,
         is_pro: fin.is_pro,
+        plan_type: fin.plan_type,
       };
     } else {
       const g = await incrementGuest(guestIp);
@@ -268,6 +269,7 @@ export async function POST(req: NextRequest) {
         credits_used: g.credits_used,
         limit: g.limit,
         is_pro: false,
+        plan_type: 'free',
       };
     }
   } catch {

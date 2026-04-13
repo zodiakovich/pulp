@@ -21,6 +21,8 @@ import { generateAbletonAlsBlob } from '@/lib/ableton-export';
 import { mapArtistProfileToHints, resolveArtistPromptChain } from '@/lib/artist-resolver';
 import { Navbar } from '@/components/Navbar';
 import { PianoRollEditor } from '@/components/PianoRollEditor';
+import { StudioMidiUploadModal, type MidiUploadSuccessPayload } from '@/components/StudioMidiUploadModal';
+import type { PlanType } from '@/lib/credits';
 import Link from 'next/link';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
@@ -1792,7 +1794,13 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
-  const [credits, setCredits] = useState<{ used: number; limit: number; isPro: boolean } | null>(null);
+  const [credits, setCredits] = useState<{
+    used: number;
+    limit: number;
+    isPro: boolean;
+    planType?: PlanType;
+  } | null>(null);
+  const [showMidiUploadModal, setShowMidiUploadModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showEmbedModal, setShowEmbedModal] = useState(false);
@@ -1819,6 +1827,8 @@ export default function Home() {
   const [isConvertingAudio, setIsConvertingAudio] = useState(false);
 
   const result = variations[selectedVariation]?.result ?? null;
+
+  const isStudio = Boolean(credits?.isPro && credits?.planType === 'studio');
 
   const selectedParams = useMemo(() => variations[selectedVariation]?.params ?? params, [variations, selectedVariation, params]);
   const selectedLayerNotes = useMemo(() => {
@@ -2033,8 +2043,18 @@ export default function Home() {
       try {
         const res = await fetch('/api/credits');
         if (!res.ok) return;
-        const d = (await res.json()) as { credits_used: number; limit: number; is_pro: boolean };
-        setCredits({ used: d.credits_used, limit: d.limit, isPro: d.is_pro });
+        const d = (await res.json()) as {
+          credits_used: number;
+          limit: number;
+          is_pro: boolean;
+          plan_type?: PlanType;
+        };
+        setCredits({
+          used: d.credits_used,
+          limit: d.limit,
+          isPro: d.is_pro,
+          planType: d.plan_type ?? (d.is_pro ? 'pro' : 'free'),
+        });
       } catch {
         // ignore
       }
@@ -2120,6 +2140,30 @@ export default function Home() {
       window.clearInterval(id);
     };
   }, [showOnboarding, onboardingStep, result]);
+
+  const handleMidiUploadSuccess = useCallback(
+    (data: MidiUploadSuccessPayload) => {
+      stopPlayAll();
+      stopAllPlayback();
+      setPlayingAll(false);
+      setParams(data.params);
+      setPrompt(data.prompt);
+      setVariations(data.variations);
+      setSelectedVariation(0);
+      setVariationIds(data.variationIds ?? []);
+      setActiveStyleTag(null);
+      setCredits({
+        used: data.credits.credits_used,
+        limit: data.credits.limit,
+        isPro: data.credits.is_pro,
+        planType: data.credits.plan_type,
+      });
+      setEditorView('piano');
+      if (effectiveUserId) void loadHistoryFromDb(effectiveUserId);
+      window.setTimeout(() => toolRef.current?.scrollIntoView({ behavior: 'smooth' }), 120);
+    },
+    [effectiveUserId, loadHistoryFromDb],
+  );
 
   // ── GENERATE ─────────────────────────────────────────────────
 
@@ -2255,14 +2299,15 @@ export default function Home() {
         if (!res.ok) throw new Error('generate failed');
         const data = (await res.json()) as {
           variations: { result: GenerationResult; params: GenerationParams }[];
-          credits?: { credits_used: number; limit: number; is_pro: boolean };
+          credits?: { credits_used: number; limit: number; is_pro: boolean; plan_type?: PlanType };
         };
         if (data.credits) {
-          setCredits({
-            used: data.credits.credits_used,
-            limit: data.credits.limit,
-            isPro: data.credits.is_pro,
-          });
+          setCredits(prev => ({
+            used: data.credits!.credits_used,
+            limit: data.credits!.limit,
+            isPro: data.credits!.is_pro,
+            planType: data.credits!.plan_type ?? prev?.planType ?? (data.credits!.is_pro ? 'pro' : 'free'),
+          }));
         }
         return data.variations;
       };
@@ -3435,6 +3480,12 @@ export default function Home() {
         )}
       </AnimatePresence>
 
+      <StudioMidiUploadModal
+        open={showMidiUploadModal}
+        onClose={() => setShowMidiUploadModal(false)}
+        onSuccess={handleMidiUploadSuccess}
+      />
+
       {/* ── HISTORY SIDEBAR ── */}
       <AnimatePresence>
         {showHistory && (
@@ -3717,6 +3768,37 @@ export default function Home() {
                 </SignInButtonDeferred>
               )}
             </div>
+            {effectiveIsSignedIn && (
+              <div className="mb-4 flex justify-center">
+                <div className="relative inline-block">
+                  <button
+                    type="button"
+                    className="rounded-xl border px-5 py-3 text-sm font-semibold transition-opacity"
+                    style={{
+                      fontFamily: 'DM Sans, sans-serif',
+                      borderColor: isStudio ? 'rgba(255,109,63,0.45)' : '#2A2A40',
+                      color: isStudio ? '#F5F5F5' : '#8A8A9A',
+                      background: isStudio ? 'rgba(255,109,63,0.08)' : 'transparent',
+                      opacity: isStudio ? 1 : 0.4,
+                      cursor: isStudio ? 'pointer' : 'not-allowed',
+                    }}
+                    title={isStudio ? undefined : 'Available on Studio plan'}
+                    disabled={!isStudio}
+                    onClick={() => {
+                      if (isStudio) setShowMidiUploadModal(true);
+                    }}
+                  >
+                    Upload MIDI
+                  </button>
+                  <span
+                    className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                    style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
+                  >
+                    Studio only
+                  </span>
+                </div>
+              </div>
+            )}
             {!effectiveIsSignedIn && (
               <p className="-mt-2 mb-4 text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
                 No credit card required · 10 free generations per month
