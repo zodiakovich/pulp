@@ -34,6 +34,7 @@ export default async function ExplorePage() {
     : await supabase
       .from('generations')
       .select('id, prompt, genre, bpm, style_tag, created_at')
+      .eq('is_public', true)
       .order('created_at', { ascending: false })
       .limit(50);
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { supabase } from '@/lib/supabase';
+import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { GENRES, STYLE_TAGS } from '@/lib/music-engine';
 import { Navbar } from '@/components/Navbar';
 import { EmbedClient } from '@/app/embed/EmbedClient';
@@ -41,6 +41,7 @@ export default function CollabSessionPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { userId } = useAuth();
+  const supabase = useSupabaseWithClerk();
 
   const sessionCode = useMemo(() => (id ? String(id).slice(-8) : ''), [id]);
   const [fullUrl, setFullUrl] = useState('');
@@ -105,7 +106,7 @@ export default function CollabSessionPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, supabase]);
 
   useEffect(() => {
     if (!id) return;
@@ -154,7 +155,7 @@ export default function CollabSessionPage() {
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [id, myPresenceKey, pushActivity]);
+  }, [id, myPresenceKey, pushActivity, supabase]);
 
   const publish = async (next: Omit<CollabState, 'updatedAt'>) => {
     const updated: CollabState = { ...next, updatedAt: Date.now() };

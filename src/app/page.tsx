@@ -13,7 +13,7 @@ import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/mi
 import { playNotesWithMix as playNotes, stopAllPlayback } from '@/lib/mix-engine';
 import { playAll, stopPlayAll } from '@/lib/tone-play-all';
 import { playTonePreview, stopTonePreview } from '@/lib/tone-preview';
-import { supabase } from '@/lib/supabase';
+import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { track } from '@vercel/analytics';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
@@ -1771,6 +1771,7 @@ function ShareModal({
 // ─── MAIN PAGE ────────────────────────────────────────────────
 export default function Home() {
   const { isSignedIn, isLoaded, userId } = useAuth();
+  const supabase = useSupabaseWithClerk();
   const e2eBypass = process.env.NEXT_PUBLIC_E2E === '1';
   const effectiveIsSignedIn = e2eBypass ? true : isSignedIn;
   const effectiveUserId = e2eBypass ? 'e2e' : userId;
@@ -2008,7 +2009,7 @@ export default function Home() {
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [supabase]);
 
   const loadInspirationChipsFromDb = useCallback(async (uid: string) => {
     try {
@@ -2035,7 +2036,7 @@ export default function Home() {
     } catch {
       // Ignore
     }
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     if (!effectiveIsSignedIn || !effectiveUserId || e2eBypass) return;
@@ -2099,7 +2100,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, effectiveIsSignedIn, effectiveUserId]);
+  }, [isLoaded, effectiveIsSignedIn, effectiveUserId, supabase]);
 
   const completeOnboarding = useCallback(() => {
     const key = 'pulp_onboarding_complete_v1';
@@ -2406,7 +2407,7 @@ export default function Home() {
       for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
       generatingStageTimeoutsRef.current = [];
     }
-  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, loadHistoryFromDb, loadInspirationChipsFromDb]);
+  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, loadHistoryFromDb, loadInspirationChipsFromDb, supabase]);
 
   const handleStyleTag = (tag: string) => {
     const preset = STYLE_TAGS[tag];
