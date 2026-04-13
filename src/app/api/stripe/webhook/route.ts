@@ -1,12 +1,19 @@
 import Stripe from 'stripe';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import type { PlanType } from '@/lib/credits';
 
 export const runtime = 'nodejs';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
 });
+
+function sessionPlanType(session: Stripe.Checkout.Session): PlanType {
+  const raw = session.metadata?.plan_type;
+  if (raw === 'studio') return 'studio';
+  return 'pro';
+}
 
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -33,10 +40,12 @@ export async function POST(req: Request) {
 
     if (clerkUserId && supabaseAdmin) {
       try {
-        // Ensure a row exists and mark as pro.
-        await supabaseAdmin
-          .from('user_credits')
-          .upsert({ user_id: clerkUserId, is_pro: true }, { onConflict: 'user_id' });
+        const plan_type = sessionPlanType(session);
+        // Studio and Pro both unlock is_pro entitlements; generation caps differ via plan_type.
+        await supabaseAdmin.from('user_credits').upsert(
+          { user_id: clerkUserId, is_pro: true, plan_type },
+          { onConflict: 'user_id' },
+        );
       } catch {
         // ignore
       }
@@ -45,4 +54,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ received: true });
 }
-

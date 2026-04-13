@@ -3,7 +3,8 @@
 import React from 'react';
 import { useState, useCallback, useRef, useEffect, useMemo, type DragEvent } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { useAuth, SignInButton, UserButton } from '@clerk/nextjs';
+import { useAuth } from '@clerk/nextjs';
+import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
 import {
   generateTrack, getDefaultParams, GENRES, STYLE_TAGS, parsePrompt, MANUAL_SCALE_OPTIONS, SCALE_INTERVALS,
   type GenerationParams, type GenerationResult, type NoteEvent,
@@ -44,6 +45,19 @@ const revealContainer: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
 };
+
+const scrollSection = {
+  initial: { opacity: 0, y: 14 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, amount: 0.12 },
+  transition: { duration: 0.4, ease: EASE_OUT },
+} as const;
+
+const LANDING_STATS: { value: string; label: string }[] = [
+  { value: '300+', label: ' artists' },
+  { value: '20', label: ' genres' },
+  { value: 'MIDI-ready', label: ' in seconds' },
+];
 
 // ─── TYPES ───────────────────────────────────────────────────
 interface HistoryEntry {
@@ -1537,43 +1551,6 @@ function normalizeScaleToEngine(value: string): string {
   return 'minor';
 }
 
-const HOW_IT_WORKS = [
-  {
-    num: '01',
-    title: 'Describe or pick a style',
-    body: 'Type a prompt like "dark techno, Am, 130bpm" or tap any vibe tag.',
-  },
-  {
-    num: '02',
-    title: '4 tracks generate in under a second',
-    body: 'Melody, chords, bass, and drums generate simultaneously in under a second.',
-  },
-  {
-    num: '03',
-    title: 'Drop the .mid into your DAW',
-    body: 'Download individual tracks or the full .mid. Drag straight into your DAW.',
-  },
-];
-
-const LAYER_EXPLAINER = [
-  {
-    name: 'Melody',   key: 'melody' as const, color: '#FF6D3F', range: 'C4 – C6',
-    body: 'Genre-matched lead lines. Density and rhythm adapt to tempo and style — sparse for house, dense for trance.',
-  },
-  {
-    name: 'Chords',   key: 'chords' as const, color: '#A78BFA', range: 'C3 – C5',
-    body: 'Triads, sevenths, or extended voicings based on genre. Rhythm ranges from sustained pads to staccato stabs.',
-  },
-  {
-    name: 'Bass',     key: 'bass' as const,   color: '#00B894', range: 'C1 – C3',
-    body: 'Root, walking, octave, syncopated, or 808 style. Locked to chord changes for musical coherence.',
-  },
-  {
-    name: 'Drums',    key: 'drums' as const,  color: '#E94560', range: 'GM map',
-    body: 'Pattern-driven: four-on-floor, breakbeat, trap, DnB, shuffle. Hat density from 8 to 32 steps per bar.',
-  },
-];
-
 function HeroDemoPreview() {
   const [tick, setTick] = React.useState(0)
   
@@ -1935,10 +1912,12 @@ export default function Home() {
   useEffect(() => {
     const fetchCount = async () => {
       try {
-        const { count } = await supabase
-          .from('generations')
-          .select('id', { count: 'exact', head: true });
-        if (typeof count === 'number') setTotalGenerations(count);
+        const res = await fetch('/api/stats');
+        if (!res.ok) return;
+        const d = (await res.json()) as { totalGenerations: number | null };
+        if (typeof d.totalGenerations === 'number' && d.totalGenerations > 0) {
+          setTotalGenerations(d.totalGenerations);
+        }
       } catch {
         // ignore
       }
@@ -3199,7 +3178,7 @@ export default function Home() {
 
   // ── RENDER ────────────────────────────────────────────────
   return (
-    <div className="min-h-screen">
+    <>
 
       {/* ── ONBOARDING ── */}
       <AnimatePresence>
@@ -3483,86 +3462,162 @@ export default function Home() {
         historyCount={history.length}
       />
 
+      <main className="min-h-screen" style={{ background: '#09090B' }}>
       {/* ── HERO ── */}
-      <section className="hero-noise px-4 sm:px-8 pt-16 pb-10">
-        <div className="max-w-[1280px] mx-auto min-h-[100svh] flex flex-col justify-center gap-6">
-
-          {/* Staggered headline + subtitle */}
+      <section className="px-4 sm:px-8 pb-8 pt-24" style={{ background: '#09090B' }}>
+        <div className="mx-auto max-w-[720px] text-center">
           <motion.div
-            className="text-center"
-            variants={staggerContainer}
-            initial="hidden"
-            animate="visible"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: EASE_OUT }}
           >
-            <motion.h1
-              variants={fadeUp}
-              className="text-gradient font-extrabold leading-[1.1]"
-              style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(1.8rem, 8vw, 5rem)', letterSpacing: '-0.02em' }}
+            <p
+              className="mb-6 text-[11px] font-medium uppercase tracking-[0.22em]"
+              style={{ fontFamily: 'DM Sans, sans-serif', color: '#FF6D3F' }}
             >
-              Generate MIDI.<br />Instantly.
-            </motion.h1>
-            <motion.p
-              variants={fadeUp}
-              className="mt-3 mx-auto leading-relaxed"
-              style={{ fontSize: 16, color: 'var(--muted)', maxWidth: 560 }}
+              AI MIDI Generator
+            </p>
+            <h1
+              className="font-extrabold leading-[1.05] tracking-tight"
+              style={{
+                fontFamily: "'Syne', sans-serif",
+                fontWeight: 800,
+                fontSize: 'clamp(2.25rem, 6vw, 4rem)',
+                color: '#F5F5F5',
+                letterSpacing: '-0.03em',
+              }}
             >
-              Type a prompt. Get melody, chords, bass and drums — locked to your key and tempo — in under a second. Drop the .mid straight into FL Studio, Ableton, or Logic.
-            </motion.p>
-          </motion.div>
-
-          {/* Dominant hero CTA — only primary button in hero */}
-          <motion.div
-            className="flex flex-col items-center justify-center gap-3"
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            transition={{ delay: 0.1 }}
-          >
-            <div ref={generateBtnWrapRef}>
+              MIDI from language, instantly.
+            </h1>
+            <p
+              className="mx-auto mt-6 max-w-[560px] text-[18px] leading-snug"
+              style={{ fontFamily: 'DM Sans, sans-serif', color: '#8A8A9A' }}
+            >
+              Describe a track in text — pulp returns four-layer MIDI, keyed and tempo-locked, export-ready for any DAW.
+            </p>
+            <div className="mt-10 flex flex-col items-stretch justify-center gap-4 sm:mt-12 sm:flex-row sm:items-center sm:justify-center">
               {effectiveIsSignedIn ? (
-                <SpotlightButton
-                  type="button"
-                  className={`btn-primary btn-hero${isGenerating ? ' pulsing' : ''}`}
-                  onClick={() => void handleGenerate()}
-                  disabled={isGenerating}
+                <Link
+                  href="/dashboard"
+                  className="inline-flex min-h-[56px] items-center justify-center rounded-xl px-10 py-4 text-base font-semibold transition-transform active:scale-[0.98]"
+                  style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
                 >
-                  {isGenerating ? (
-                    <span className="flex items-center gap-3">
-                      <span className="spinner" />
-                      {generatingStage || 'Generating…'}
-                    </span>
-                  ) : (
-                    'Generate now'
-                  )}
-                </SpotlightButton>
+                  Start generating free
+                </Link>
               ) : (
-                <SignInButton mode="modal">
-                  <SpotlightButton type="button" className="btn-primary btn-hero">
-                    Start free
-                  </SpotlightButton>
-                </SignInButton>
+                <SignInButtonDeferred mode="modal">
+                  <button
+                    type="button"
+                    className="inline-flex min-h-[56px] w-full items-center justify-center rounded-xl px-10 py-4 text-base font-semibold transition-transform active:scale-[0.98] sm:w-auto"
+                    style={{ background: '#FF6D3F', color: '#09090B', fontFamily: 'DM Sans, sans-serif' }}
+                  >
+                    Start generating free
+                  </button>
+                </SignInButtonDeferred>
               )}
+              <a
+                href="#demo"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-xl border px-8 py-3 text-sm font-medium transition-colors"
+                style={{
+                  fontFamily: 'DM Sans, sans-serif',
+                  color: '#F5F5F5',
+                  borderColor: 'rgba(255,255,255,0.12)',
+                  background: 'transparent',
+                }}
+              >
+                See how it works
+              </a>
             </div>
-            {!effectiveIsSignedIn && (
-              <p className="text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                No credit card required · 10 free generations per month
-              </p>
-            )}
           </motion.div>
+        </div>
+      </section>
 
-          {/* ── GENERATOR ── */}
-          <motion.div
-            id="generator"
-            ref={toolRef}
-            className="w-full max-w-[720px] mx-auto"
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            transition={{ delay: 0.16 }}
-          >
+      {/* ── STATS ── */}
+      <motion.section
+        className="mt-24 px-4 sm:px-8 py-10"
+        style={{ background: '#111118', borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
+        {...scrollSection}
+      >
+        <div className="mx-auto flex max-w-[960px] flex-col divide-y divide-[#1A1A2E] sm:flex-row sm:divide-x sm:divide-y-0">
+          {LANDING_STATS.map(row => (
+            <div key={row.value + row.label} className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center sm:py-6">
+              <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, lineHeight: 1.4 }}>
+                <span style={{ color: '#F5F5F5', fontWeight: 600 }}>{row.value}</span>
+                <span style={{ color: '#8A8A9A' }}>{row.label}</span>
+              </p>
+            </div>
+          ))}
+        </div>
+      </motion.section>
+
+      {/* ── DEMO / FEATURES ── */}
+      <motion.section
+        id="demo"
+        className="mt-24 px-4 sm:px-8 pb-8"
+        style={{ background: '#09090B' }}
+        {...scrollSection}
+      >
+        <div className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
+          {[
+            {
+              title: 'Artist-aware',
+              body: 'Steer grooves with artist-inspired prompts and style tags.',
+              icon: (
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0">
+                  <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M4 20a8 8 0 0116 0" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              ),
+            },
+            {
+              title: 'Piano Roll editor',
+              body: 'Tweak notes, velocity, and timing in a fast FL-style roll.',
+              icon: (
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0">
+                  <rect x="3" y="5" width="18" height="14" rx="2" stroke="#FF6D3F" strokeWidth="1.5" />
+                  <path d="M7 15V9M10 15v-4M13 15V8M16 15v-6" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              ),
+            },
+            {
+              title: 'Instant MIDI export',
+              body: 'Download .mid or drag layers straight into your session.',
+              icon: (
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0">
+                  <path d="M12 4v12M8 12l4 4 4-4" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 20h14" stroke="#FF6D3F" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              ),
+            },
+          ].map(card => (
+            <div
+              key={card.title}
+              className="rounded-[14px] border border-[#1A1A2E] bg-[#111118] p-6 transition-[border-color] duration-200 hover:border-[#FF6D3F] md:p-8"
+            >
+              <div className="mb-5 flex items-start gap-4">
+                {card.icon}
+                <h2
+                  className="text-lg font-bold leading-tight"
+                  style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: '#F5F5F5' }}
+                >
+                  {card.title}
+                </h2>
+              </div>
+              <p className="text-[15px] leading-relaxed" style={{ fontFamily: 'DM Sans, sans-serif', color: '#8A8A9A' }}>
+                {card.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </motion.section>
+
+      {/* ── GENERATOR ── */}
+      <motion.section className="mt-24 px-4 sm:px-8 pb-10" style={{ background: '#09090B' }} {...scrollSection}>
+        <div className="mx-auto max-w-[1280px]">
+          <motion.div id="generator" ref={toolRef} className="mx-auto w-full max-w-[720px]">
             <div className="px-4 sm:px-0">
 
-            {/* Prompt — no duplicate Generate; Inspire is a text control only */}
+            {/* Prompt — primary Generate below */}
             <div className="mb-4 hidden sm:block">
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: '#FF6D3F' }}>✦</span>
@@ -3579,7 +3634,7 @@ export default function Home() {
               </div>
               <div className="mt-2 flex items-center justify-between gap-4 px-1">
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
-                  {effectiveIsSignedIn ? 'Press Enter to generate' : 'Sign in above, then describe your track'}
+                  {effectiveIsSignedIn ? 'Press Enter to generate' : 'Sign in to generate below'}
                 </span>
                 <button
                   type="button"
@@ -3615,7 +3670,7 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-between gap-4 px-1">
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
-                  {effectiveIsSignedIn ? 'Enter to generate' : 'Start free above'}
+                  {effectiveIsSignedIn ? 'Enter to generate' : 'Sign in to generate below'}
                 </span>
                 <button
                   type="button"
@@ -3636,6 +3691,37 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
+            <div ref={generateBtnWrapRef} className="mb-4 flex justify-center">
+              {effectiveIsSignedIn ? (
+                <SpotlightButton
+                  type="button"
+                  className={`btn-primary btn-hero${isGenerating ? ' pulsing' : ''}`}
+                  onClick={() => void handleGenerate()}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? (
+                    <span className="flex items-center gap-3">
+                      <span className="spinner" />
+                      {generatingStage || 'Generating…'}
+                    </span>
+                  ) : (
+                    'Generate now'
+                  )}
+                </SpotlightButton>
+              ) : (
+                <SignInButtonDeferred mode="modal">
+                  <SpotlightButton type="button" className="btn-primary btn-hero">
+                    Generate now
+                  </SpotlightButton>
+                </SignInButtonDeferred>
+              )}
+            </div>
+            {!effectiveIsSignedIn && (
+              <p className="-mt-2 mb-4 text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
+                No credit card required · 10 free generations per month
+              </p>
+            )}
 
             <AnimatePresence>
               {showInspire && (
@@ -3905,9 +3991,9 @@ export default function Home() {
               <button
                 onClick={() => setShowManual(!showManual)}
                 className="w-full px-5 py-3 flex items-center justify-between transition-colors"
-                style={{ color: 'var(--muted)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#F0F0FF')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+                style={{ color: 'var(--text)', opacity: 0.6, fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#F0F0FF'; e.currentTarget.style.opacity = '1'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.opacity = '0.6'; }}
               >
                 <span className="flex items-center gap-2"><span>⚙</span> Manual controls</span>
                 <span className={`transform transition-transform text-xs ${showManual ? 'rotate-180' : ''}`}>▾</span>
@@ -3926,7 +4012,7 @@ export default function Home() {
                       style={{ borderTop: '1px solid #1A1A2E' }}>
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wider"
-                          style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
+                          style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
                         <select
                           ref={genreSelectRef}
                           className="w-full"
@@ -3939,7 +4025,7 @@ export default function Home() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wider"
-                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
+                            style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
                           <select
                             className="w-full"
                             value={params.key}
@@ -3950,7 +4036,7 @@ export default function Home() {
                         </div>
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wider"
-                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
+                            style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
                           <select
                             className="w-full"
                             value={MANUAL_SCALE_OPTIONS.some(o => o.value === params.scale) ? params.scale : 'minor'}
@@ -3965,7 +4051,7 @@ export default function Home() {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-xs uppercase tracking-wider"
-                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Feel</label>
+                            style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Feel</label>
                           <span
                             className="text-xs tabular-nums"
                             style={{ color: '#F0F0FF', fontFamily: 'JetBrains Mono, monospace' }}
@@ -3989,7 +4075,7 @@ export default function Home() {
                       <div className="col-span-2 md:col-span-3">
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-xs uppercase tracking-wider"
-                            style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
+                            style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>BPM</label>
                           <div className="flex items-center gap-2 flex-wrap justify-end">
                             {detectedBpm !== null && (
                               <span
@@ -4657,199 +4743,14 @@ export default function Home() {
               20 genres · 15 styles · 4 independent tracks · .mid export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(138,138,154,0.45)' }}>
-              No account needed. Use the button above or press G.
+              Press G to generate · ⌘K for commands
             </p>
           </div>
         </div>
-      </section>
-
-      {/* ── DAW COMPATIBILITY ── */}
-      <section className="py-12 sm:py-24 px-4 sm:px-8" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="max-w-[1280px] mx-auto text-center">
-          <p style={{
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 11,
-            color: 'var(--muted)',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            marginBottom: 32,
-          }}>
-            Works with your DAW
-          </p>
-          <div className="flex items-center justify-center gap-12 flex-wrap">
-            {[
-              { name: 'FL Studio', abbr: 'FL' },
-              { name: 'Ableton Live', abbr: 'AB' },
-              { name: 'Logic Pro', abbr: 'LG' },
-              { name: 'GarageBand', abbr: 'GB' },
-              { name: 'Pro Tools', abbr: 'PT' },
-              { name: 'Cubase', abbr: 'CB' },
-            ].map(daw => (
-              <div key={daw.name} className="flex flex-col items-center gap-2" style={{ opacity: 0.7 }}>
-                <div style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--foreground-muted)',
-                }}>
-                  {daw.abbr}
-                </div>
-                <span style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 10,
-                  color: 'var(--muted)',
-                }}>
-                  {daw.name}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── HOW IT WORKS ── */}
-      <section
-        className="dark-band py-12 sm:py-24 px-4 sm:px-8"
-        style={{ borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
-      >
-        <div className="max-w-[1280px] mx-auto">
-          <h2
-            className="font-extrabold mb-16"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-          >
-            3 steps.<br />0 fuss.
-          </h2>
-          <div
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
-          >
-            {HOW_IT_WORKS.map(step => (
-              <div key={step.num}>
-                <div className="text-gradient font-extrabold mb-5"
-                  style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  {step.num}
-                </div>
-                <h3 className="font-bold mb-3"
-                  style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, letterSpacing: '-0.005em', lineHeight: 1.3 }}>
-                  {step.title}
-                </h3>
-                <p style={{ fontSize: 14, color: 'var(--foreground-muted)', lineHeight: 1.7 }}>{step.body}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-16 flex justify-center">
-            {effectiveIsSignedIn ? (
-              <button type="button" className="btn-primary" onClick={() => scrollToTool()}>
-                Open generator →
-              </button>
-            ) : (
-              <SignInButton mode="modal">
-                <button type="button" className="btn-primary">
-                  Try it free →
-                </button>
-              </SignInButton>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ── GENRE GRID ── */}
-      <section
-        className="py-12 sm:py-24 px-4 sm:px-8"
-      >
-        <div className="max-w-[1280px] mx-auto">
-          <h2
-            className="font-extrabold mb-3"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-          >
-            20 genres, built in.
-          </h2>
-          <p
-            className="mb-12 text-sm"
-            style={{ color: 'var(--foreground-muted)', fontFamily: 'JetBrains Mono, monospace' }}
-          >
-            Pick a genre to pre-fill the prompt — scroll up to generate when you are ready.
-          </p>
-          <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
-          >
-            {GENRE_LIST.map(g => (
-              <button
-                key={g.key}
-                onClick={() => { setParams(p => ({ ...p, genre: g.key })); setActiveStyleTag(null); scrollToTool(); }}
-                className="genre-card text-left"
-              >
-                <span className="block font-bold text-sm leading-tight"
-                  style={{ fontFamily: 'Syne, sans-serif', color: 'var(--foreground)' }}>
-                  {g.name}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── LAYER SYSTEM ── */}
-      <section
-        className="dark-band py-12 sm:py-24 px-4 sm:px-8"
-        style={{ borderTop: '1px solid #1A1A2E', borderBottom: '1px solid #1A1A2E' }}
-      >
-        <div className="max-w-[1280px] mx-auto">
-          <h2
-            className="font-extrabold mb-3"
-            style={{ fontFamily: 'Syne, sans-serif', fontSize: 48, letterSpacing: '-0.015em', lineHeight: 1.15 }}
-          >
-            4 independent tracks.
-          </h2>
-          <p
-            className="mb-12"
-            style={{ fontSize: 15, color: 'var(--foreground-muted)', maxWidth: 560, lineHeight: 1.7 }}
-          >
-            Each track has its own voice, rhythm, and range. Toggle any layer on or off. Download each one separately or all at once.
-          </p>
-          <div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-          >
-            {LAYER_EXPLAINER.map(layer => (
-              <div
-                key={layer.key}
-                className={`layer-card active-${layer.key}`}
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: layer.color }} />
-                  <span className="font-bold text-sm" style={{ fontFamily: 'Syne, sans-serif' }}>{layer.name}</span>
-                  <span className="ml-auto text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--foreground-muted)' }}>{layer.range}</span>
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: 'var(--foreground-muted)', lineHeight: 1.7 }}>{layer.body}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-10">
-            <Link
-              href="/explore"
-              className="text-sm inline-block"
-              style={{
-                fontFamily: 'JetBrains Mono, monospace',
-                color: 'var(--accent)',
-                textDecoration: 'none',
-                borderBottom: '1px solid rgba(255,109,63,0.35)',
-              }}
-            >
-              See an example →
-            </Link>
-          </div>
-        </div>
-      </section>
+      </motion.section>
 
       {/* ── FOOTER ── */}
-      <footer className="px-4 sm:px-8 py-16" style={{ borderTop: '1px solid var(--border)' }}>
+      <footer className="mt-24 px-4 sm:px-8 py-16" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="max-w-[1280px] mx-auto">
 
           {/* Top row */}
@@ -4858,21 +4759,21 @@ export default function Home() {
             <span className="text-gradient font-extrabold text-2xl" style={{ fontFamily: 'Syne, sans-serif' }}>
               pulp
             </span>
-            <span className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
-              a{' '}
+            <span className="text-sm" style={{ color: 'var(--text)' }}>
+              <span style={{ opacity: 0.6 }}>a </span>
               <span className="font-extrabold text-gradient" style={{ fontFamily: 'Syne, sans-serif' }}>papaya</span>
               <span style={{ color: '#00B894' }}>●</span>
-              {' '}tool
+              <span style={{ opacity: 0.6 }}> tool</span>
             </span>
           </div>
 
           {/* Bottom row */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
+            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', opacity: 0.6 }}>
               © 2026 PULP. MADE BY PAPAYA.
             </span>
 
-            <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.55)' }}>
+            <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', opacity: 0.6 }}>
               <a href="/about" className="footer-link">About</a>
               <a href="/legal/terms" className="footer-link">
                 Terms
@@ -4888,17 +4789,18 @@ export default function Home() {
             {/* Live status */}
             <div className="flex items-center gap-2">
               <span className="status-dot" />
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)' }}>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text)', opacity: 0.6 }}>
                 All systems operational
               </span>
             </div>
 
-            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.4)' }}>
+            <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', opacity: 0.6 }}>
               royalty-free. yours forever.
             </span>
           </div>
         </div>
       </footer>
-    </div>
+      </main>
+    </>
   );
 }

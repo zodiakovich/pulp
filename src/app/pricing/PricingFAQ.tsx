@@ -17,11 +17,11 @@ const FAQS = [
   },
   {
     q: 'Do unused generations roll over?',
-    a: 'No — the free tier resets to 10 each month; Pro has no cap.',
+    a: 'No — allowances reset each calendar month (10 / 150 / 600 generations per plan).',
   },
   {
     q: 'How does billing work?',
-    a: 'Pro is billed monthly through Stripe until you cancel.',
+    a: 'Pro and Studio are billed through Stripe (monthly or annual); cancel anytime from your account.',
   },
   {
     q: 'Is my data private?',

@@ -159,6 +159,7 @@ export default async function ProfilePage() {
         is_pro: false,
         limit: 10,
         allowed: true,
+        plan_type: 'free' as const,
       })),
     ]);
 

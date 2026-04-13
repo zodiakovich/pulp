@@ -2,21 +2,39 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 
 /** Free tier monthly cap (must match product copy unless changed together). */
 export const FREE_MONTHLY_LIMIT = 10;
-/** Pro tier monthly cap — not unlimited; abuse protection. */
-export const PRO_MONTHLY_LIMIT = 200;
+/** Pro tier monthly cap. */
+export const PRO_MONTHLY_LIMIT = 150;
+/** Studio tier monthly cap. */
+export const STUDIO_MONTHLY_LIMIT = 600;
 /** Signed-out: max generations per IP per UTC calendar day. */
 export const GUEST_DAILY_LIMIT = 3;
+
+export type PlanType = 'free' | 'pro' | 'studio';
 
 export type UserCreditsRow = {
   user_id: string;
   credits_used: number;
   is_pro: boolean;
+  plan_type: PlanType | null;
   created_at: string;
 };
 
 function firstOfCurrentMonthISO(): string {
   const n = new Date();
   return new Date(n.getFullYear(), n.getMonth(), 1).toISOString();
+}
+
+export function resolvePlanType(row: UserCreditsRow): PlanType {
+  if (!row.is_pro) return 'free';
+  if (row.plan_type === 'studio') return 'studio';
+  return 'pro';
+}
+
+export function monthlyLimitForRow(row: UserCreditsRow): number {
+  const t = resolvePlanType(row);
+  if (t === 'studio') return STUDIO_MONTHLY_LIMIT;
+  if (t === 'pro') return PRO_MONTHLY_LIMIT;
+  return FREE_MONTHLY_LIMIT;
 }
 
 /**
@@ -41,7 +59,7 @@ export async function getOrCreateCredits(userId: string): Promise<UserCreditsRow
   if (!existing) {
     const { data: inserted, error: insErr } = await supabaseAdmin
       .from('user_credits')
-      .insert({ user_id: userId, credits_used: 0, is_pro: false })
+      .insert({ user_id: userId, credits_used: 0, is_pro: false, plan_type: 'free' })
       .select('*')
       .single();
     if (insErr || !inserted) throw insErr ?? new Error('user_credits insert failed');
@@ -69,11 +87,13 @@ export async function checkCreditsAllowed(userId: string): Promise<{
   credits_used: number;
   is_pro: boolean;
   limit: number;
+  plan_type: PlanType;
 }> {
   const row = await getOrCreateCredits(userId);
-  const limit = row.is_pro ? PRO_MONTHLY_LIMIT : FREE_MONTHLY_LIMIT;
+  const plan_type = resolvePlanType(row);
+  const limit = monthlyLimitForRow(row);
   const allowed = row.credits_used < limit;
-  return { allowed, credits_used: row.credits_used, is_pro: row.is_pro, limit };
+  return { allowed, credits_used: row.credits_used, is_pro: row.is_pro, limit, plan_type };
 }
 
 /** Increments monthly usage by 1. Does not change `created_at`. Call once per successful multi-variation generate. */

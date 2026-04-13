@@ -16,6 +16,7 @@ export async function GET() {
       credits_used: s.credits_used,
       limit: s.limit,
       is_pro: s.is_pro,
+      plan_type: s.plan_type,
       allowed: s.allowed,
     });
   } catch {

@@ -10,6 +10,7 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
+  compress: true,
   async headers() {
     return [
       {

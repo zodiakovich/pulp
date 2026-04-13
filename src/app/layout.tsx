@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ToastProvider } from '@/components/toast/ToastProvider';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
+import './fonts.css';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -45,6 +46,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <ClerkProvider>
       <html lang="en">
+        <head>
+          <link rel="preconnect" href="https://composed-moth-91.clerk.accounts.dev" crossOrigin="anonymous" />
+          <link rel="preconnect" href="https://wakqmkbdeottfvgtezym.supabase.co" crossOrigin="anonymous" />
+          <link rel="dns-prefetch" href="https://composed-moth-91.clerk.accounts.dev" />
+          <link rel="dns-prefetch" href="https://wakqmkbdeottfvgtezym.supabase.co" />
+        </head>
         <body className="min-h-screen font-body antialiased" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
           <script
             dangerouslySetInnerHTML={{

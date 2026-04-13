@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import { useAuth, SignedIn, SignedOut } from '@clerk/nextjs';
+import { SignInButtonDeferred, UserButtonDeferred } from '@/components/ClerkAuthDeferred';
 import { WhatsNew } from '@/components/WhatsNew';
 
 const STORAGE_KEY = 'pulp_theme';
@@ -200,14 +201,14 @@ export function Navbar({
                 Generate
               </Link>
             )}
-            <UserButton />
+            <UserButtonDeferred />
           </SignedIn>
           <SignedOut>
-            <SignInButton mode="modal">
+            <SignInButtonDeferred mode="modal">
               <button type="button" className="btn-primary btn-sm">
                 Start free
               </button>
-            </SignInButton>
+            </SignInButtonDeferred>
           </SignedOut>
         </div>
       </div>
