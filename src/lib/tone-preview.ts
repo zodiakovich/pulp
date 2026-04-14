@@ -1,6 +1,9 @@
 import * as Tone from 'tone';
 import type { NoteEvent } from '@/lib/music-engine';
-import { bassPresets, chordPresets, melodyPresets, pickPresetIndex, type LayeredInstrument } from '@/lib/synth-presets';
+import {
+  bassPresets, chordPresets, melodyPresets, pickPresetIndex,
+  type LayeredInstrument,
+} from '@/lib/synth-presets';
 import { ensureToneSampleSet, resolveToneSampleSlug } from '@/lib/tone-sample-loader';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -15,15 +18,11 @@ let activeNodes: Tone.ToneAudioNode[] = [];
 
 export function stopTonePreview() {
   for (const node of activeNodes) {
-    try {
-      node.dispose();
-    } catch {
-      /* ignore */
-    }
+    try { node.dispose(); } catch { /* ignore */ }
   }
   activeNodes = [];
-  Tone.Transport.stop();
-  Tone.Transport.cancel();
+  // Do NOT call Tone.Transport.stop/cancel — we use absolute-time scheduling,
+  // not Transport-relative, and stop() can disrupt in-progress async previews.
 }
 
 export type TonePreviewLayer = 'melody' | 'chords' | 'bass' | 'drums';
@@ -45,83 +44,73 @@ export async function playTonePreview(
 
   const secondsPerBeat = 60 / Math.max(60, Math.min(200, bpm));
   const seed = Math.round(bpm) + notes.length;
+
+  // Only async step: sample loading. `now` is computed after so timestamps are fresh.
   const sampleSlug = resolveToneSampleSlug(genre);
   const sampleSet = sampleSlug ? await ensureToneSampleSet(sampleSlug) : null;
 
-  // Pre-create Reverb and await IR generation before computing `now`.
-  // Tone.Reverb generates its impulse response asynchronously; audio is
-  // silent until ready, so we must wait before scheduling any notes.
-  // Bass uses no reverb, so skip it for that layer.
-  const reverbDecay = layer === 'melody' ? 1.8 : layer === 'chords' ? 3 : layer === 'drums' ? 0.5 : null;
-  const reverbWet   = layer === 'melody' ? 0.25 : layer === 'chords' ? 0.4 : layer === 'drums' ? 0.1 : null;
-  const reverb = (reverbDecay !== null && reverbWet !== null)
-    ? new Tone.Reverb({ decay: reverbDecay, wet: reverbWet }).toDestination()
-    : null;
-
-  if (reverb) {
-    await reverb.ready;
-  }
-
-  // All async work is done — grab a fresh timestamp now.
   const now = Tone.now() + 0.05;
 
-  if (layer === 'melody' && reverb) {
-    const delay = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.2, wet: 0.1 }).connect(reverb);
+  // ─── MELODY ────────────────────────────────────────────────────────────────
+  if (layer === 'melody') {
+    // FeedbackDelay → Destination (synchronous, no async setup)
+    const dly = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.2, wet: 0.1 }).toDestination();
     let melInst: LayeredInstrument | null = null;
     if (sampleSet) {
       const sam = sampleSet.samplers.lead;
       try { sam.disconnect(); } catch { /* not yet connected */ }
-      sam.connect(delay);
-      activeNodes.push(reverb, delay);
+      sam.connect(dly);
+      activeNodes.push(dly);
     } else {
       melInst = melodyPresets[pickPresetIndex(seed, melodyPresets.length)]!();
-      (melInst.output as any).connect(delay);
-      activeNodes.push(reverb, delay, ...melInst.nodes);
+      (melInst.output as any).connect(dly);
+      activeNodes.push(dly, ...melInst.nodes);
     }
 
     let maxEnd = 0;
     for (const note of notes) {
       const startTime = now + note.startTime * secondsPerBeat;
-      const duration = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
-      const noteName = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
-      const velocity = note.velocity / 127;
+      const duration  = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
+      const noteName  = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
+      const velocity  = note.velocity / 127;
       if (sampleSet) {
-        sampleSet.samplers.lead.triggerAttackRelease(noteName, duration as any, startTime, velocity);
+        sampleSet.samplers.lead.triggerAttackRelease(noteName, duration, startTime, velocity);
       } else {
         melInst?.trigger(noteName, duration, startTime, velocity);
       }
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
     }
-
     if (onComplete) {
       window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
     }
     return;
   }
 
-  if (layer === 'chords' && reverb) {
-    const chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.3 }).connect(reverb);
+  // ─── CHORDS ────────────────────────────────────────────────────────────────
+  if (layer === 'chords') {
+    // Chorus → Destination
+    const chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.3 }).toDestination();
     chorus.start();
     let chInst: LayeredInstrument | null = null;
     if (sampleSet) {
       const sam = sampleSet.samplers.pad;
       try { sam.disconnect(); } catch { /* not yet connected */ }
       sam.connect(chorus);
-      activeNodes.push(reverb, chorus);
+      activeNodes.push(chorus);
     } else {
       chInst = chordPresets[pickPresetIndex(seed + 11, chordPresets.length)]!();
       (chInst.output as any).connect(chorus);
-      activeNodes.push(reverb, chorus, ...chInst.nodes);
+      activeNodes.push(chorus, ...chInst.nodes);
     }
 
     let maxEnd = 0;
     for (const note of notes) {
       const startTime = now + note.startTime * secondsPerBeat;
-      const duration = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
-      const noteName = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
-      const velocity = note.velocity / 127;
+      const duration  = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
+      const noteName  = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
+      const velocity  = note.velocity / 127;
       if (sampleSet) {
-        sampleSet.samplers.pad.triggerAttackRelease(noteName, duration as any, startTime, velocity);
+        sampleSet.samplers.pad.triggerAttackRelease(noteName, duration, startTime, velocity);
       } else {
         chInst?.trigger(noteName, duration, startTime, velocity);
       }
@@ -133,7 +122,9 @@ export async function playTonePreview(
     return;
   }
 
+  // ─── BASS ──────────────────────────────────────────────────────────────────
   if (layer === 'bass') {
+    // Filter → Destination
     const filter = new Tone.Filter({ frequency: 500, type: 'lowpass', rolloff: -24 }).toDestination();
     const distortion = new Tone.Distortion({ distortion: 0.15, wet: 0.2 }).connect(filter);
     let bassInst: LayeredInstrument | null = null;
@@ -151,11 +142,11 @@ export async function playTonePreview(
     let maxEnd = 0;
     for (const note of notes) {
       const startTime = now + note.startTime * secondsPerBeat;
-      const duration = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
-      const noteName = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
-      const velocity = note.velocity / 127;
+      const duration  = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
+      const noteName  = midiToNoteName(Math.max(24, Math.min(108, note.pitch)));
+      const velocity  = note.velocity / 127;
       if (sampleSet) {
-        sampleSet.samplers.bass.triggerAttackRelease(noteName, duration as any, startTime, velocity);
+        sampleSet.samplers.bass.triggerAttackRelease(noteName, duration, startTime, velocity);
       } else {
         bassInst?.trigger(noteName, duration, startTime, velocity);
       }
@@ -167,30 +158,31 @@ export async function playTonePreview(
     return;
   }
 
-  // Drums
-  if (reverb) {
+  // ─── DRUMS ─────────────────────────────────────────────────────────────────
+  if (layer === 'drums') {
     if (sampleSet) {
-      const gKick  = new Tone.Gain(1).connect(reverb);
-      const gSnare = new Tone.Gain(1).connect(reverb);
-      const gCH    = new Tone.Gain(1).connect(reverb);
-      const gOH    = new Tone.Gain(1).connect(reverb);
-      const gPerc  = new Tone.Gain(1).connect(reverb);
-      try { sampleSet.players.kick.disconnect(); } catch { /* not yet connected */ }
-      try { sampleSet.players.snare.disconnect(); } catch { /* not yet connected */ }
+      // Per-drum Gain nodes allow per-hit velocity without storing shared players in activeNodes.
+      const gKick  = new Tone.Gain(1).toDestination();
+      const gSnare = new Tone.Gain(1).toDestination();
+      const gCH    = new Tone.Gain(1).toDestination();
+      const gOH    = new Tone.Gain(1).toDestination();
+      const gPerc  = new Tone.Gain(1).toDestination();
+      try { sampleSet.players.kick.disconnect(); }          catch { /* not yet connected */ }
+      try { sampleSet.players.snare.disconnect(); }         catch { /* not yet connected */ }
       try { sampleSet.players['closed-hat'].disconnect(); } catch { /* not yet connected */ }
-      try { sampleSet.players['open-hat'].disconnect(); } catch { /* not yet connected */ }
-      try { sampleSet.players.perc.disconnect(); } catch { /* not yet connected */ }
+      try { sampleSet.players['open-hat'].disconnect(); }   catch { /* not yet connected */ }
+      try { sampleSet.players.perc.disconnect(); }          catch { /* not yet connected */ }
       sampleSet.players.kick.connect(gKick);
       sampleSet.players.snare.connect(gSnare);
       sampleSet.players['closed-hat'].connect(gCH);
       sampleSet.players['open-hat'].connect(gOH);
       sampleSet.players.perc.connect(gPerc);
-      activeNodes.push(reverb, gKick, gSnare, gCH, gOH, gPerc);
+      activeNodes.push(gKick, gSnare, gCH, gOH, gPerc);
 
       let maxEnd = 0;
       for (const note of notes) {
         const startTime = now + note.startTime * secondsPerBeat;
-        const v = Math.max(0.05, Math.min(1, note.velocity / 127));
+        const v         = Math.max(0.05, Math.min(1, note.velocity / 127));
         const isKick   = note.pitch === 36 || note.pitch === 35;
         const isSnare  = note.pitch === 38 || note.pitch === 40;
         const isOpen   = note.pitch === 46;
@@ -208,23 +200,24 @@ export async function playTonePreview(
       return;
     }
 
+    // Synth drums — connect directly to destination.
     const kick = new Tone.MembraneSynth({
       pitchDecay: 0.08, octaves: 8,
       envelope: { attack: 0.001, decay: 0.4, sustain: 0, release: 0.1 },
       volume: -4,
-    }).connect(reverb);
+    }).toDestination();
     const snare = new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.05 },
       volume: -10,
-    }).connect(reverb);
+    }).toDestination();
     const hat = new Tone.MetalSynth({
       envelope: { attack: 0.001, decay: 0.05, release: 0.01 },
       harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5,
       volume: -18,
-    }).connect(reverb);
+    }).toDestination();
     hat.frequency.value = 400;
-    activeNodes.push(reverb, kick, snare, hat);
+    activeNodes.push(kick, snare, hat);
 
     let maxEnd = 0;
     for (const note of notes) {
