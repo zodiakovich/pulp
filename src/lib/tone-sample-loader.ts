@@ -15,16 +15,16 @@ export async function ensureToneSampleSet(slug: SampleSetSlug): Promise<ToneLoad
     const baseUrl = `/samples/${slug}/`;
 
     // Pitched instruments — base note C3 so MIDI notes transpose correctly.
-    const bass = new Tone.Sampler({ urls: { C3: 'bass.wav' }, baseUrl }).sync();
-    const lead = new Tone.Sampler({ urls: { C3: 'lead.wav' }, baseUrl }).sync();
-    const pad = new Tone.Sampler({ urls: { C3: 'pad.wav' }, baseUrl }).sync();
+    const bass = new Tone.Sampler({ urls: { C3: 'bass.wav' }, baseUrl });
+    const lead = new Tone.Sampler({ urls: { C3: 'lead.wav' }, baseUrl });
+    const pad = new Tone.Sampler({ urls: { C3: 'pad.wav' }, baseUrl });
 
     // Drums — one-shots.
-    const kick = new Tone.Player(`${baseUrl}kick.wav`).sync();
-    const snare = new Tone.Player(`${baseUrl}snare.wav`).sync();
-    const closedHat = new Tone.Player(`${baseUrl}closed-hat.wav`).sync();
-    const openHat = new Tone.Player(`${baseUrl}open-hat.wav`).sync();
-    const perc = new Tone.Player(`${baseUrl}perc.wav`).sync();
+    const kick = new Tone.Player(`${baseUrl}kick.wav`);
+    const snare = new Tone.Player(`${baseUrl}snare.wav`);
+    const closedHat = new Tone.Player(`${baseUrl}closed-hat.wav`);
+    const openHat = new Tone.Player(`${baseUrl}open-hat.wav`);
+    const perc = new Tone.Player(`${baseUrl}perc.wav`);
 
     // `retrigger` isn't always present in the public typings, but helps one-shots stack cleanly.
     (kick as any).retrigger = true;

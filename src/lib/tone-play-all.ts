@@ -33,11 +33,11 @@ export async function playAll(
   stopPlayAll();
 
   const spb = 60 / Math.max(60, Math.min(200, bpm));
-  const now = Tone.now() + 0.05;
   let maxEnd = 0;
   const seed = Math.round(bpm) + (tracks.melody?.length ?? 0) + (tracks.chords?.length ?? 0) + (tracks.bass?.length ?? 0);
   const sampleSlug = resolveToneSampleSlug(genre);
   const sampleSet = sampleSlug ? await ensureToneSampleSet(sampleSlug) : null;
+  const now = Tone.now() + 0.05;
 
   // MELODY — richer layered FM/AM presets + FX
   if (tracks.melody?.length) {
@@ -46,7 +46,7 @@ export async function playAll(
     if (sampleSet) {
       const sam = sampleSet.samplers.lead;
       sam.connect(dly);
-      activeNodes.push(rev, dly, ...sampleSet.nodes);
+      activeNodes.push(rev, dly);
       for (const n of tracks.melody) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -75,7 +75,7 @@ export async function playAll(
     if (sampleSet) {
       const sam = sampleSet.samplers.pad;
       sam.connect(cho);
-      activeNodes.push(rev, cho, ...sampleSet.nodes);
+      activeNodes.push(rev, cho);
       for (const n of tracks.chords) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -102,7 +102,7 @@ export async function playAll(
     if (sampleSet) {
       const sam = sampleSet.samplers.bass;
       sam.connect(flt);
-      activeNodes.push(flt, ...sampleSet.nodes);
+      activeNodes.push(flt);
       for (const n of tracks.bass) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -137,7 +137,7 @@ export async function playAll(
       sampleSet.players['closed-hat'].connect(gCH);
       sampleSet.players['open-hat'].connect(gOH);
       sampleSet.players.perc.connect(gPerc);
-      activeNodes.push(rev, gKick, gSnare, gCH, gOH, gPerc, ...sampleSet.nodes);
+      activeNodes.push(rev, gKick, gSnare, gCH, gOH, gPerc);
 
       for (const n of tracks.drums) {
         const t = now + n.startTime * spb;

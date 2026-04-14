@@ -44,10 +44,10 @@ export async function playTonePreview(
   }
 
   const secondsPerBeat = 60 / Math.max(60, Math.min(200, bpm));
-  const now = Tone.now() + 0.05;
   const seed = Math.round(bpm) + notes.length;
   const sampleSlug = resolveToneSampleSlug(genre);
   const sampleSet = sampleSlug ? await ensureToneSampleSet(sampleSlug) : null;
+  const now = Tone.now() + 0.05;
 
   if (layer === 'melody') {
     const reverb = new Tone.Reverb({ decay: 1.8, wet: 0.25 }).toDestination();
@@ -55,7 +55,7 @@ export async function playTonePreview(
     if (sampleSet) {
       const sam = sampleSet.samplers.lead;
       sam.connect(delay);
-      activeNodes.push(reverb, delay, ...sampleSet.nodes);
+      activeNodes.push(reverb, delay);
     } else {
       const inst = melodyPresets[pickPresetIndex(seed, melodyPresets.length)]!();
       (inst.output as any).connect(delay);
@@ -103,7 +103,7 @@ export async function playTonePreview(
     if (sampleSet) {
       const sam = sampleSet.samplers.pad;
       sam.connect(chorus);
-      activeNodes.push(reverb, chorus, ...sampleSet.nodes);
+      activeNodes.push(reverb, chorus);
     } else {
       const inst = chordPresets[pickPresetIndex(seed + 11, chordPresets.length)]!();
       (inst.output as any).connect(chorus);
@@ -150,7 +150,7 @@ export async function playTonePreview(
     if (sampleSet) {
       const sam = sampleSet.samplers.bass;
       sam.connect(distortion);
-      activeNodes.push(filter, distortion, ...sampleSet.nodes);
+      activeNodes.push(filter, distortion);
     } else {
       const inst = bassPresets[pickPresetIndex(seed + 29, bassPresets.length)]!();
       (inst.output as any).connect(distortion);
@@ -204,7 +204,7 @@ export async function playTonePreview(
     sampleSet.players['closed-hat'].connect(gCH);
     sampleSet.players['open-hat'].connect(gOH);
     sampleSet.players.perc.connect(gPerc);
-    activeNodes.push(reverb, gKick, gSnare, gCH, gOH, gPerc, ...sampleSet.nodes);
+    activeNodes.push(reverb, gKick, gSnare, gCH, gOH, gPerc);
 
     let maxEnd = 0;
     for (const note of notes) {
