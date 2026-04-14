@@ -9,6 +9,7 @@ type Props = {
   promptRef: React.RefObject<HTMLElement | null>;
   pianoRef: React.RefObject<HTMLElement | null>;
   exportRef: React.RefObject<HTMLElement | null>;
+  enabled?: boolean;
 };
 
 type Rect = { left: number; top: number; width: number; height: number };
@@ -48,7 +49,7 @@ function computeCardPos(target: Rect): { left: number; top: number; maxWidth: nu
 
 const STORAGE_KEY = 'pulp_onboarded';
 
-export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
+export function OnboardingOverlay({ promptRef, pianoRef, exportRef, enabled = true }: Props) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<StepId>(0);
 
@@ -110,6 +111,7 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
   };
 
   useEffect(() => {
+    if (!enabled) return;
     let shouldOpen = false;
     try {
       shouldOpen = localStorage.getItem(STORAGE_KEY) !== '1';
@@ -117,18 +119,11 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
       shouldOpen = true;
     }
     if (shouldOpen) setOpen(true);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     if (!open) return;
     if (!targetEl) return;
-
-    // Bring the relevant section into view (softly).
-    try {
-      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } catch {
-      // ignore
-    }
 
     recalc();
 
@@ -151,6 +146,7 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step, targetEl]);
 
+  if (!enabled) return null;
   if (!open || !targetRect || !cardPos) return null;
 
   const dots = [0, 1, 2] as const;
@@ -168,8 +164,8 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
           height: targetRect.height + 12,
           borderRadius: 16,
           boxShadow: '0 0 0 9999px rgba(10,10,11,0.14)',
-          border: '1px solid rgba(255,255,255,0.10)',
-          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid var(--border-weak)',
+          background: 'var(--surface-weak)',
         }}
       />
 
@@ -190,9 +186,9 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
             pointerEvents: 'auto',
           }}
         >
-          <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'rgba(240,240,255,0.92)', lineHeight: 1.35 }}>
+          <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--text)', lineHeight: 1.35 }}>
             <span style={{ fontWeight: 600 }}>{copy.title}</span>{' '}
-            <span style={{ color: 'rgba(138,138,154,0.95)', fontWeight: 400 }}>{copy.body}</span>
+            <span style={{ color: 'var(--muted)', fontWeight: 400 }}>{copy.body}</span>
           </div>
 
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -203,7 +199,7 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
                 pointerEvents: 'auto',
                 border: 'none',
                 background: 'transparent',
-                color: 'rgba(240,240,255,0.86)',
+                color: 'var(--text)',
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: 12,
                 padding: 0,
@@ -222,7 +218,7 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
                     width: 5,
                     height: 5,
                     borderRadius: 999,
-                    background: d === step ? 'rgba(240,240,255,0.75)' : 'rgba(138,138,154,0.35)',
+                    background: d === step ? 'var(--text)' : 'var(--border-weak)',
                   }}
                 />
               ))}
@@ -236,7 +232,7 @@ export function OnboardingOverlay({ promptRef, pianoRef, exportRef }: Props) {
                 pointerEvents: 'auto',
                 border: 'none',
                 background: 'transparent',
-                color: 'rgba(138,138,154,0.65)',
+                color: 'var(--muted)',
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: 12,
                 padding: 0,

@@ -45,6 +45,7 @@ import type { PlanType } from '@/lib/credits';
 import { DS, LAYER_VIZ_COLORS, readCssColor, getLayerVizColorsForCanvas } from '@/lib/design-system';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 /** Default UI easing — hover, enters, in-view */
@@ -454,13 +455,19 @@ function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: s
     const pitchRange = Math.max(maxPitch - minPitch, 8);
     const maxTime = Math.max(...notes.map(n => n.startTime + n.duration), 4);
 
+    const resolvedColor = (() => {
+      const m = String(color ?? '').match(/var\((--[^)]+)\)/);
+      if (!m) return color;
+      return readCssColor(m[1]!, color);
+    })();
+
     for (const note of notes) {
       const x = (note.startTime / maxTime) * w;
       const noteW = Math.max(2, (note.duration / maxTime) * w);
       const y = h - ((note.pitch - minPitch) / pitchRange) * h;
       const noteH = Math.max(2, (h / pitchRange) * 0.8);
 
-      ctx.fillStyle = color;
+      ctx.fillStyle = resolvedColor;
       ctx.globalAlpha = 0.5 + (note.velocity / 127) * 0.5;
       ctx.beginPath();
       const rx = x, ry = y - noteH / 2, rw = noteW, rh = noteH, r = 1.5;
@@ -1509,7 +1516,6 @@ const SHORTCUT_OVERLAY_GROUPS: { title: string; rows: { k: string; d: string }[]
       { k: 'I', d: 'Toggle Inspire' },
       { k: 'B', d: 'Open blog' },
       { k: 'P', d: 'Go to pricing' },
-      { k: 'L', d: 'Toggle Live mode' },
       { k: 'C', d: 'Toggle Compare mode' },
       { k: '1 / 2 / 3', d: 'Select variation' },
     ],
@@ -2229,12 +2235,17 @@ export default function Home() {
   const e2eBypass = process.env.NEXT_PUBLIC_E2E === '1';
   const effectiveIsSignedIn = e2eBypass ? true : isSignedIn;
   const effectiveUserId = e2eBypass ? 'e2e' : userId;
+  const searchParams = useSearchParams();
+  const generatorMode = searchParams?.get('mode') === 'generate';
+  const generatorOnly = Boolean(effectiveIsSignedIn && generatorMode);
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
   const [variations, setVariations] = useState<{ result: GenerationResult; params: GenerationParams }[]>([]);
   const [selectedVariation, setSelectedVariation] = useState(0);
   const [playingVariationIndex, setPlayingVariationIndex] = useState<number | null>(null);
+  const playingVariationIndexRef = useRef<number | null>(null);
+  useEffect(() => { playingVariationIndexRef.current = playingVariationIndex; }, [playingVariationIndex]);
   const [editorPlayheadBeat, setEditorPlayheadBeat] = useState(0);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2245,9 +2256,10 @@ export default function Home() {
   const [inspireFieldStatus, setInspireFieldStatus] = useState<'idle' | 'error' | 'success'>('idle');
   const [totalGenerations, setTotalGenerations] = useState<number | null>(null);
   const [playingAll, setPlayingAll] = useState(false);
+  const playingAllRef = useRef(false);
+  useEffect(() => { playingAllRef.current = playingAll; }, [playingAll]);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIndex, setCompareIndex] = useState(0);
-  const [liveMode, setLiveMode] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -2304,10 +2316,29 @@ export default function Home() {
   const onboardingPromptRef = useRef<HTMLDivElement>(null);
   const onboardingPianoRef = useRef<HTMLDivElement>(null);
   const onboardingExportRef = useRef<HTMLDivElement>(null);
+  const [generatorInView, setGeneratorInView] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
   const demoFeaturesRef = useRef<HTMLElement>(null);
   const dawStripRef = useRef<HTMLElement>(null);
   const compareRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = toolRef.current;
+    if (!el) return;
+    if (!('IntersectionObserver' in window)) {
+      setGeneratorInView(true);
+      return;
+    }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const v = entries[0]?.isIntersecting ?? false;
+        if (v) setGeneratorInView(true);
+      },
+      { root: null, threshold: 0.35 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // ─── SCROLL-TELLING (landing) ────────────────────────────────
   // All effects are driven from scroll position (no intersection observer).
@@ -2434,10 +2465,6 @@ export default function Home() {
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
   }, []);
-  const liveTimerRef = useRef<number | null>(null);
-  const liveBarRef = useRef(0);
-  const livePendingParamsRef = useRef<GenerationParams | null>(null);
-  const livePendingResultRef = useRef<GenerationResult | null>(null);
 
   useEffect(() => {
     if (editorView !== 'sheet') return;
@@ -2515,6 +2542,7 @@ export default function Home() {
       if (prefill) {
         setPrompt(prefill);
         setActiveStyleTag(null);
+        window.setTimeout(() => promptRef.current?.focus(), 0);
       }
     } catch {
       // ignore
@@ -2958,14 +2986,14 @@ export default function Home() {
   const handlePlayAll = () => {
     const sel = variations[selectedVariation];
     if (!sel) return;
-    if (liveMode || compareMode) return;
+    if (compareMode) return;
     if (playingAll) {
       stopPlayAll();
       setPlayingAll(false);
       return;
     }
     setPlayingAll(true);
-    void playAll(
+    const schedule = () => playAll(
       {
         melody: params.layers.melody ? sel.result.melody : undefined,
         chords: params.layers.chords ? sel.result.chords : undefined,
@@ -2974,8 +3002,13 @@ export default function Home() {
       },
       sel.params.bpm,
       sel.params.genre,
-      () => setPlayingAll(false),
+      () => {
+        // Loop until user stops.
+        if (!playingAllRef.current) return;
+        schedule();
+      },
     );
+    void schedule();
   };
 
   const stopCompare = useCallback((opts?: { stopAudio?: boolean }) => {
@@ -2996,15 +3029,22 @@ export default function Home() {
     stopAllPlayback();
     setPlayingAll(false);
     setPlayingVariationIndex(i);
-    playNotes({
+    const schedule = () => playNotes({
       melody: params.layers.melody ? v.result.melody : undefined,
       chords: params.layers.chords ? v.result.chords : undefined,
       bass:   params.layers.bass   ? v.result.bass   : undefined,
       drums:  params.layers.drums  ? v.result.drums  : undefined,
       bpm: v.params.bpm,
       genre: v.params.genre,
-      onComplete: () => setPlayingVariationIndex(null),
+      onComplete: () => {
+        // Loop until user stops or switches variation.
+        window.setTimeout(() => {
+          if (playingVariationIndexRef.current !== i) return;
+          schedule();
+        }, 0);
+      },
     });
+    schedule();
   }, [variations, params.layers]);
 
   const startCompare = useCallback(() => {
@@ -3050,99 +3090,6 @@ export default function Home() {
       .filter(n => n.startTime >= start && n.startTime < end)
       .map(n => ({ ...n, startTime: n.startTime - start }));
   }, []);
-
-  const stopLive = useCallback(() => {
-    if (liveTimerRef.current !== null) window.clearTimeout(liveTimerRef.current);
-    liveTimerRef.current = null;
-    liveBarRef.current = 0;
-    livePendingParamsRef.current = null;
-    livePendingResultRef.current = null;
-    stopPlayAll();
-    stopAllPlayback();
-    setPlayingAll(false);
-  }, []);
-
-  const tickLive = useCallback(() => {
-    const sel = variations[selectedVariation];
-    if (!sel) return;
-    if (!liveMode) return;
-
-    // Apply pending regeneration at bar boundary
-    if (livePendingResultRef.current && livePendingParamsRef.current) {
-      const nextRes = livePendingResultRef.current;
-      const nextParams = livePendingParamsRef.current;
-      livePendingResultRef.current = null;
-      livePendingParamsRef.current = null;
-
-      // Swap pattern in state; keep only the selected variation updated
-      setVariations(prev => prev.map((v, i) => (
-        i === selectedVariation ? { result: nextRes, params: nextParams } : v
-      )));
-
-      // “Crossfade” approximation without engine gain access: stop current and wait 200ms.
-      stopPlayAll();
-      stopAllPlayback();
-    }
-
-    const current = variations[selectedVariation] ?? sel;
-    const barCount = current.params.bars ?? params.bars;
-    const barIndex = liveBarRef.current % Math.max(1, barCount);
-    liveBarRef.current = barIndex + 1;
-
-    const bpm = params.bpm; // take effect on next bar
-
-    playNotes({
-      melody: params.layers.melody ? sliceNotesToBar(current.result.melody, barIndex) : undefined,
-      chords: params.layers.chords ? sliceNotesToBar(current.result.chords, barIndex) : undefined,
-      bass:   params.layers.bass   ? sliceNotesToBar(current.result.bass, barIndex) : undefined,
-      drums:  params.layers.drums  ? sliceNotesToBar(current.result.drums, barIndex) : undefined,
-      bpm,
-      genre: params.genre,
-      onComplete: () => {},
-    });
-
-    const msPerBeat = 60_000 / Math.max(60, Math.min(200, bpm));
-    const nextMs = Math.max(250, Math.round(msPerBeat * 4));
-    liveTimerRef.current = window.setTimeout(() => tickLive(), nextMs);
-  }, [variations, selectedVariation, liveMode, params, sliceNotesToBar]);
-
-  // Live mode: regenerate on key changes and loop by bar.
-  useEffect(() => {
-    if (!liveMode) {
-      stopLive();
-      return;
-    }
-
-    // Start looping from bar 0
-    stopPlayAll();
-    stopAllPlayback();
-    liveBarRef.current = 0;
-    window.setTimeout(() => tickLive(), 10);
-
-    return () => stopLive();
-  }, [liveMode, tickLive, stopLive]);
-
-  useEffect(() => {
-    if (!liveMode) return;
-    const sel = variations[selectedVariation];
-    if (!sel) return;
-
-    // Regenerate with current params (same key/scale/bpm/genre etc.)
-    const nextParams: GenerationParams = { ...params };
-    const next = generateTrack(nextParams);
-    livePendingParamsRef.current = nextParams;
-    livePendingResultRef.current = next;
-  }, [
-    liveMode,
-    selectedVariation,
-    variations,
-    params.genre,
-    params.bpm,
-    params.key,
-    params.scale,
-    params.humanization,
-    activeStyleTag,
-  ]);
 
   const handleDownloadLayer = (name: string, notes: NoteEvent[]) => {
     track('midi_downloaded', {
@@ -3779,7 +3726,6 @@ export default function Home() {
       // Single-key shortcuts
       if (e.key === ' ') {
         e.preventDefault();
-        if (liveMode) return;
         if (compareMode) {
           stopCompare();
           startVariationPlayback(compareIndex);
@@ -3833,23 +3779,6 @@ export default function Home() {
         setIsPianoFullscreen(true);
         return;
       }
-      if (key === 'l') {
-        e.preventDefault();
-        setLiveMode(v => {
-          const next = !v;
-          if (next) {
-            setPlayingAll(false);
-            stopCompare({ stopAudio: true });
-            stopPlayAll();
-            stopAllPlayback();
-          } else {
-            stopPlayAll();
-            stopAllPlayback();
-          }
-          return next;
-        });
-        return;
-      }
       if (key === 'c') {
         e.preventDefault();
         if (compareMode) stopCompare({ stopAudio: true });
@@ -3896,7 +3825,6 @@ export default function Home() {
     isPianoFullscreen,
     setShowInspire,
     setShowShareModal,
-    liveMode,
     playingVariationIndex,
     selectedVariation,
     showAudioToMidiModal,
@@ -3932,6 +3860,7 @@ export default function Home() {
         promptRef={onboardingPromptRef}
         pianoRef={onboardingPianoRef}
         exportRef={onboardingExportRef}
+        enabled={generatorInView}
       />
 
       {/* ── COMMAND BAR ── */}
@@ -4262,6 +4191,8 @@ export default function Home() {
       />
 
       <main className="min-h-screen" style={{ background: 'var(--bg)' }}>
+      {!generatorOnly && (
+      <>
       {/* ── HERO ── */}
       <section ref={heroRef} className="relative overflow-hidden px-4 sm:px-8 pb-28 pt-24" style={{ background: 'var(--bg)' }}>
         {/* Subtle depth: grid pattern + hero glow */}
@@ -4371,7 +4302,7 @@ export default function Home() {
             fontFamily: 'JetBrains Mono, monospace',
             fontSize: 12,
             letterSpacing: '0.02em',
-            color: 'rgba(240,240,255,0.70)',
+            color: 'var(--muted)',
             opacity: prefersReducedMotion ? 0.68 : dawSpotlightOpacity,
           }}
         >
@@ -4396,10 +4327,10 @@ export default function Home() {
       {/* ── STATS ── */}
       <motion.section
         className="mt-24 px-4 sm:px-8 py-24"
-        style={{ background: 'rgba(17,17,24,0.65)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        style={{ background: 'var(--surface)', borderTop: '1px solid var(--divider)', borderBottom: '1px solid var(--divider)' }}
         {...scrollSection}
       >
-        <div className="mx-auto flex max-w-[960px] flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        <div className="mx-auto flex max-w-[960px] flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0" style={{ borderColor: 'var(--divider)' }}>
           {LANDING_STATS.map(row => (
             <div key={row.value + row.label} className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center sm:py-6">
               <p
@@ -4479,9 +4410,11 @@ export default function Home() {
           ))}
         </div>
       </section>
+      </>
+      )}
 
       {/* ── GENERATOR ── */}
-      <motion.section className="mt-24 px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} {...scrollSection}>
+      <motion.section className={`${generatorOnly ? 'mt-20' : 'mt-24'} px-4 sm:px-8 py-24`} style={{ background: 'var(--bg)' }} {...scrollSection}>
         <div className="mx-auto max-w-[1280px]">
           <motion.div id="generator" ref={toolRef} className="relative mx-auto w-full max-w-[720px]">
             {genBar === 'loading' && (
@@ -4870,7 +4803,7 @@ export default function Home() {
                               style={{ width: 10, height: 2, background: 'rgba(255,109,63,0.85)' }}
                               aria-hidden
                             />
-                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'rgba(240,240,255,0.92)', fontWeight: 600 }}>
+                            <span style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
                               {m}
                             </span>
                           </div>
@@ -5255,7 +5188,7 @@ export default function Home() {
                   className="absolute inset-0 flex items-center justify-center"
                   style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 100%)' }}
                 >
-                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(240,240,255,0.5)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
+                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
                     ↑ Hit Generate to create yours
                   </p>
                 </div>
@@ -5605,40 +5538,6 @@ export default function Home() {
                   <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
                     {playingAll ? '■  Stop' : '▶  Play All'}
                   </SpotlightButton>
-                  <SpotlightButton
-                    type="button"
-                    onClick={() => {
-                      setLiveMode(v => {
-                        const next = !v;
-                        if (next) {
-                          setPlayingAll(false);
-                          stopPlayAll();
-                          stopAllPlayback();
-                        } else {
-                          stopPlayAll();
-                          stopAllPlayback();
-                        }
-                        return next;
-                      });
-                    }}
-                    className="btn-secondary btn-sm"
-                    style={liveMode ? { borderColor: 'rgba(255,109,63,0.45)' } : undefined}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={liveMode ? 'animate-pulse' : ''}
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 999,
-                          background: DS.accent,
-                        }}
-                      />
-                      <span style={{ color: liveMode ? DS.accent : 'var(--text)' }}>
-                        LIVE
-                      </span>
-                    </span>
-                  </SpotlightButton>
                   <div
                     draggable
                     onDragStart={(e) => {
@@ -5729,7 +5628,7 @@ export default function Home() {
                                   key={opt.k}
                                   type="button"
                                   className="w-full px-4 py-3 text-left text-sm transition-colors"
-                                  style={{ fontFamily: 'DM Sans, sans-serif', color: 'rgba(240,240,255,0.88)' }}
+                                  style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--text)' }}
                                   onClick={() => {
                                     setShowDownloadMenu(false);
                                     handleDownloadTrackOnly(opt.k);
@@ -5913,139 +5812,170 @@ export default function Home() {
                   style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}
                 >
                   {/* Header: label + layer tabs */}
-                  <div className="flex items-center justify-between px-4 py-3"
-                    style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
-                    <div className="flex items-center gap-2">
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.30)', letterSpacing: '0.06em' }}>
-                        EDITOR
-                      </span>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setEditorView('piano')}
-                          className="px-3 h-7 rounded-md transition-all"
-                          style={{
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 11,
-                            color: editorView === 'piano' ? 'var(--accent)' : 'var(--muted)',
-                            background: editorView === 'piano' ? 'rgba(255,109,63,0.14)' : 'transparent',
-                            border: editorView === 'piano' ? '1px solid rgba(255,109,63,0.35)' : '1px solid transparent',
-                          }}
-                        >
-                          Piano Roll
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditorView('sheet')}
-                          className="px-3 h-7 rounded-md transition-all"
-                          style={{
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 11,
-                            color: editorView === 'sheet' ? 'var(--accent)' : 'var(--muted)',
-                            background: editorView === 'sheet' ? 'rgba(255,109,63,0.14)' : 'transparent',
-                            border: editorView === 'sheet' ? '1px solid rgba(255,109,63,0.35)' : '1px solid transparent',
-                          }}
-                        >
-                          Sheet Music
-                        </button>
+                  <div
+                    className="flex items-center gap-3 px-4 py-3"
+                    style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: 11,
+                        color: 'var(--text-micro)',
+                        letterSpacing: '0.06em',
+                        flexShrink: 0,
+                      }}
+                    >
+                      EDITOR
+                    </span>
+
+                    <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
+                      <div className="flex items-center gap-2 pr-1" style={{ whiteSpace: 'nowrap' }}>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setEditorView('piano')}
+                            className="rounded-md transition-all"
+                            style={{
+                              padding: '8px 12px',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 11,
+                              lineHeight: 1,
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                              color: editorView === 'piano' ? 'var(--accent)' : 'var(--muted)',
+                              background: editorView === 'piano' ? 'rgba(255,109,63,0.14)' : 'transparent',
+                              border: editorView === 'piano' ? '1px solid rgba(255,109,63,0.45)' : '1px solid transparent',
+                            }}
+                          >
+                            Piano Roll
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditorView('sheet')}
+                            className="rounded-md transition-all"
+                            style={{
+                              padding: '8px 12px',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 11,
+                              lineHeight: 1,
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                              color: editorView === 'sheet' ? 'var(--accent)' : 'var(--muted)',
+                              background: editorView === 'sheet' ? 'rgba(255,109,63,0.14)' : 'transparent',
+                              border: editorView === 'sheet' ? '1px solid rgba(255,109,63,0.45)' : '1px solid transparent',
+                            }}
+                          >
+                            Sheet Music
+                          </button>
+                        </div>
+
+                        <div className="h-6 w-px flex-shrink-0" style={{ background: 'var(--divider)' }} aria-hidden />
+
+                        {editorView === 'piano' && (
+                          <button
+                            type="button"
+                            className="rounded-md transition-all"
+                            style={{
+                              padding: '8px 12px',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 11,
+                              lineHeight: 1,
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                              color: 'var(--text)',
+                              border: '1px solid var(--border)',
+                              background: 'transparent',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                            onClick={handleCompletePattern}
+                            title="Generate 8 bars continuing your pattern"
+                          >
+                            Complete Pattern
+                          </button>
+                        )}
+                        {editorView === 'sheet' && (
+                          <button
+                            type="button"
+                            className="rounded-md transition-all"
+                            style={{
+                              padding: '8px 12px',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 11,
+                              lineHeight: 1,
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                              color: 'var(--text)',
+                              border: '1px solid var(--border)',
+                              background: 'transparent',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                            onClick={() => {
+                              const c = sheetCanvasRef.current;
+                              if (!c) return;
+                              const url = c.toDataURL('image/png');
+                              const w = window.open('', '_blank');
+                              if (!w) return;
+                              w.document.write(`<!doctype html><html><head><title>Print Sheet</title></head><body style="margin:0;background:#0A0A0B;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%;height:auto;" /></body></html>`);
+                              w.document.close();
+                              w.focus();
+                              w.print();
+                            }}
+                          >
+                            Print
+                          </button>
+                        )}
+                        {editorView === 'piano' && (
+                          <button
+                            type="button"
+                            className="rounded-md transition-all"
+                            style={{
+                              padding: '8px 12px',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 11,
+                              lineHeight: 1,
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                              color: 'var(--text)',
+                              border: '1px solid var(--border)',
+                              background: 'transparent',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                            onClick={() => setIsPianoFullscreen(true)}
+                            title="Fullscreen (F)"
+                          >
+                            ⤢
+                          </button>
+                        )}
+
+                        <div className="h-6 w-px flex-shrink-0" style={{ background: 'var(--divider)' }} aria-hidden />
+
+                        <div className="flex gap-2 flex-shrink-0">
+                          {EDITOR_LAYERS.map(layer => (
+                            <button
+                              key={layer}
+                              onClick={() => setEditorLayer(layer)}
+                              className="rounded-md capitalize transition-all"
+                              style={{
+                                padding: '8px 12px',
+                                fontFamily: 'JetBrains Mono, monospace',
+                                fontSize: 11,
+                                lineHeight: 1,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                color: editorLayer === layer ? LAYER_COLORS[layer] : 'var(--muted)',
+                                background: editorLayer === layer ? 'var(--surface-weak)' : 'transparent',
+                                border: editorLayer === layer ? '1px solid var(--border)' : '1px solid transparent',
+                              }}
+                            >
+                              {layer === 'imported' ? 'imported' : layer}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      {editorView === 'piano' && (
-                        <button
-                          type="button"
-                          className="px-3 h-7 rounded-md transition-all"
-                          style={{
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 11,
-                            color: 'var(--text)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            background: 'transparent',
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
-                          onClick={handleCompletePattern}
-                          title="Generate 8 bars continuing your pattern"
-                        >
-                          Complete Pattern
-                        </button>
-                      )}
-                      {editorView === 'sheet' && (
-                        <button
-                          type="button"
-                          className="px-3 h-7 rounded-md transition-all"
-                          style={{
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 11,
-                            color: 'var(--text)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            background: 'transparent',
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
-                          onClick={() => {
-                            const c = sheetCanvasRef.current;
-                            if (!c) return;
-                            const url = c.toDataURL('image/png');
-                            const w = window.open('', '_blank');
-                            if (!w) return;
-                            w.document.write(`<!doctype html><html><head><title>Print Sheet</title></head><body style="margin:0;background:#0A0A0B;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%;height:auto;" /></body></html>`);
-                            w.document.close();
-                            w.focus();
-                            w.print();
-                          }}
-                        >
-                          Print
-                        </button>
-                      )}
-                      {editorView === 'piano' && (
-                        <button
-                          type="button"
-                          className="px-3 h-7 rounded-md transition-all"
-                          style={{
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 11,
-                            color: 'var(--text)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            background: 'transparent',
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
-                          onClick={() => setIsPianoFullscreen(true)}
-                          title="Fullscreen (F)"
-                        >
-                          ⤢
-                        </button>
-                      )}
-                      <div className="flex gap-1">
-                      {EDITOR_LAYERS.map(layer => (
-                        <button
-                          key={layer}
-                          onClick={() => setEditorLayer(layer)}
-                          className="px-3 h-7 rounded-md capitalize transition-all"
-                          style={{
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 11,
-                            color: editorLayer === layer ? LAYER_COLORS[layer] : 'var(--muted)',
-                            background: editorLayer === layer ? 'rgba(255,255,255,0.06)' : 'transparent',
-                            border: editorLayer === layer ? '1px solid var(--border)' : '1px solid transparent',
-                          }}
-                        >
-                          {layer === 'imported' ? 'imported' : layer}
-                        </button>
-                      ))}
-                    </div>
-                    </div>
-                  </div>
-
-                  {/* Hint bar */}
-                  <div className="px-4 py-1.5" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.30)' }}>
-                      {editorView === 'piano'
-                        ? 'FL-style piano roll — snap, quantize, velocity lane, rubber-band select, undo'
-                        : 'basic canvas score · durations are approximate'}
-                    </span>
                   </div>
 
                   {/* Canvas */}
@@ -6208,6 +6138,8 @@ export default function Home() {
       </motion.section>
 
       {/* ── COMPARISON ── */}
+      {!generatorOnly && (
+      <>
       <section ref={compareRef} className="mt-20 px-4 sm:px-8 py-20" style={{ background: 'var(--bg)' }}>
         <div className="mx-auto max-w-[1200px]">
           <div className="mb-10">
@@ -6240,7 +6172,7 @@ export default function Home() {
             const labelStyle: React.CSSProperties = {
               fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
               fontSize: 14,
-              color: 'rgba(240,240,255,0.78)',
+              color: 'var(--muted)',
               letterSpacing: 'normal',
               fontWeight: 500,
             };
@@ -6249,15 +6181,15 @@ export default function Home() {
               fontFamily: 'JetBrains Mono, monospace',
               fontSize: 13,
               fontVariantNumeric: 'tabular-nums',
-              color: v === '—' ? 'rgba(255,255,255,0.30)' : 'rgba(240,240,255,0.84)',
+              color: v === '—' ? 'var(--text-micro)' : 'var(--text)',
             });
 
             return (
               <div
                 className="rounded-2xl overflow-hidden"
                 style={{
-                  background: 'rgba(17,17,24,0.62)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--divider)',
                   backdropFilter: 'blur(16px)',
                   WebkitBackdropFilter: 'blur(16px)',
                 }}
@@ -6269,7 +6201,7 @@ export default function Home() {
                       className="grid"
                       style={{
                         gridTemplateColumns: 'minmax(140px, 1.1fr) repeat(4, minmax(140px, 1fr))',
-                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                        borderBottom: '1px solid var(--divider)',
                       }}
                     >
                       <div className="compare-cell compare-label" style={{ padding: '16px 18px' }} />
@@ -6283,8 +6215,8 @@ export default function Home() {
                             fontSize: 12,
                             letterSpacing: '0.08em',
                             textTransform: 'uppercase',
-                            color: idx === 0 ? 'rgba(240,240,255,0.92)' : 'rgba(255,255,255,0.50)',
-                            background: idx === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+                            color: idx === 0 ? 'var(--text)' : 'var(--muted)',
+                            background: idx === 0 ? 'var(--surface-weak)' : 'transparent',
                           }}
                         >
                           {c}
@@ -6299,7 +6231,7 @@ export default function Home() {
                         className="grid"
                         style={{
                           gridTemplateColumns: 'minmax(140px, 1.1fr) repeat(4, minmax(140px, 1fr))',
-                          borderBottom: ri === rows.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                          borderBottom: ri === rows.length - 1 ? 'none' : '1px solid var(--divider)',
                           opacity: prefersReducedMotion
                             ? 1
                             : (ri === 0 ? cmpRow0O : ri === 1 ? cmpRow1O : ri === 2 ? cmpRow2O : ri === 3 ? cmpRow3O : ri === 4 ? cmpRow4O : ri === 5 ? cmpRow5O : cmpRow6O),
@@ -6315,7 +6247,7 @@ export default function Home() {
                             className={ci === 0 ? 'compare-cell compare-pulp' : 'compare-cell'}
                             style={{
                               padding: '14px 18px',
-                              background: ci === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+                              background: ci === 0 ? 'var(--surface-weak)' : 'transparent',
                             }}
                           >
                             <motion.span
@@ -6359,6 +6291,8 @@ export default function Home() {
       </section>
 
       <SiteFooter />
+      </>
+      )}
       </main>
     </>
   );

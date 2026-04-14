@@ -16,7 +16,7 @@ function FooterCol({ title, links }: { title: string; links: FooterLink[] }) {
           fontSize: 13,
           fontWeight: 700,
           letterSpacing: '0.02em',
-          color: 'rgba(240,240,255,0.86)',
+          color: 'var(--text)',
         }}
       >
         {title}
@@ -34,7 +34,7 @@ function FooterCol({ title, links }: { title: string; links: FooterLink[] }) {
                 fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                 fontSize: 14,
                 lineHeight: 1.6,
-                color: 'rgba(240,240,255,0.92)',
+                color: 'var(--text)',
                 textDecoration: 'none',
               }}
             >
@@ -60,7 +60,7 @@ export function SiteFooter() {
                 fontFamily: 'Syne, system-ui, Segoe UI, sans-serif',
                 fontWeight: 800,
                 letterSpacing: '-0.02em',
-                color: 'rgba(240,240,255,0.92)',
+                color: 'var(--text)',
               }}
             >
               pulp
@@ -71,7 +71,7 @@ export function SiteFooter() {
                   fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                   fontSize: 14,
                   lineHeight: 1.6,
-                  color: 'rgba(240,240,255,0.92)',
+                  color: 'var(--text)',
                   opacity: 0.5,
                 }}
               >
@@ -82,7 +82,7 @@ export function SiteFooter() {
                   fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                   fontSize: 14,
                   lineHeight: 1.6,
-                  color: 'rgba(240,240,255,0.92)',
+                  color: 'var(--text)',
                   opacity: 0.35,
                 }}
               >
@@ -127,14 +127,14 @@ export function SiteFooter() {
           />
         </div>
 
-        <div className="mt-16" style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />
+        <div className="mt-16" style={{ height: 1, background: 'var(--divider)' }} />
 
         <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div
             style={{
               fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
               fontSize: 14,
-              color: 'rgba(240,240,255,0.92)',
+              color: 'var(--text)',
               opacity: 0.5,
             }}
           >
@@ -155,14 +155,14 @@ export function SiteFooter() {
                     fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                     fontSize: 14,
                     lineHeight: 1.6,
-                    color: 'rgba(240,240,255,0.92)',
+                    color: 'var(--text)',
                     textDecoration: 'none',
                   }}
                 >
                   {l.label}
                 </Link>
                 {i < 2 ? (
-                  <span aria-hidden style={{ margin: '0 10px', opacity: 0.35, color: 'rgba(240,240,255,0.92)' }}>
+                  <span aria-hidden style={{ margin: '0 10px', opacity: 0.35, color: 'var(--muted)' }}>
                     ·
                   </span>
                 ) : null}

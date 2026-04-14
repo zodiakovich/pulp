@@ -4,10 +4,17 @@ import { auth } from '@clerk/nextjs/server';
 
 export const runtime = 'nodejs';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  // Keep this pinned to a real Stripe API version supported by stripe-node.
-  apiVersion: '2024-06-20',
-});
+let stripeSingleton: Stripe | null = null;
+function getStripe() {
+  if (stripeSingleton) return stripeSingleton;
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('Missing STRIPE_SECRET_KEY');
+  stripeSingleton = new Stripe(key, {
+    // Keep this pinned to a real Stripe API version supported by stripe-node.
+    apiVersion: '2024-06-20',
+  });
+  return stripeSingleton;
+}
 
 type CheckoutBody = {
   plan?: string;
@@ -28,15 +35,26 @@ function resolvePriceId(plan: 'pro' | 'studio', billing: 'monthly' | 'annual'): 
   return billing === 'annual' ? proAnnual ?? null : proMonthly ?? null;
 }
 
-export async function POST(req: Request) {
-  console.log('[stripe/checkout] called');
-  try {
-    const hasSecret = Boolean(process.env.STRIPE_SECRET_KEY);
-    console.log('[stripe/checkout] env', { hasSecret });
-    if (!hasSecret) {
-      return NextResponse.json({ error: 'Missing STRIPE_SECRET_KEY' }, { status: 500 });
-    }
+function resolveBaseUrl(req: Request) {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  const xfProto = req.headers.get('x-forwarded-proto');
+  const xfHost = req.headers.get('x-forwarded-host');
+  const host = xfHost || req.headers.get('host');
+  const proto = xfProto || 'https';
 
+  let base =
+    envUrl?.trim() ||
+    (host ? `${proto}://${host}` : '') ||
+    'https://pulp.bypapaya.com';
+
+  // Never emit localhost URLs in production flows.
+  if (/localhost|127\.0\.0\.1/i.test(base)) base = 'https://pulp.bypapaya.com';
+
+  return base.replace(/\/+$/, '');
+}
+
+export async function POST(req: Request) {
+  try {
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -63,9 +81,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Missing Stripe price ID for this plan. ${hint}` }, { status: 500 });
     }
 
-    const origin = req.headers.get('origin') || 'https://pulp-4ubq.vercel.app';
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json({ error: 'Missing STRIPE_SECRET_KEY' }, { status: 500 });
+    }
+
+    if (!priceId.startsWith('price_')) {
+      return NextResponse.json({ error: `Invalid Stripe price ID: ${priceId}` }, { status: 500 });
+    }
+
+    const origin = resolveBaseUrl(req);
     const plan_type = plan === 'studio' ? 'studio' : 'pro';
 
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
@@ -75,17 +102,48 @@ export async function POST(req: Request) {
       allow_promotion_codes: true,
       metadata: {
         plan_type,
+        clerk_user_id: userId,
+        billing,
+      },
+      subscription_data: {
+        metadata: {
+          plan_type,
+          clerk_user_id: userId,
+          billing,
+        },
       },
     });
 
-    console.log('[stripe/checkout] created session', { id: session.id, hasUrl: Boolean(session.url) });
     if (!session.url) {
       return NextResponse.json({ error: 'Missing Checkout URL', id: session.id }, { status: 500 });
     }
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    console.log('[stripe/checkout] error', err);
-    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
+    const e = err as unknown;
+    const stripeError = e as Partial<{
+      type?: string;
+      code?: string;
+      decline_code?: string;
+      statusCode?: number;
+      requestId?: string;
+      doc_url?: string;
+    }>;
+
+    // Intentionally log diagnostic context (no secrets) so the real Stripe error shows up in server logs.
+    console.error('[stripe/checkout] Failed to create session', {
+      message: e instanceof Error ? e.message : String(e),
+      type: stripeError.type,
+      code: stripeError.code,
+      decline_code: stripeError.decline_code,
+      statusCode: stripeError.statusCode,
+      requestId: (stripeError as any)?.requestId,
+      doc_url: (stripeError as any)?.doc_url,
+    });
+
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Failed to create checkout session' },
+      { status: 500 },
+    );
   }
 }

@@ -255,7 +255,7 @@ export function EmbedIframeClient({
             height: 40,
             padding: '0 16px',
             background: '#FF6D3F',
-            color: '#fff',
+            color: 'var(--on-accent)',
             border: 'none',
             borderRadius: 8,
             fontSize: 13,

@@ -61,7 +61,7 @@ export function InstallPromptBanner() {
         className="mx-auto flex w-full max-w-[720px] items-center justify-between gap-3 rounded-2xl px-4 py-3 glass-elevated"
         style={{
           background: 'rgba(17,17,24,0.78)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          border: '1px solid var(--border-weak)',
         }}
       >
         <div className="min-w-0">
@@ -69,7 +69,7 @@ export function InstallPromptBanner() {
             className="text-sm"
             style={{
               fontFamily: 'DM Sans, sans-serif',
-              color: 'rgba(240,240,255,0.92)',
+              color: 'var(--text)',
               lineHeight: 1.35,
             }}
           >
@@ -84,9 +84,9 @@ export function InstallPromptBanner() {
             style={{
               minHeight: 44,
               fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-              background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.10)',
-              color: 'rgba(240,240,255,0.88)',
+              background: 'var(--surface-weak)',
+              border: '1px solid var(--border-weak)',
+              color: 'var(--text)',
             }}
             onClick={() => {
               window.localStorage.setItem(DISMISS_KEY, String(nowMs() + DAYS_7));

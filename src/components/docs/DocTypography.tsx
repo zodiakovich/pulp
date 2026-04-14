@@ -88,11 +88,11 @@ export function DocCode({ children }: { children: React.ReactNode }) {
       style={{
         fontFamily: 'JetBrains Mono, monospace',
         fontSize: 13,
-        background: 'rgba(255,255,255,0.06)',
+        background: 'var(--surface-weak)',
         border: '1px solid var(--border)',
         padding: '2px 6px',
         borderRadius: 6,
-        color: 'rgba(240,240,255,0.88)',
+        color: 'var(--text)',
       }}
     >
       {children}

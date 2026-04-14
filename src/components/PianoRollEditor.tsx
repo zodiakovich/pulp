@@ -333,6 +333,11 @@ export function PianoRollEditor({
     }
 
     const yOff = showChords ? CHORD_H : 0;
+    const resolvedColor = (() => {
+      const m = String(color ?? '').match(/var\((--[^)]+)\)/);
+      if (!m) return color;
+      return R(m[1]!, color);
+    })();
     const sorted = [...notes].sort((a, b) => a.startTime - b.startTime || a.pitch - b.pitch);
     for (const note of sorted) {
       if (note.pitch < MIDI_MIN || note.pitch >= MIDI_MAX) continue;
@@ -349,7 +354,7 @@ export function PianoRollEditor({
       ctx.globalAlpha = alpha;
       // Slight brightness lift on higher velocities (subtle)
       const bright = 0.75 + vNorm * 0.25;
-      ctx.fillStyle = vNorm < 0.5 ? `${color}` : `${color}`;
+      ctx.fillStyle = resolvedColor;
       const r = Math.min(3, nh / 2, nw / 2);
       ctx.beginPath();
       ctx.moveTo(x0 + r, y);
@@ -1056,14 +1061,14 @@ export function PianoRollEditor({
     <div
       ref={containerRef}
       tabIndex={0}
-      className="outline-none rounded-xl overflow-hidden border border-white/10 flex flex-col focus:ring-1 focus:ring-[rgba(255,109,63,0.35)]"
-      style={{ background: 'var(--piano-roll-surface)' }}
+      className="outline-none rounded-xl overflow-hidden border flex flex-col focus:ring-1 focus:ring-[rgba(255,109,63,0.35)]"
+      style={{ background: 'var(--piano-roll-surface)', borderColor: 'var(--border-weak)' }}
       onMouseDown={() => containerRef.current?.focus()}
       onKeyDown={onKeyDown}
     >
       <div
-        className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-white/10 shrink-0"
-        style={{ background: 'var(--piano-roll-bg)', minHeight: 40 }}
+        className="flex flex-wrap items-center gap-2 px-3 py-2 border-b shrink-0"
+        style={{ background: 'var(--piano-roll-bg)', minHeight: 40, borderColor: 'var(--border-weak)' }}
       >
         <span className="text-[10px] uppercase tracking-wider font-mono" style={{ color: 'var(--piano-roll-muted)' }}>
           {layerName}
@@ -1073,8 +1078,8 @@ export function PianoRollEditor({
             type="button"
             className="relative px-2 h-7 rounded-md text-xs font-mono border transition-colors"
             style={{
-              borderColor: undoCount > 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)',
-              color: undoCount > 0 ? 'rgba(255,255,255,0.90)' : 'rgba(255,255,255,0.35)',
+              borderColor: undoCount > 0 ? 'var(--border)' : 'var(--border-weak)',
+              color: undoCount > 0 ? 'var(--text)' : 'var(--text-micro)',
               opacity: undoCount > 0 ? 1 : 0.55,
               cursor: undoCount > 0 ? 'pointer' : 'not-allowed',
             }}
@@ -1088,7 +1093,7 @@ export function PianoRollEditor({
             {undoCount > 0 && (
               <span
                 className="absolute -right-1 -top-1 rounded px-1 text-[9px] font-mono"
-                style={{ background: 'rgba(255,255,255,0.10)', color: 'rgba(240,240,255,0.9)' }}
+                style={{ background: 'var(--surface-weak)', color: 'var(--text)' }}
               >
                 {Math.min(99, undoCount)}
               </span>
@@ -1098,8 +1103,8 @@ export function PianoRollEditor({
             type="button"
             className="relative px-2 h-7 rounded-md text-xs font-mono border transition-colors"
             style={{
-              borderColor: redoCount > 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)',
-              color: redoCount > 0 ? 'rgba(255,255,255,0.90)' : 'rgba(255,255,255,0.35)',
+              borderColor: redoCount > 0 ? 'var(--border)' : 'var(--border-weak)',
+              color: redoCount > 0 ? 'var(--text)' : 'var(--text-micro)',
               opacity: redoCount > 0 ? 1 : 0.55,
               cursor: redoCount > 0 ? 'pointer' : 'not-allowed',
             }}
@@ -1113,7 +1118,7 @@ export function PianoRollEditor({
             {redoCount > 0 && (
               <span
                 className="absolute -right-1 -top-1 rounded px-1 text-[9px] font-mono"
-                style={{ background: 'rgba(255,255,255,0.10)', color: 'rgba(240,240,255,0.9)' }}
+                style={{ background: 'var(--surface-weak)', color: 'var(--text)' }}
               >
                 {Math.min(99, redoCount)}
               </span>
@@ -1123,14 +1128,16 @@ export function PianoRollEditor({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            className="px-2 h-7 rounded-lg text-xs font-mono border border-white/10 hover:border-[rgba(255,109,63,0.45)] text-white/50 hover:text-white transition-colors"
+            className="px-2 h-7 rounded-lg text-xs font-mono border transition-colors"
+            style={{ borderColor: 'var(--border-weak)', color: 'var(--piano-roll-muted)' }}
             onClick={zoomOut}
           >
             −
           </button>
           <button
             type="button"
-            className="px-2 h-7 rounded-lg text-xs font-mono border border-white/10 hover:border-[rgba(255,109,63,0.45)] text-white/50 hover:text-white transition-colors"
+            className="px-2 h-7 rounded-lg text-xs font-mono border transition-colors"
+            style={{ borderColor: 'var(--border-weak)', color: 'var(--piano-roll-muted)' }}
             onClick={zoomIn}
           >
             +
@@ -1145,8 +1152,13 @@ export function PianoRollEditor({
               key={o.label}
               type="button"
               className={`px-2 h-7 rounded-md text-[10px] font-mono border transition-colors ${
-                snapStep === o.step ? 'border-[rgba(255,109,63,0.55)] text-[#FF6D3F] bg-[rgba(255,109,63,0.10)]' : 'border-white/10 text-white/50 hover:text-white'
+                snapStep === o.step ? 'border-[rgba(255,109,63,0.55)] text-[#FF6D3F] bg-[rgba(255,109,63,0.10)]' : ''
               }`}
+              style={
+                snapStep === o.step
+                  ? undefined
+                  : { borderColor: 'var(--border-weak)', color: 'var(--piano-roll-muted)' }
+              }
               onClick={() => setSnapStep(o.step)}
             >
               {o.label}
@@ -1155,7 +1167,8 @@ export function PianoRollEditor({
         </div>
         <button
           type="button"
-          className="px-2 h-7 rounded-lg text-[10px] font-mono border border-white/10 hover:border-[rgba(255,109,63,0.45)] text-white/50 hover:text-white transition-colors"
+          className="px-2 h-7 rounded-lg text-[10px] font-mono border transition-colors"
+          style={{ borderColor: 'var(--border-weak)', color: 'var(--piano-roll-muted)' }}
           onClick={quantizeAll}
         >
           Quantize
@@ -1172,7 +1185,7 @@ export function PianoRollEditor({
           className="px-2 h-7 rounded-md text-[10px] font-mono border transition-colors"
           style={{
             borderColor: showChords ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
-            color: showChords ? '#FF6D3F' : 'rgba(255,255,255,0.50)',
+            color: showChords ? '#FF6D3F' : 'var(--piano-roll-muted)',
             background: showChords ? 'rgba(255,109,63,0.10)' : 'transparent',
           }}
           onClick={toggleChordStrip}
@@ -1330,12 +1343,13 @@ export function PianoRollEditor({
               />
               {velTooltip && hoverVelIdx != null && (
                 <div
-                  className="pointer-events-none absolute z-20 px-1.5 py-0.5 rounded text-[10px] font-mono border border-white/20"
+                  className="pointer-events-none absolute z-20 px-1.5 py-0.5 rounded text-[10px] font-mono border"
                   style={{
                     left: Math.min(wPx - 56, velTooltip.x + 8),
                     top: velTooltip.y - 24,
                     background: 'var(--piano-roll-surface)',
-                    color: 'rgba(255,255,255,0.90)',
+                    color: 'var(--text)',
+                    borderColor: 'var(--border)',
                   }}
                 >
                   vel {velTooltip.v}
@@ -1346,7 +1360,7 @@ export function PianoRollEditor({
         </div>
       </div>
 
-      <p className="px-3 py-1.5 text-[9px] font-mono border-t border-white/10" style={{ color: 'rgba(255,255,255,0.30)' }}>
+      <p className="px-3 py-1.5 text-[9px] font-mono border-t" style={{ color: 'var(--text-micro)', borderColor: 'var(--border-weak)' }}>
         Del remove · Shift+click multi · drag · right edge resize · RMB delete · Ctrl+A · Ctrl+Z / Ctrl+Shift+Z redo
       </p>
     </div>

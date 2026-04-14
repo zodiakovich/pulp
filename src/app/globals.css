@@ -515,7 +515,7 @@ section h2, .section-title {
   font-family: 'DM Sans', system-ui, 'Segoe UI', sans-serif;
   font-weight: 500;
   font-size: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--border-weak);
   cursor: pointer;
   transition: transform 150ms var(--ease-ui), box-shadow 150ms var(--ease-ui), filter 150ms var(--ease-ui), border-color 150ms var(--ease-ui);
   white-space: nowrap;
@@ -557,13 +557,13 @@ section h2, .section-title {
   font-family: 'DM Sans', system-ui, 'Segoe UI', sans-serif;
   font-weight: 500;
   font-size: 15px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border-weak);
   cursor: pointer;
   transition: transform 150ms var(--ease-ui), background 150ms var(--ease-ui), border-color 150ms var(--ease-ui), color 150ms var(--ease-ui);
   white-space: nowrap;
   flex-shrink: 0;
 }
-.btn-secondary:hover:not(:disabled) { transform: scale(1.02); background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.10); }
+.btn-secondary:hover:not(:disabled) { transform: scale(1.02); background: var(--surface-weak); border-color: var(--border); }
 .btn-secondary:active:not(:disabled) { transform: scale(0.98); transition-duration: 100ms; }
 .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .btn-secondary:disabled:hover { transform: none; background: transparent; }
@@ -582,7 +582,7 @@ html.light .btn-secondary {
   padding: 0 28px;
   border-radius: 12px;
   background: #00B894;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--on-accent);
   font-family: 'DM Sans', system-ui, 'Segoe UI', sans-serif;
   font-weight: 500;
   font-size: 15px;
@@ -610,10 +610,10 @@ html.light .btn-secondary {
   border-radius: 8px !important;
 }
 .btn-primary.btn-sm {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-weak);
 }
 .btn-secondary.btn-sm {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-weak);
 }
 html.light .btn-secondary.btn-sm {
   border: 1px solid var(--border-weak);

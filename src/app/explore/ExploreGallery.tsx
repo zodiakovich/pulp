@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 const EXPLORE_GENRES = ['All', 'Tech House', 'Afro House', 'Melodic Techno', 'Deep House', 'Hard Techno', 'Melodic House', 'Techno', 'Trance', 'Drum & Bass'] as const;
 
@@ -26,6 +27,7 @@ export function ExploreGallery({
   genres: Array<{ key: string; name: string }>;
   seedMode: boolean;
 }) {
+  const router = useRouter();
   const [selectedGenre, setSelectedGenre] = useState<(typeof EXPLORE_GENRES)[number]>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -139,7 +141,6 @@ export function ExploreGallery({
           const promptShort =
             prompt.length > 60 ? `${prompt.slice(0, 60).trimEnd()}…` : (prompt || '—');
           const href = item.isExample ? '/' : `/g/${item.id}`;
-          const usePromptHref = prompt ? `/?prompt=${encodeURIComponent(prompt)}` : '/';
 
           return (
             <Link
@@ -218,18 +219,28 @@ export function ExploreGallery({
                   </div>
 
                   <div className="mt-4">
-                    <Link
-                      href={usePromptHref}
+                    <button
+                      type="button"
                       className="inline-flex items-center gap-2 text-xs"
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
                         color: 'var(--accent)',
                         textDecoration: 'none',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 0,
+                        cursor: prompt ? 'pointer' : 'not-allowed',
                       }}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!prompt) return;
+                        router.push(`/?prompt=${encodeURIComponent(prompt)}`);
+                      }}
+                      disabled={!prompt}
                     >
                       Use this prompt →
-                    </Link>
+                    </button>
                   </div>
                 </div>
                 <span

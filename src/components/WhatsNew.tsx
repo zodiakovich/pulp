@@ -24,6 +24,17 @@ export function WhatsNew() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      setOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   const hasNew = useMemo(() => {
     if (!seen) return true;
     return seen !== latest;
@@ -72,12 +83,14 @@ export function WhatsNew() {
             style={{ background: 'rgba(10,10,11,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
             onClick={() => setOpen(false)}
           />
-          <div
-            className="fixed left-1/2 top-1/2 z-[71] w-[min(980px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6 glass-elevated card-tilt-hover"
-            role="dialog"
-            aria-modal="true"
-            aria-label="What's new"
-          >
+          <div className="fixed inset-0 z-[71] flex items-center justify-center p-4 sm:p-6">
+            <div
+              className="w-[min(980px,calc(100vw-32px))] rounded-2xl p-6 glass-elevated"
+              role="dialog"
+              aria-modal="true"
+              aria-label="What's new"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
@@ -90,16 +103,18 @@ export function WhatsNew() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="h-9 px-3 rounded-lg transition-all duration-200 ease-ui"
+                aria-label="Close"
+                className="h-9 w-9 rounded-lg transition-all duration-200 ease-ui grid place-items-center"
                 style={{
                   border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                   color: 'var(--text)',
                   fontFamily: 'JetBrains Mono, monospace',
                   background: 'transparent',
-                  fontSize: 12,
+                  fontSize: 14,
+                  lineHeight: 1,
                 }}
               >
-                Esc
+                ×
               </button>
             </div>
 
@@ -161,6 +176,7 @@ export function WhatsNew() {
               >
                 Got it
               </button>
+            </div>
             </div>
           </div>
         </>

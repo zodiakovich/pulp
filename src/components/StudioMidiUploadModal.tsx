@@ -15,7 +15,7 @@ export type MidiUploadSuccessPayload = {
 
 const PANEL = 'var(--surface)';
 const BORDER = 'var(--border)';
-const DASH = 'rgba(255,255,255,0.12)';
+const DASH = 'var(--border-weak)';
 const ACCENT = '#FF6D3F';
 const MUTED = 'var(--muted)';
 const CTA_TEXT = 'var(--on-accent)';

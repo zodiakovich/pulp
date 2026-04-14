@@ -10,8 +10,8 @@ const CARD = 'var(--surface)';
 const BORDER = 'var(--border)';
 const ACCENT = '#FF6D3F';
 const CHECK_ON = ACCENT;
-const INACTIVE = 'rgba(255,255,255,0.08)';
-const CTA_TEXT = 'var(--bg)';
+const INACTIVE = 'var(--surface-weak)';
+const CTA_TEXT = 'var(--on-accent)';
 const STUDIO_BG = 'var(--surface-strong)';
 
 const ANNUAL_DISCOUNT = 0.2;
@@ -34,6 +34,29 @@ function effectiveMonthly(base: number, billing: Billing) {
 /** Pro / Studio price display: annual = stacked strikethrough + active + /month; monthly = inline row. */
 function PaidPlanPriceBlock({ baseMonthly, billing }: { baseMonthly: number; billing: Billing }) {
   const display = effectiveMonthly(baseMonthly, billing);
+
+  // Guard: free plans should never show "annual discount" strikethrough UI.
+  if (baseMonthly === 0) {
+    return (
+      <div className="mb-2 flex flex-wrap items-end gap-2">
+        <span
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontWeight: 400,
+            fontSize: 'clamp(2.75rem, 6vw, 3.5rem)',
+            lineHeight: 1,
+            color: 'var(--text)',
+            letterSpacing: '0.02em',
+          }}
+        >
+          {formatMoney(0)}
+        </span>
+        <span className="pb-2 text-sm" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)', fontWeight: 400 }}>
+          /month
+        </span>
+      </div>
+    );
+  }
 
   if (billing === 'monthly') {
     return (
@@ -237,7 +260,7 @@ export function PricingPlansClient() {
               left: billing === 'monthly' ? 4 : '50%',
               width: 'calc(50% - 4px)',
               borderRadius: 12,
-              background: 'rgba(255,255,255,0.08)',
+              background: 'var(--surface-weak)',
               border: '1px solid var(--border-weak)',
               transition: 'background-color 200ms cubic-bezier(0.23, 1, 0.32, 1), border-color 200ms cubic-bezier(0.23, 1, 0.32, 1)',
             }}
@@ -317,7 +340,7 @@ export function PricingPlansClient() {
               href="/"
               className="mt-auto block w-full rounded-lg border py-4 text-center text-base font-semibold transition-colors duration-200 ease-ui min-h-[56px] flex items-center justify-center active:scale-[0.98]"
               style={{
-                borderColor: 'rgba(255,255,255,0.14)',
+                borderColor: 'var(--border)',
                 color: 'var(--text)',
                 textDecoration: 'none',
                 fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
@@ -360,8 +383,7 @@ export function PricingPlansClient() {
             style={{
               background: STUDIO_BG,
               border: `2px solid ${ACCENT}`,
-              boxShadow:
-                '0 1px 2px rgba(255,255,255,0.03), 0 4px 8px rgba(255,255,255,0.02), 0 12px 24px rgba(0,0,0,0.4), 0 24px 48px rgba(0,0,0,0.2), 0 0 52px rgba(255,109,63,0.12)',
+              boxShadow: 'var(--shadow), 0 0 52px rgba(255,109,63,0.12)',
               y: prefersReducedMotion ? 0 : sideY,
             }}
           >

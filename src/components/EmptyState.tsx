@@ -48,7 +48,7 @@ export function EmptyState({
             fontWeight: 700,
             fontSize: 260,
             lineHeight: 1,
-            color: 'rgba(255,255,255,0.04)',
+            color: 'color-mix(in srgb, var(--text) 6%, transparent)',
             transform: 'translateY(6px)',
             userSelect: 'none',
           }}
@@ -62,7 +62,7 @@ export function EmptyState({
           style={{
             fontFamily: 'DM Sans, sans-serif',
             fontSize: 14,
-            color: 'rgba(240,240,255,0.50)',
+            color: 'var(--muted)',
             lineHeight: 1.6,
           }}
         >
@@ -74,7 +74,7 @@ export function EmptyState({
               marginTop: 6,
               fontFamily: 'DM Sans, sans-serif',
               fontSize: 13,
-              color: 'rgba(240,240,255,0.42)',
+              color: 'var(--text-micro)',
               lineHeight: 1.6,
             }}
           >
@@ -91,7 +91,7 @@ export function EmptyState({
                 style={{
                   fontFamily: 'DM Sans, sans-serif',
                   fontSize: 13,
-                  color: 'rgba(240,240,255,0.55)',
+                  color: 'var(--muted)',
                   textDecoration: 'none',
                 }}
                 onClick={onAction}
@@ -105,7 +105,7 @@ export function EmptyState({
                 style={{
                   fontFamily: 'DM Sans, sans-serif',
                   fontSize: 13,
-                  color: 'rgba(240,240,255,0.55)',
+                  color: 'var(--muted)',
                   background: 'transparent',
                   border: 'none',
                   padding: 0,

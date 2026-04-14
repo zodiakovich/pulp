@@ -36,7 +36,7 @@ export default function DiscordPage() {
           fontSize: 'clamp(86px, 12vw, 140px)',
           letterSpacing: '-0.02em',
           lineHeight: 1,
-          color: 'rgba(240,240,255,0.12)',
+          color: 'color-mix(in srgb, var(--text) 14%, transparent)',
           userSelect: 'none',
           pointerEvents: 'none',
           whiteSpace: 'nowrap',
@@ -57,7 +57,7 @@ export default function DiscordPage() {
             marginTop: 14,
             fontFamily: 'DM Sans, sans-serif',
             fontSize: 13,
-            color: 'rgba(240,240,255,0.55)',
+            color: 'var(--muted)',
             textDecoration: 'underline',
             textUnderlineOffset: 4,
           }}

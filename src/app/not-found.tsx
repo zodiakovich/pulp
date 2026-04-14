@@ -33,7 +33,7 @@ export default function NotFound() {
           fontSize: 'clamp(150px, 26vw, 220px)',
           letterSpacing: '-0.02em',
           lineHeight: 1,
-          color: 'rgba(240,240,255,0.12)',
+          color: 'color-mix(in srgb, var(--text) 14%, transparent)',
           userSelect: 'none',
           pointerEvents: 'none',
         }}
@@ -59,7 +59,7 @@ export default function NotFound() {
             marginTop: 14,
             fontFamily: 'DM Sans, sans-serif',
             fontSize: 13,
-            color: 'rgba(240,240,255,0.55)',
+            color: 'var(--muted)',
             textDecoration: 'underline',
             textUnderlineOffset: 4,
           }}

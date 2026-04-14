@@ -223,7 +223,7 @@ export default function BlogIndexPage() {
                 style={{
                   background: '#FF6D3F',
                   border: '1px solid rgba(255,109,63,0.45)',
-                  color: '#fff',
+                  color: 'var(--on-accent)',
                   fontFamily: 'JetBrains Mono, monospace',
                   whiteSpace: 'nowrap',
                 }}
