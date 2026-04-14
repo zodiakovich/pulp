@@ -517,7 +517,7 @@ function LayerCard({
       name === 'bass' ? 'bass' :
       name === 'chords' ? 'chords' :
       'melody';
-    await playTonePreview(notes, bpm, previewLayer, () => setPlaying(false));
+    await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false));
   };
 
   return (
@@ -2973,6 +2973,7 @@ export default function Home() {
         drums: params.layers.drums ? sel.result.drums : undefined,
       },
       sel.params.bpm,
+      sel.params.genre,
       () => setPlayingAll(false),
     );
   };

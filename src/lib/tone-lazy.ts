@@ -27,10 +27,11 @@ export function stopPlayAll() {
 export async function playAll(
   tracks: { melody?: NoteEvent[]; chords?: NoteEvent[]; bass?: NoteEvent[]; drums?: NoteEvent[] },
   bpm: number,
+  genre: string,
   onComplete?: () => void,
 ) {
   const m = await ensurePlayAll();
-  return m.playAll(tracks, bpm, onComplete);
+  return m.playAll(tracks, bpm, genre, onComplete);
 }
 
 export function stopTonePreview() {
@@ -43,8 +44,9 @@ export async function playTonePreview(
   notes: NoteEvent[],
   bpm: number,
   layer: TonePreviewLayer,
+  genre: string,
   onComplete?: () => void,
 ) {
   const m = await ensurePreview();
-  return m.playTonePreview(notes, bpm, layer, onComplete);
+  return m.playTonePreview(notes, bpm, layer, genre, onComplete);
 }

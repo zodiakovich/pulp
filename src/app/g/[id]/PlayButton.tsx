@@ -31,6 +31,7 @@ export function PlayButton({
         drums: layers.drums?.length ? layers.drums : undefined,
       },
       bpm,
+      genre,
       () => setPlaying(false),
     );
   };

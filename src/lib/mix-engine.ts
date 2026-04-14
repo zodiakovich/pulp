@@ -239,16 +239,18 @@ export function playNotesWithMix(options: PlaybackOptions) {
   }
 
   const buses = buildMixGraph(ctx);
-  const { maxEndTime, currentTime } = scheduleNotesToLayerBuses(ctx, buses, options);
+  void (async () => {
+    const { maxEndTime, currentTime } = await scheduleNotesToLayerBuses(ctx, buses, options);
 
-  if (options.onComplete) {
-    const totalDuration = (maxEndTime - currentTime) * 1000 + 500;
-    const id = window.setTimeout(() => {
-      mixIsPlaying = false;
-      options.onComplete?.();
-    }, totalDuration);
-    mixTimeouts.push(id);
-  }
+    if (options.onComplete) {
+      const totalDuration = (maxEndTime - currentTime) * 1000 + 500;
+      const id = window.setTimeout(() => {
+        mixIsPlaying = false;
+        options.onComplete?.();
+      }, totalDuration);
+      mixTimeouts.push(id);
+    }
+  })();
 }
 
 function audioBufferToWav16(buffer: AudioBuffer, targetSampleRate = 44100): ArrayBuffer {
@@ -316,7 +318,7 @@ export async function renderNotesWithMixToWav(options: PlaybackOptions): Promise
   const probeCtx = new OfflineAudioContext(2, sr, sr);
   const probeCtxCompat = probeCtx as unknown as AudioContext;
   const probeBuses = buildMixGraph(probeCtxCompat);
-  const probe = scheduleNotesToLayerBuses(probeCtxCompat, probeBuses, options);
+  const probe = await scheduleNotesToLayerBuses(probeCtxCompat, probeBuses, options);
   const mainSec = Math.max(0.1, probe.maxEndTime - probe.currentTime);
   const totalSec = mainSec + tailSec;
 
@@ -324,7 +326,7 @@ export async function renderNotesWithMixToWav(options: PlaybackOptions): Promise
   const ctx = new OfflineAudioContext(2, length, sr);
   const ctxCompat = ctx as unknown as AudioContext;
   const buses = buildMixGraph(ctxCompat);
-  scheduleNotesToLayerBuses(ctxCompat, buses, options);
+  await scheduleNotesToLayerBuses(ctxCompat, buses, options);
 
   const rendered = await ctx.startRendering();
   const wav = audioBufferToWav16(rendered, sr);

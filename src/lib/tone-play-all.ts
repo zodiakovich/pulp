@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import type { NoteEvent } from '@/lib/music-engine';
 import { bassPresets, chordPresets, melodyPresets, pickPresetIndex } from '@/lib/synth-presets';
+import { ensureToneSampleSet, resolveToneSampleSlug } from '@/lib/tone-sample-loader';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -25,6 +26,7 @@ export function stopPlayAll() {
 export async function playAll(
   tracks: { melody?: NoteEvent[]; chords?: NoteEvent[]; bass?: NoteEvent[]; drums?: NoteEvent[] },
   bpm: number,
+  genre: string,
   onComplete?: () => void,
 ) {
   await Tone.start();
@@ -34,20 +36,34 @@ export async function playAll(
   const now = Tone.now() + 0.05;
   let maxEnd = 0;
   const seed = Math.round(bpm) + (tracks.melody?.length ?? 0) + (tracks.chords?.length ?? 0) + (tracks.bass?.length ?? 0);
+  const sampleSlug = resolveToneSampleSlug(genre);
+  const sampleSet = sampleSlug ? await ensureToneSampleSet(sampleSlug) : null;
 
   // MELODY — richer layered FM/AM presets + FX
   if (tracks.melody?.length) {
     const rev = new Tone.Reverb({ decay: 1.8, wet: 0.2 }).toDestination();
     const dly = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.15, wet: 0.08 }).connect(rev);
-    const idx = pickPresetIndex(seed, melodyPresets.length);
-    const inst = melodyPresets[idx]!();
-    (inst.output as any).connect(dly);
-    activeNodes.push(rev, dly, ...inst.nodes);
-    for (const n of tracks.melody) {
-      const t = now + n.startTime * spb;
-      const d = Math.max(0.1, n.duration * spb * 0.9);
-      inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
-      maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+    if (sampleSet) {
+      const sam = sampleSet.samplers.lead;
+      sam.connect(dly);
+      activeNodes.push(rev, dly, ...sampleSet.nodes);
+      for (const n of tracks.melody) {
+        const t = now + n.startTime * spb;
+        const d = Math.max(0.1, n.duration * spb * 0.9);
+        sam.triggerAttackRelease(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+        maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+      }
+    } else {
+      const idx = pickPresetIndex(seed, melodyPresets.length);
+      const inst = melodyPresets[idx]!();
+      (inst.output as any).connect(dly);
+      activeNodes.push(rev, dly, ...inst.nodes);
+      for (const n of tracks.melody) {
+        const t = now + n.startTime * spb;
+        const d = Math.max(0.1, n.duration * spb * 0.9);
+        inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+        maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+      }
     }
   }
 
@@ -56,72 +72,127 @@ export async function playAll(
     const rev = new Tone.Reverb({ decay: 3, wet: 0.35 }).toDestination();
     const cho = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.25 }).connect(rev);
     cho.start();
-    const idx = pickPresetIndex(seed + 11, chordPresets.length);
-    const inst = chordPresets[idx]!();
-    (inst.output as any).connect(cho);
-    activeNodes.push(rev, cho, ...inst.nodes);
-    for (const n of tracks.chords) {
-      const t = now + n.startTime * spb;
-      const d = Math.max(0.1, n.duration * spb * 0.9);
-      inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
-      maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+    if (sampleSet) {
+      const sam = sampleSet.samplers.pad;
+      sam.connect(cho);
+      activeNodes.push(rev, cho, ...sampleSet.nodes);
+      for (const n of tracks.chords) {
+        const t = now + n.startTime * spb;
+        const d = Math.max(0.1, n.duration * spb * 0.9);
+        sam.triggerAttackRelease(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+        maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+      }
+    } else {
+      const idx = pickPresetIndex(seed + 11, chordPresets.length);
+      const inst = chordPresets[idx]!();
+      (inst.output as any).connect(cho);
+      activeNodes.push(rev, cho, ...inst.nodes);
+      for (const n of tracks.chords) {
+        const t = now + n.startTime * spb;
+        const d = Math.max(0.1, n.duration * spb * 0.9);
+        inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+        maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+      }
     }
   }
 
   // BASS — layered bass presets (includes 808) + filter
   if (tracks.bass?.length) {
     const flt = new Tone.Filter({ frequency: 600, type: 'lowpass', rolloff: -24 }).toDestination();
-    const idx = pickPresetIndex(seed + 29, bassPresets.length);
-    const inst = bassPresets[idx]!();
-    (inst.output as any).connect(flt);
-    activeNodes.push(flt, ...inst.nodes);
-    for (const n of tracks.bass) {
-      const t = now + n.startTime * spb;
-      const d = Math.max(0.1, n.duration * spb * 0.9);
-      inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
-      maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+    if (sampleSet) {
+      const sam = sampleSet.samplers.bass;
+      sam.connect(flt);
+      activeNodes.push(flt, ...sampleSet.nodes);
+      for (const n of tracks.bass) {
+        const t = now + n.startTime * spb;
+        const d = Math.max(0.1, n.duration * spb * 0.9);
+        sam.triggerAttackRelease(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+        maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+      }
+    } else {
+      const idx = pickPresetIndex(seed + 29, bassPresets.length);
+      const inst = bassPresets[idx]!();
+      (inst.output as any).connect(flt);
+      activeNodes.push(flt, ...inst.nodes);
+      for (const n of tracks.bass) {
+        const t = now + n.startTime * spb;
+        const d = Math.max(0.1, n.duration * spb * 0.9);
+        inst.trigger(midiToNote(Math.max(24, Math.min(108, n.pitch))), d, t, n.velocity / 127);
+        maxEnd = Math.max(maxEnd, n.startTime * spb + d);
+      }
     }
   }
 
   // DRUMS — kick + snare + hat (shared synths per layer)
   if (tracks.drums?.length) {
     const rev = new Tone.Reverb({ decay: 0.4, wet: 0.08 }).toDestination();
-    const kick = new Tone.MembraneSynth({
-      pitchDecay: 0.08,
-      octaves: 8,
-      envelope: { attack: 0.001, decay: 0.4, sustain: 0, release: 0.1 },
-      volume: -4,
-    }).connect(rev);
-    const snr = new Tone.NoiseSynth({
-      noise: { type: 'white' },
-      envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.05 },
-      volume: -12,
-    }).connect(rev);
-    const hat = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.04, release: 0.01 },
-      harmonicity: 5.1,
-      modulationIndex: 32,
-      resonance: 4000,
-      octaves: 1.5,
-      volume: -20,
-    }).connect(rev);
-    hat.frequency.value = 400;
-    activeNodes.push(rev, kick, snr, hat);
+    if (sampleSet) {
+      const gKick = new Tone.Gain(1).connect(rev);
+      const gSnare = new Tone.Gain(1).connect(rev);
+      const gCH = new Tone.Gain(1).connect(rev);
+      const gOH = new Tone.Gain(1).connect(rev);
+      const gPerc = new Tone.Gain(1).connect(rev);
+      sampleSet.players.kick.connect(gKick);
+      sampleSet.players.snare.connect(gSnare);
+      sampleSet.players['closed-hat'].connect(gCH);
+      sampleSet.players['open-hat'].connect(gOH);
+      sampleSet.players.perc.connect(gPerc);
+      activeNodes.push(rev, gKick, gSnare, gCH, gOH, gPerc, ...sampleSet.nodes);
 
-    for (const n of tracks.drums) {
-      const t = now + n.startTime * spb;
-      const isKick = n.pitch === 36 || n.pitch === 35;
-      const isSnare = n.pitch === 38 || n.pitch === 40;
-      const isHat = n.pitch >= 42;
+      for (const n of tracks.drums) {
+        const t = now + n.startTime * spb;
+        const v = Math.max(0.05, Math.min(1, n.velocity / 127));
+        const isKick = n.pitch === 36 || n.pitch === 35;
+        const isSnare = n.pitch === 38 || n.pitch === 40;
+        const isOpen = n.pitch === 46;
+        const isClosed = n.pitch === 42 || n.pitch === 51;
 
-      if (isKick) {
-        kick.triggerAttackRelease('C1', '8n', t);
-      } else if (isSnare) {
-        snr.triggerAttackRelease('8n', t);
-      } else if (isHat) {
-        hat.triggerAttackRelease('32n', t);
+        if (isKick) { gKick.gain.setValueAtTime(v, t); sampleSet.players.kick.start(t); }
+        else if (isSnare) { gSnare.gain.setValueAtTime(v, t); sampleSet.players.snare.start(t); }
+        else if (isOpen) { gOH.gain.setValueAtTime(v, t); sampleSet.players['open-hat'].start(t); }
+        else if (isClosed) { gCH.gain.setValueAtTime(v, t); sampleSet.players['closed-hat'].start(t); }
+        else { gPerc.gain.setValueAtTime(v, t); sampleSet.players.perc.start(t); }
+
+        maxEnd = Math.max(maxEnd, n.startTime * spb + 0.5);
       }
-      maxEnd = Math.max(maxEnd, n.startTime * spb + 0.5);
+    } else {
+      const kick = new Tone.MembraneSynth({
+        pitchDecay: 0.08,
+        octaves: 8,
+        envelope: { attack: 0.001, decay: 0.4, sustain: 0, release: 0.1 },
+        volume: -4,
+      }).connect(rev);
+      const snr = new Tone.NoiseSynth({
+        noise: { type: 'white' },
+        envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.05 },
+        volume: -12,
+      }).connect(rev);
+      const hat = new Tone.MetalSynth({
+        envelope: { attack: 0.001, decay: 0.04, release: 0.01 },
+        harmonicity: 5.1,
+        modulationIndex: 32,
+        resonance: 4000,
+        octaves: 1.5,
+        volume: -20,
+      }).connect(rev);
+      hat.frequency.value = 400;
+      activeNodes.push(rev, kick, snr, hat);
+
+      for (const n of tracks.drums) {
+        const t = now + n.startTime * spb;
+        const isKick = n.pitch === 36 || n.pitch === 35;
+        const isSnare = n.pitch === 38 || n.pitch === 40;
+        const isHat = n.pitch >= 42;
+
+        if (isKick) {
+          kick.triggerAttackRelease('C1', '8n', t);
+        } else if (isSnare) {
+          snr.triggerAttackRelease('8n', t);
+        } else if (isHat) {
+          hat.triggerAttackRelease('32n', t);
+        }
+        maxEnd = Math.max(maxEnd, n.startTime * spb + 0.5);
+      }
     }
   }
 

@@ -5,6 +5,7 @@
 // ============================================================
 
 import { NoteEvent, getGenreSoundMap, type GenreSoundMap } from './music-engine';
+import { resolveSampleSetSlug, type SampleSetSlug, type WebAudioDecodedSampleSet } from './sample-sets';
 
 let audioCtx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
@@ -1531,6 +1532,117 @@ function pickFromGenre(genre: string): GenreSoundMap {
 let activeTimeouts: number[] = [];
 let isPlaying = false;
 
+// ============================================================
+// SAMPLE SETS (WebAudio) — lazy-load per genre
+// ============================================================
+
+const SAMPLE_BASE_MIDI = 48; // C3
+
+const decodedSampleSetsByCtx = new WeakMap<AudioContext, Map<SampleSetSlug, Promise<WebAudioDecodedSampleSet>>>();
+
+function getDecodedMap(ctx: AudioContext) {
+  let m = decodedSampleSetsByCtx.get(ctx);
+  if (!m) {
+    m = new Map();
+    decodedSampleSetsByCtx.set(ctx, m);
+  }
+  return m;
+}
+
+async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+  return await res.arrayBuffer();
+}
+
+async function decodeWav(ctx: AudioContext, url: string): Promise<AudioBuffer> {
+  const ab = await fetchArrayBuffer(url);
+  // decodeAudioData may detach the buffer; keep it per-decode.
+  const copy = ab.slice(0);
+  return await ctx.decodeAudioData(copy);
+}
+
+async function ensureDecodedSampleSet(ctx: AudioContext, slug: SampleSetSlug): Promise<WebAudioDecodedSampleSet> {
+  const map = getDecodedMap(ctx);
+  const existing = map.get(slug);
+  if (existing) return existing;
+
+  const p = (async () => {
+    const base = `/samples/${slug}`;
+    const [kick, snare, closedHat, openHat, perc, bass, lead, pad] = await Promise.all([
+      decodeWav(ctx, `${base}/kick.wav`),
+      decodeWav(ctx, `${base}/snare.wav`),
+      decodeWav(ctx, `${base}/closed-hat.wav`),
+      decodeWav(ctx, `${base}/open-hat.wav`),
+      decodeWav(ctx, `${base}/perc.wav`),
+      decodeWav(ctx, `${base}/bass.wav`),
+      decodeWav(ctx, `${base}/lead.wav`),
+      decodeWav(ctx, `${base}/pad.wav`),
+    ]);
+
+    return { slug, kick, snare, closedHat, openHat, perc, bass, lead, pad };
+  })();
+
+  map.set(slug, p);
+  return p;
+}
+
+function scheduleOneShot(ctx: AudioContext, dest: AudioNode, buf: AudioBuffer, start: number, velocity: number) {
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const g = ctx.createGain();
+  const v = Math.max(0, Math.min(1, velocity / 127));
+  // Short fade to avoid clicks (works for offline + realtime).
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.linearRampToValueAtTime(v, start + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(0.18, buf.duration));
+  src.connect(g);
+  g.connect(dest);
+  src.start(start);
+  src.stop(start + Math.min(buf.duration + 0.02, 0.6));
+}
+
+function schedulePitchedSample(
+  ctx: AudioContext,
+  dest: AudioNode,
+  buf: AudioBuffer,
+  midiPitch: number,
+  start: number,
+  durationSec: number,
+  velocity: number,
+) {
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+
+  // Transpose relative to C3.
+  const semis = midiPitch - SAMPLE_BASE_MIDI;
+  const rate = Math.pow(2, semis / 12);
+  src.playbackRate.setValueAtTime(rate, start);
+
+  const g = ctx.createGain();
+  const v = Math.max(0, Math.min(1, velocity / 127));
+  const attack = 0.004;
+  const release = 0.04;
+  const end = start + Math.max(0.05, durationSec);
+
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.linearRampToValueAtTime(v, start + attack);
+  g.gain.setValueAtTime(v, Math.max(start + attack, end - release));
+  g.gain.exponentialRampToValueAtTime(0.0001, end);
+
+  src.connect(g);
+  g.connect(dest);
+  src.start(start);
+  src.stop(end + 0.02);
+}
+
+export async function preloadGenreSamples(ctx: AudioContext, genreKey: string): Promise<boolean> {
+  const slug = resolveSampleSetSlug(genreKey);
+  if (!slug) return false;
+  await ensureDecodedSampleSet(ctx, slug);
+  return true;
+}
+
 export function stopAllPlayback() {
   activeTimeouts.forEach(id => clearTimeout(id));
   activeTimeouts = [];
@@ -1589,9 +1701,10 @@ export function scheduleNotesToLayerBuses(
   ctx: AudioContext,
   buses: LayerDestinationBuses,
   options: PlaybackOptions
-): { maxEndTime: number; currentTime: number } {
+): Promise<{ maxEndTime: number; currentTime: number }> {
   const secPerBeat = 60 / options.bpm;
   const sounds = pickFromGenre(options.genre);
+  const sampleSlug = resolveSampleSetSlug(options.genre);
 
   const melodySynth = MELODY_SYNTHS[sounds.melody[Math.floor(Math.random() * sounds.melody.length)]];
   const chordSynth = CHORD_SYNTHS[sounds.chords[Math.floor(Math.random() * sounds.chords.length)]];
@@ -1614,77 +1727,103 @@ export function scheduleNotesToLayerBuses(
     sounds.snare === 'snare' ? drumSnare :
     drumClap;
 
-  let maxEndTime = 0;
-  const currentTime = ctx.currentTime + 0.1;
+  const run = async () => {
+    const sampleSet = sampleSlug ? await ensureDecodedSampleSet(ctx, sampleSlug) : null;
 
-  if (options.melody) {
-    for (const note of options.melody) {
-      const start = currentTime + note.startTime * secPerBeat;
-      const dur = note.duration * secPerBeat;
-      melodySynth(ctx, buses.melody, midiToFreq(note.pitch), start, dur, note.velocity);
-      maxEndTime = Math.max(maxEndTime, start + dur);
-    }
-  }
+    let maxEndTime = 0;
+    const currentTime = ctx.currentTime + 0.1;
 
-  if (options.chords) {
-    for (const note of options.chords) {
-      const start = currentTime + note.startTime * secPerBeat;
-      const dur = note.duration * secPerBeat;
-      chordSynth(ctx, buses.chords, midiToFreq(note.pitch), start, dur, note.velocity);
-      maxEndTime = Math.max(maxEndTime, start + dur);
-    }
-  }
-
-  if (options.bass) {
-    for (const note of options.bass) {
-      const start = currentTime + note.startTime * secPerBeat;
-      const dur = note.duration * secPerBeat;
-      bassSynth(ctx, buses.bass, midiToFreq(note.pitch), start, dur, note.velocity);
-      maxEndTime = Math.max(maxEndTime, start + dur);
-    }
-  }
-
-  if (options.drums) {
-    for (const note of options.drums) {
-      const start = currentTime + note.startTime * secPerBeat;
-      const pitch = note.pitch;
-      const vel = note.velocity;
-
-      if (pitch === 36) kickFn(ctx, buses.drums, start, vel);
-      else if (pitch === 38) snareFn(ctx, buses.drums, start, vel);
-      else if (pitch === 39) drumClap(ctx, buses.drums, start, vel);
-      else if (pitch === 42) {
-        const hat = sounds.hats[Math.floor(Math.random() * sounds.hats.length)] ?? 'closed';
-        if (hat === 'pedal') drumPedalHat(ctx, buses.drums, start, vel);
-        else if (hat === 'sizzle') drumSizzleHat(ctx, buses.drums, start, vel);
-        else if (hat === 'tambourine') drumTambourine(ctx, buses.drums, start, vel);
-        else drumClosedHat(ctx, buses.drums, start, vel);
+    if (options.melody) {
+      for (const note of options.melody) {
+        const start = currentTime + note.startTime * secPerBeat;
+        const dur = note.duration * secPerBeat;
+        if (sampleSet) {
+          schedulePitchedSample(ctx, buses.melody, sampleSet.lead, note.pitch, start, dur, note.velocity);
+        } else {
+          melodySynth(ctx, buses.melody, midiToFreq(note.pitch), start, dur, note.velocity);
+        }
+        maxEndTime = Math.max(maxEndTime, start + dur);
       }
-      else if (pitch === 46) drumOpenHat(ctx, buses.drums, start, vel);
-      else if (pitch === 51) drumClosedHat(ctx, buses.drums, start, vel);
-      else if (pitch === 37) drumRim(ctx, buses.drums, start, vel);
-      else if (pitch === 62) drumConga(ctx, buses.drums, start, vel, true);
-      else if (pitch === 63) {
-        if (options.genre === 'afro_house') drumBongo(ctx, buses.drums, start, vel, false);
-        else drumConga(ctx, buses.drums, start, vel, false);
-      }
-      else if (pitch === 70) drumShaker(ctx, buses.drums, start, vel);
-      else drumClosedHat(ctx, buses.drums, start, vel);
-
-      maxEndTime = Math.max(maxEndTime, start + 0.3);
     }
-  }
 
-  return { maxEndTime, currentTime };
+    if (options.chords) {
+      for (const note of options.chords) {
+        const start = currentTime + note.startTime * secPerBeat;
+        const dur = note.duration * secPerBeat;
+        if (sampleSet) {
+          schedulePitchedSample(ctx, buses.chords, sampleSet.pad, note.pitch, start, dur, note.velocity);
+        } else {
+          chordSynth(ctx, buses.chords, midiToFreq(note.pitch), start, dur, note.velocity);
+        }
+        maxEndTime = Math.max(maxEndTime, start + dur);
+      }
+    }
+
+    if (options.bass) {
+      for (const note of options.bass) {
+        const start = currentTime + note.startTime * secPerBeat;
+        const dur = note.duration * secPerBeat;
+        if (sampleSet) {
+          schedulePitchedSample(ctx, buses.bass, sampleSet.bass, note.pitch, start, dur, note.velocity);
+        } else {
+          bassSynth(ctx, buses.bass, midiToFreq(note.pitch), start, dur, note.velocity);
+        }
+        maxEndTime = Math.max(maxEndTime, start + dur);
+      }
+    }
+
+    if (options.drums) {
+      for (const note of options.drums) {
+        const start = currentTime + note.startTime * secPerBeat;
+        const pitch = note.pitch;
+        const vel = note.velocity;
+
+        if (sampleSet) {
+          if (pitch === 36 || pitch === 35) scheduleOneShot(ctx, buses.drums, sampleSet.kick, start, vel);
+          else if (pitch === 38 || pitch === 40) scheduleOneShot(ctx, buses.drums, sampleSet.snare, start, vel);
+          else if (pitch === 46) scheduleOneShot(ctx, buses.drums, sampleSet.openHat, start, vel);
+          else if (pitch === 42 || pitch === 51) scheduleOneShot(ctx, buses.drums, sampleSet.closedHat, start, vel);
+          else scheduleOneShot(ctx, buses.drums, sampleSet.perc, start, vel);
+        } else {
+          if (pitch === 36) kickFn(ctx, buses.drums, start, vel);
+          else if (pitch === 38) snareFn(ctx, buses.drums, start, vel);
+          else if (pitch === 39) drumClap(ctx, buses.drums, start, vel);
+          else if (pitch === 42) {
+            const hat = sounds.hats[Math.floor(Math.random() * sounds.hats.length)] ?? 'closed';
+            if (hat === 'pedal') drumPedalHat(ctx, buses.drums, start, vel);
+            else if (hat === 'sizzle') drumSizzleHat(ctx, buses.drums, start, vel);
+            else if (hat === 'tambourine') drumTambourine(ctx, buses.drums, start, vel);
+            else drumClosedHat(ctx, buses.drums, start, vel);
+          }
+          else if (pitch === 46) drumOpenHat(ctx, buses.drums, start, vel);
+          else if (pitch === 51) drumClosedHat(ctx, buses.drums, start, vel);
+          else if (pitch === 37) drumRim(ctx, buses.drums, start, vel);
+          else if (pitch === 62) drumConga(ctx, buses.drums, start, vel, true);
+          else if (pitch === 63) {
+            if (options.genre === 'afro_house') drumBongo(ctx, buses.drums, start, vel, false);
+            else drumConga(ctx, buses.drums, start, vel, false);
+          }
+          else if (pitch === 70) drumShaker(ctx, buses.drums, start, vel);
+          else drumClosedHat(ctx, buses.drums, start, vel);
+        }
+
+        maxEndTime = Math.max(maxEndTime, start + 0.35);
+      }
+    }
+
+    return { maxEndTime, currentTime };
+  };
+
+  return run();
 }
 
-export function playNotes(options: PlaybackOptions) {
+export async function playNotes(options: PlaybackOptions) {
   stopAllPlayback();
   isPlaying = true;
 
   const ctx = getAudioContext();
   const dest = masterGain!;
-  const { maxEndTime, currentTime } = scheduleNotesToLayerBuses(
+  const { maxEndTime, currentTime } = await scheduleNotesToLayerBuses(
     ctx,
     { melody: dest, chords: dest, bass: dest, drums: dest },
     options
