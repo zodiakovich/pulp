@@ -11,8 +11,31 @@ function midiToNote(midi: number): string {
 }
 
 let activeNodes: Tone.ToneAudioNode[] = [];
+let activeTimeout: number | null = null;
+
+let toneConfigured = false;
+async function ensureToneConfigured() {
+  if (toneConfigured) return;
+  await Tone.start();
+  // Prefer stability over minimum latency for longer sequences.
+  try {
+    const ctx = Tone.getContext() as any;
+    if (ctx) {
+      ctx.latencyHint = 'playback';
+      ctx.lookAhead = 0.1;
+      ctx.updateInterval = 0.02;
+    }
+  } catch {
+    // ignore
+  }
+  toneConfigured = true;
+}
 
 export function stopPlayAll() {
+  if (activeTimeout !== null) {
+    window.clearTimeout(activeTimeout);
+    activeTimeout = null;
+  }
   for (const n of activeNodes) {
     try {
       n.dispose();
@@ -21,6 +44,13 @@ export function stopPlayAll() {
     }
   }
   activeNodes = [];
+  // Ensure any leftover scheduled events are cleared.
+  try {
+    Tone.Transport.stop();
+    Tone.Transport.cancel(0);
+  } catch {
+    // ignore
+  }
 }
 
 export async function playAll(
@@ -29,7 +59,7 @@ export async function playAll(
   genre: string,
   onComplete?: () => void,
 ) {
-  await Tone.start();
+  await ensureToneConfigured();
   stopPlayAll();
 
   const spb = 60 / Math.max(60, Math.min(200, bpm));
@@ -46,7 +76,8 @@ export async function playAll(
     if (sampleSet) {
       const sam = sampleSet.samplers.lead;
       sam.connect(dly);
-      activeNodes.push(rev, dly, ...sampleSet.nodes);
+      // Do not dispose cached sample-set nodes (samplers/players). Only dispose per-play FX.
+      activeNodes.push(rev, dly);
       for (const n of tracks.melody) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -75,7 +106,7 @@ export async function playAll(
     if (sampleSet) {
       const sam = sampleSet.samplers.pad;
       sam.connect(cho);
-      activeNodes.push(rev, cho, ...sampleSet.nodes);
+      activeNodes.push(rev, cho);
       for (const n of tracks.chords) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -102,7 +133,7 @@ export async function playAll(
     if (sampleSet) {
       const sam = sampleSet.samplers.bass;
       sam.connect(flt);
-      activeNodes.push(flt, ...sampleSet.nodes);
+      activeNodes.push(flt);
       for (const n of tracks.bass) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -137,7 +168,7 @@ export async function playAll(
       sampleSet.players['closed-hat'].connect(gCH);
       sampleSet.players['open-hat'].connect(gOH);
       sampleSet.players.perc.connect(gPerc);
-      activeNodes.push(rev, gKick, gSnare, gCH, gOH, gPerc, ...sampleSet.nodes);
+      activeNodes.push(rev, gKick, gSnare, gCH, gOH, gPerc);
 
       for (const n of tracks.drums) {
         const t = now + n.startTime * spb;
@@ -197,7 +228,7 @@ export async function playAll(
   }
 
   if (onComplete) {
-    window.setTimeout(() => {
+    activeTimeout = window.setTimeout(() => {
       stopPlayAll();
       onComplete();
     }, (maxEnd + 2) * 1000);

@@ -12,8 +12,31 @@ function midiToNoteName(midi: number): string {
 }
 
 let activeNodes: Tone.ToneAudioNode[] = [];
+let activeTimeout: number | null = null;
+
+let toneConfigured = false;
+async function ensureToneConfigured() {
+  if (toneConfigured) return;
+  await Tone.start();
+  // Prefer stability over minimum latency for longer sequences.
+  try {
+    const ctx = Tone.getContext() as any;
+    if (ctx) {
+      ctx.latencyHint = 'playback';
+      ctx.lookAhead = 0.1;
+      ctx.updateInterval = 0.02;
+    }
+  } catch {
+    // ignore
+  }
+  toneConfigured = true;
+}
 
 export function stopTonePreview() {
+  if (activeTimeout !== null) {
+    window.clearTimeout(activeTimeout);
+    activeTimeout = null;
+  }
   for (const node of activeNodes) {
     try {
       node.dispose();
@@ -23,7 +46,7 @@ export function stopTonePreview() {
   }
   activeNodes = [];
   Tone.Transport.stop();
-  Tone.Transport.cancel();
+  Tone.Transport.cancel(0);
 }
 
 export type TonePreviewLayer = 'melody' | 'chords' | 'bass' | 'drums';
@@ -35,7 +58,7 @@ export async function playTonePreview(
   genre: string,
   onComplete?: () => void,
 ) {
-  await Tone.start();
+  await ensureToneConfigured();
   stopTonePreview();
 
   if (notes.length === 0) {
@@ -55,7 +78,8 @@ export async function playTonePreview(
     if (sampleSet) {
       const sam = sampleSet.samplers.lead;
       sam.connect(delay);
-      activeNodes.push(reverb, delay, ...sampleSet.nodes);
+      // Do not dispose cached sample-set nodes (samplers/players). Only dispose per-play FX.
+      activeNodes.push(reverb, delay);
     } else {
       const inst = melodyPresets[pickPresetIndex(seed, melodyPresets.length)]!();
       (inst.output as any).connect(delay);
@@ -70,7 +94,7 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
       }
       if (onComplete) {
-        window.setTimeout(() => {
+        activeTimeout = window.setTimeout(() => {
           stopTonePreview();
           onComplete();
         }, (maxEnd + 2) * 1000);
@@ -88,7 +112,7 @@ export async function playTonePreview(
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
     }
     if (onComplete) {
-      window.setTimeout(() => {
+      activeTimeout = window.setTimeout(() => {
         stopTonePreview();
         onComplete();
       }, (maxEnd + 2) * 1000);
@@ -103,7 +127,7 @@ export async function playTonePreview(
     if (sampleSet) {
       const sam = sampleSet.samplers.pad;
       sam.connect(chorus);
-      activeNodes.push(reverb, chorus, ...sampleSet.nodes);
+      activeNodes.push(reverb, chorus);
     } else {
       const inst = chordPresets[pickPresetIndex(seed + 11, chordPresets.length)]!();
       (inst.output as any).connect(chorus);
@@ -118,7 +142,7 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
       }
       if (onComplete) {
-        window.setTimeout(() => {
+        activeTimeout = window.setTimeout(() => {
           stopTonePreview();
           onComplete();
         }, (maxEnd + 2) * 1000);
@@ -136,7 +160,7 @@ export async function playTonePreview(
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
     }
     if (onComplete) {
-      window.setTimeout(() => {
+      activeTimeout = window.setTimeout(() => {
         stopTonePreview();
         onComplete();
       }, (maxEnd + 2) * 1000);
@@ -150,7 +174,7 @@ export async function playTonePreview(
     if (sampleSet) {
       const sam = sampleSet.samplers.bass;
       sam.connect(distortion);
-      activeNodes.push(filter, distortion, ...sampleSet.nodes);
+      activeNodes.push(filter, distortion);
     } else {
       const inst = bassPresets[pickPresetIndex(seed + 29, bassPresets.length)]!();
       (inst.output as any).connect(distortion);
@@ -165,7 +189,7 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
       }
       if (onComplete) {
-        window.setTimeout(() => {
+        activeTimeout = window.setTimeout(() => {
           stopTonePreview();
           onComplete();
         }, (maxEnd + 2) * 1000);
@@ -183,7 +207,7 @@ export async function playTonePreview(
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + duration);
     }
     if (onComplete) {
-      window.setTimeout(() => {
+      activeTimeout = window.setTimeout(() => {
         stopTonePreview();
         onComplete();
       }, (maxEnd + 2) * 1000);
@@ -222,7 +246,7 @@ export async function playTonePreview(
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + 0.5);
     }
     if (onComplete) {
-      window.setTimeout(() => {
+      activeTimeout = window.setTimeout(() => {
         stopTonePreview();
         onComplete();
       }, (maxEnd + 1) * 1000);
@@ -270,7 +294,7 @@ export async function playTonePreview(
   }
 
   if (onComplete) {
-    window.setTimeout(() => {
+    activeTimeout = window.setTimeout(() => {
       stopTonePreview();
       onComplete();
     }, (maxEnd + 1) * 1000);

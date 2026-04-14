@@ -491,8 +491,15 @@ function PianoRoll({ notes, color, height = 88 }: { notes: NoteEvent[]; color: s
   );
 }
 
-// ─── LAYER COLORS (strict palette) ────────────────────────────
-const LAYER_COLORS: Record<string, string> = LAYER_VIZ_COLORS;
+// ─── LAYER COLORS ─────────────────────────────────────────────
+// Product decision: keep piano roll + layer UI monochrome (accent).
+const LAYER_COLORS: Record<string, string> = {
+  melody: 'var(--accent)',
+  chords: 'var(--accent)',
+  bass: 'var(--accent)',
+  drums: 'var(--accent)',
+  imported: 'var(--accent)',
+};
 
 const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
 const EDITOR_LAYERS = [...LAYERS, 'imported'] as const;
@@ -2295,6 +2302,7 @@ export default function Home() {
   const lastInspirationSourceRef = useRef<string | null>(null);
   const [isExtending, setIsExtending] = useState(false);
   const [editorView, setEditorView] = useState<'piano' | 'sheet'>('piano');
+  const [editorOpen, setEditorOpen] = useState(true);
   const [pianoChordStripVisible, setPianoChordStripVisible] = useState(true);
   const [importedNotes, setImportedNotes] = useState<NoteEvent[]>([]);
   const [showAudioToMidiModal, setShowAudioToMidiModal] = useState(false);
@@ -2302,6 +2310,10 @@ export default function Home() {
   const [templatesOpen, setTemplatesOpen] = useState(true);
 
   const result = variations[selectedVariation]?.result ?? null;
+
+  useEffect(() => {
+    if (variations.length > 0) setEditorOpen(true);
+  }, [variations.length]);
 
   const isStudio = Boolean(credits?.isPro && credits?.planType === 'studio');
 
@@ -5801,7 +5813,26 @@ export default function Home() {
 
             {/* Piano Roll Editor */}
             <AnimatePresence>
-              {variations.length > 0 && !isGenerating && (
+              {variations.length > 0 && !isGenerating && !editorOpen && (
+                <motion.div
+                  className="mt-6"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: EASE_UI }}
+                >
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={() => setEditorOpen(true)}
+                  >
+                    Open piano roll
+                  </button>
+                </motion.div>
+              )}
+
+              {variations.length > 0 && !isGenerating && editorOpen && (
                 <>
                 <motion.div
                   className="mt-6"
@@ -5976,6 +6007,25 @@ export default function Home() {
                         </div>
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      aria-label="Close piano roll"
+                      title="Close"
+                      className="h-8 w-8 rounded-md grid place-items-center transition-colors"
+                      style={{
+                        flexShrink: 0,
+                        border: '1px solid var(--border-weak)',
+                        color: 'var(--muted)',
+                        background: 'transparent',
+                        lineHeight: 1,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-weak)'; e.currentTarget.style.color = 'var(--muted)'; }}
+                      onClick={() => setEditorOpen(false)}
+                    >
+                      ×
+                    </button>
                   </div>
 
                   {/* Canvas */}
