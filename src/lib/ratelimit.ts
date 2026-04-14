@@ -12,18 +12,18 @@ const guestLimiter = new Ratelimit({
   prefix: 'rl:guest',
 });
 
-/** Signed-in free: 15 req/day (above 10/mo credit cap to avoid false blocks). */
+/** Signed-in free: 30 requests per 60s (auth UX should never feel rate-limited). */
 const freeSignedLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(15, '1 d'),
+  limiter: Ratelimit.slidingWindow(30, '60 s'),
   analytics: true,
   prefix: 'rl:free-signed',
 });
 
-/** Pro: 50 req/day. */
+/** Pro: 60 requests per 60s. */
 const proLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(50, '1 d'),
+  limiter: Ratelimit.slidingWindow(60, '60 s'),
   analytics: true,
   prefix: 'rl:pro',
 });
