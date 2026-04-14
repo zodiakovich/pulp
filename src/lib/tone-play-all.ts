@@ -37,16 +37,31 @@ export async function playAll(
   const seed = Math.round(bpm) + (tracks.melody?.length ?? 0) + (tracks.chords?.length ?? 0) + (tracks.bass?.length ?? 0);
   const sampleSlug = resolveToneSampleSlug(genre);
   const sampleSet = sampleSlug ? await ensureToneSampleSet(sampleSlug) : null;
+
+  // Pre-create Reverb nodes and await their IR generation in parallel before
+  // computing `now`. Tone.Reverb generates its impulse response asynchronously;
+  // audio is silent until ready, so we must wait before scheduling any notes.
+  const melRev = tracks.melody?.length ? new Tone.Reverb({ decay: 1.8, wet: 0.2 }).toDestination() : null;
+  const chRev  = tracks.chords?.length  ? new Tone.Reverb({ decay: 3,   wet: 0.35 }).toDestination() : null;
+  const drmRev = tracks.drums?.length   ? new Tone.Reverb({ decay: 0.4, wet: 0.08 }).toDestination() : null;
+
+  await Promise.all(
+    ([melRev, chRev, drmRev] as (Tone.Reverb | null)[])
+      .filter((r): r is Tone.Reverb => r !== null)
+      .map(r => r.ready),
+  );
+
+  // All reverbs are ready — grab a fresh timestamp now.
   const now = Tone.now() + 0.05;
 
   // MELODY — richer layered FM/AM presets + FX
-  if (tracks.melody?.length) {
-    const rev = new Tone.Reverb({ decay: 1.8, wet: 0.2 }).toDestination();
-    const dly = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.15, wet: 0.08 }).connect(rev);
+  if (tracks.melody?.length && melRev) {
+    const dly = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.15, wet: 0.08 }).connect(melRev);
     if (sampleSet) {
       const sam = sampleSet.samplers.lead;
+      try { sam.disconnect(); } catch { /* not yet connected */ }
       sam.connect(dly);
-      activeNodes.push(rev, dly);
+      activeNodes.push(melRev, dly);
       for (const n of tracks.melody) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -57,7 +72,7 @@ export async function playAll(
       const idx = pickPresetIndex(seed, melodyPresets.length);
       const inst = melodyPresets[idx]!();
       (inst.output as any).connect(dly);
-      activeNodes.push(rev, dly, ...inst.nodes);
+      activeNodes.push(melRev, dly, ...inst.nodes);
       for (const n of tracks.melody) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -68,14 +83,14 @@ export async function playAll(
   }
 
   // CHORDS — pad-like layered FM/AM presets + chorus + reverb
-  if (tracks.chords?.length) {
-    const rev = new Tone.Reverb({ decay: 3, wet: 0.35 }).toDestination();
-    const cho = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.25 }).connect(rev);
+  if (tracks.chords?.length && chRev) {
+    const cho = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.25 }).connect(chRev);
     cho.start();
     if (sampleSet) {
       const sam = sampleSet.samplers.pad;
+      try { sam.disconnect(); } catch { /* not yet connected */ }
       sam.connect(cho);
-      activeNodes.push(rev, cho);
+      activeNodes.push(chRev, cho);
       for (const n of tracks.chords) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -86,7 +101,7 @@ export async function playAll(
       const idx = pickPresetIndex(seed + 11, chordPresets.length);
       const inst = chordPresets[idx]!();
       (inst.output as any).connect(cho);
-      activeNodes.push(rev, cho, ...inst.nodes);
+      activeNodes.push(chRev, cho, ...inst.nodes);
       for (const n of tracks.chords) {
         const t = now + n.startTime * spb;
         const d = Math.max(0.1, n.duration * spb * 0.9);
@@ -101,6 +116,7 @@ export async function playAll(
     const flt = new Tone.Filter({ frequency: 600, type: 'lowpass', rolloff: -24 }).toDestination();
     if (sampleSet) {
       const sam = sampleSet.samplers.bass;
+      try { sam.disconnect(); } catch { /* not yet connected */ }
       sam.connect(flt);
       activeNodes.push(flt);
       for (const n of tracks.bass) {
@@ -124,20 +140,24 @@ export async function playAll(
   }
 
   // DRUMS — kick + snare + hat (shared synths per layer)
-  if (tracks.drums?.length) {
-    const rev = new Tone.Reverb({ decay: 0.4, wet: 0.08 }).toDestination();
+  if (tracks.drums?.length && drmRev) {
     if (sampleSet) {
-      const gKick = new Tone.Gain(1).connect(rev);
-      const gSnare = new Tone.Gain(1).connect(rev);
-      const gCH = new Tone.Gain(1).connect(rev);
-      const gOH = new Tone.Gain(1).connect(rev);
-      const gPerc = new Tone.Gain(1).connect(rev);
+      const gKick = new Tone.Gain(1).connect(drmRev);
+      const gSnare = new Tone.Gain(1).connect(drmRev);
+      const gCH = new Tone.Gain(1).connect(drmRev);
+      const gOH = new Tone.Gain(1).connect(drmRev);
+      const gPerc = new Tone.Gain(1).connect(drmRev);
+      try { sampleSet.players.kick.disconnect(); } catch { /* not yet connected */ }
+      try { sampleSet.players.snare.disconnect(); } catch { /* not yet connected */ }
+      try { sampleSet.players['closed-hat'].disconnect(); } catch { /* not yet connected */ }
+      try { sampleSet.players['open-hat'].disconnect(); } catch { /* not yet connected */ }
+      try { sampleSet.players.perc.disconnect(); } catch { /* not yet connected */ }
       sampleSet.players.kick.connect(gKick);
       sampleSet.players.snare.connect(gSnare);
       sampleSet.players['closed-hat'].connect(gCH);
       sampleSet.players['open-hat'].connect(gOH);
       sampleSet.players.perc.connect(gPerc);
-      activeNodes.push(rev, gKick, gSnare, gCH, gOH, gPerc);
+      activeNodes.push(drmRev, gKick, gSnare, gCH, gOH, gPerc);
 
       for (const n of tracks.drums) {
         const t = now + n.startTime * spb;
@@ -161,12 +181,12 @@ export async function playAll(
         octaves: 8,
         envelope: { attack: 0.001, decay: 0.4, sustain: 0, release: 0.1 },
         volume: -4,
-      }).connect(rev);
+      }).connect(drmRev);
       const snr = new Tone.NoiseSynth({
         noise: { type: 'white' },
         envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.05 },
         volume: -12,
-      }).connect(rev);
+      }).connect(drmRev);
       const hat = new Tone.MetalSynth({
         envelope: { attack: 0.001, decay: 0.04, release: 0.01 },
         harmonicity: 5.1,
@@ -174,9 +194,9 @@ export async function playAll(
         resonance: 4000,
         octaves: 1.5,
         volume: -20,
-      }).connect(rev);
+      }).connect(drmRev);
       hat.frequency.value = 400;
-      activeNodes.push(rev, kick, snr, hat);
+      activeNodes.push(drmRev, kick, snr, hat);
 
       for (const n of tracks.drums) {
         const t = now + n.startTime * spb;
