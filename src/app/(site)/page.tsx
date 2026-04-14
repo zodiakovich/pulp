@@ -2236,8 +2236,7 @@ export default function Home() {
   const effectiveIsSignedIn = e2eBypass ? true : isSignedIn;
   const effectiveUserId = e2eBypass ? 'e2e' : userId;
   const searchParams = useSearchParams();
-  const generatorMode = searchParams?.get('mode') === 'generate';
-  const generatorOnly = Boolean(effectiveIsSignedIn && generatorMode);
+  const generatorOnly = Boolean(effectiveIsSignedIn);
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
   const [params, setParams] = useState<GenerationParams>(getDefaultParams());
