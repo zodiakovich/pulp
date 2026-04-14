@@ -79,7 +79,7 @@ function buildMixGraph(ctx: AudioContext): LayerDestinationBuses {
   melPeak.connect(haasDelay);
   haasDelay.connect(melGainR);
   melGainR.connect(melPanR);
-  melPanR.connect(melMerger, 1, 1);
+  melPanR.connect(melMerger, 0, 1);
 
   const melDry = ctx.createGain();
   melDry.gain.value = 0.8;
