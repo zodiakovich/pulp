@@ -1,5 +1,3 @@
-import type * as Tone from 'tone';
-
 export const SAMPLE_SET_SLUGS = ['acid-drop', 'uk-garage', 'deep-hypnotic', 'bouncy-funk'] as const;
 export type SampleSetSlug = (typeof SAMPLE_SET_SLUGS)[number];
 
@@ -50,10 +48,4 @@ export type WebAudioDecodedSampleSet = {
   pad: AudioBuffer;
 };
 
-export type ToneLoadedSampleSet = {
-  slug: SampleSetSlug;
-  samplers: Record<PitchedSampleKey, Tone.Sampler>;
-  players: Record<DrumSampleKey, Tone.Player>;
-  nodes: Tone.ToneAudioNode[];
-};
 
