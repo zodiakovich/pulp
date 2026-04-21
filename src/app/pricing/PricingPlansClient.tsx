@@ -352,7 +352,30 @@ export function PricingPlansClient() {
           </motion.div>
 
           {/* Pro */}
-          <motion.div className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover" style={{ y: prefersReducedMotion ? 0 : centerY }}>
+          <div style={{ transform: 'scale(1.03)', transformOrigin: 'center' }}>
+          <motion.div
+            className="relative flex flex-col rounded-2xl p-10 card-tilt-hover"
+            style={{
+              y: prefersReducedMotion ? 0 : centerY,
+              border: '1.5px solid rgba(255,109,63,0.35)',
+              background: 'rgba(255,109,63,0.04)',
+              boxShadow: '0 0 0 1px rgba(255,109,63,0.08), 0 24px 48px -12px rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+            }}
+          >
+            {/* Radial highlight at top */}
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: -1,
+                borderRadius: 'inherit',
+                background: 'radial-gradient(ellipse at 50% 0%, rgba(255,109,63,0.06) 0%, transparent 60%)',
+                zIndex: -1,
+                pointerEvents: 'none',
+              }}
+            />
             <div className="mb-10">
               <p
                 className="mb-6 text-xs uppercase tracking-[0.12em]"
@@ -375,7 +398,11 @@ export function PricingPlansClient() {
               ))}
             </ul>
             <CheckoutCta plan="pro" billing={billing} label="Subscribe" />
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 12 }}>
+              Chosen by 87% of active producers
+            </p>
           </motion.div>
+          </div>
 
           {/* Studio — featured */}
           <motion.div

@@ -34,6 +34,7 @@ export function Navbar({
   const pathname = usePathname();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const scrollToGenerator = () => {
     document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -42,6 +43,12 @@ export function Navbar({
   useEffect(() => {
     const resolved = document.documentElement.classList.contains('light') ? 'light' : 'dark';
     setTheme(resolved);
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const navClass = (isActive: boolean) =>
@@ -107,7 +114,15 @@ export function Navbar({
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-50 glass"
+      className="sticky top-0 left-0 right-0 z-50"
+      style={{
+        background: 'rgba(10,10,11,0.7)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: scrolled ? '0 4px 24px -4px rgba(255,109,63,0.10)' : 'none',
+        transition: 'box-shadow 300ms ease',
+      }}
     >
       <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between gap-4">
         <Link

@@ -2054,9 +2054,13 @@ function normalizeScaleToEngine(value: string): string {
 
 function HeroDemoPreview() {
   const [tick, setTick] = React.useState(0)
-  
+  const [playhead, setPlayhead] = React.useState(0)
+
   React.useEffect(() => {
-    const interval = setInterval(() => setTick(t => (t + 1) % 60), 100)
+    const interval = setInterval(() => {
+      setTick(t => (t + 1) % 60)
+      setPlayhead(t => (t + 1) % 100)
+    }, 200)
     return () => clearInterval(interval)
   }, [])
 
@@ -2068,62 +2072,92 @@ function HeroDemoPreview() {
   ]
 
   return (
-    <div
-      className="mb-6 rounded-2xl overflow-hidden"
-      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
-    >
+    <div className="relative mb-6" style={{ position: 'relative' }}>
+      {/* Ambient glow behind */}
       <div
-        className="flex items-center justify-between px-4 py-2"
-        style={{ borderBottom: '1px solid var(--border)' }}
+        aria-hidden
+        style={{
+          position: 'absolute',
+          zIndex: -1,
+          inset: -20,
+          background: 'radial-gradient(ellipse, rgba(255,109,63,0.08) 0%, transparent 70%)',
+          filter: 'blur(40px)',
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
-        <div className="flex items-center gap-2">
-          <div
-            className="animate-pulse"
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: DS.accent,
-            }}
-          />
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.06em' }}>
-            LIVE PREVIEW · Tech House · 128 BPM · Am
+        <div
+          className="flex items-center justify-between px-4 py-2"
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
+          <div className="flex items-center gap-2">
+            <div
+              className="animate-pulse"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: DS.accent,
+              }}
+            />
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.06em' }}>
+              LIVE PREVIEW · Tech House · 128 BPM · Am
+            </span>
+          </div>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
+            generate yours →
           </span>
         </div>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-          generate yours →
-        </span>
-      </div>
-      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {layers.map(layer => (
-          <div
-            key={layer.name}
-            className="rounded-xl overflow-hidden"
-            style={{ background: 'var(--bg)', border: '1px solid var(--border-weak)', height: 52 }}
-          >
-            <div className="flex items-center gap-1.5 px-2 pt-1.5">
-              <div style={{ width: 5, height: 5, borderRadius: '50%', background: layer.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: layer.color, opacity: 0.7 }}>
-                {layer.name.toUpperCase()}
-              </span>
-            </div>
-            <div className="flex items-end gap-px px-2 pb-2" style={{ height: 32 }}>
-              {layer.pattern.map((on, i) => (
+        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {layers.map(layer => (
+            <div
+              key={layer.name}
+              className="rounded-xl overflow-hidden"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border-weak)', height: 52 }}
+            >
+              <div className="flex items-center gap-1.5 px-2 pt-1.5">
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: layer.color, flexShrink: 0 }} />
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: layer.color, opacity: 0.7 }}>
+                  {layer.name.toUpperCase()}
+                </span>
+              </div>
+              <div className="flex items-end gap-px px-2 pb-2" style={{ height: 32, position: 'relative' }}>
+                {layer.pattern.map((on, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      flex: 1,
+                      borderRadius: 3,
+                      background: layer.color,
+                      opacity: on ? (i === tick % 16 ? 1 : 0.45) : 0.08,
+                      height: on ? (layer.name === 'Melody' ? `${50 + Math.sin(i * 0.8) * 35}%` : layer.name === 'Drums' ? '80%' : '55%') : '15%',
+                      transition: 'opacity 0.1s',
+                      boxShadow: on ? 'inset 0 1px 0 rgba(255,255,255,0.15)' : undefined,
+                    }}
+                  />
+                ))}
+                {/* Animated playhead */}
                 <div
-                  key={i}
+                  aria-hidden
                   style={{
-                    flex: 1,
-                    borderRadius: 1,
-                    background: layer.color,
-                    opacity: on ? (i === tick % 16 ? 1 : 0.45) : 0.08,
-                    height: on ? (layer.name === 'Melody' ? `${50 + Math.sin(i * 0.8) * 35}%` : layer.name === 'Drums' ? '80%' : '55%') : '15%',
-                    transition: 'opacity 0.1s',
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    width: 1,
+                    background: 'rgba(255,255,255,0.7)',
+                    left: `${playhead}%`,
+                    pointerEvents: 'none',
+                    zIndex: 10,
+                    filter: 'drop-shadow(0 0 4px rgba(255,255,255,0.9))',
                   }}
                 />
-              ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -2354,6 +2388,7 @@ export default function Home() {
   const [generatorInView, setGeneratorInView] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
   const demoFeaturesRef = useRef<HTMLElement>(null);
+  const featuresGridRef = useRef<HTMLDivElement>(null);
   const dawStripRef = useRef<HTMLElement>(null);
   const compareRef = useRef<HTMLElement>(null);
 
@@ -2578,6 +2613,19 @@ export default function Home() {
       window.setTimeout(() => promptRef.current?.focus(), 0);
     }
   }, [searchParams]);
+
+  // Mouse spotlight for features grid
+  useEffect(() => {
+    const el = featuresGridRef.current;
+    if (!el) return;
+    const onMove = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      el.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+      el.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
+    };
+    el.addEventListener('mousemove', onMove);
+    return () => el.removeEventListener('mousemove', onMove);
+  }, []);
 
   // Track viewport height for fullscreen editor sizing
   useEffect(() => {
@@ -4252,25 +4300,39 @@ export default function Home() {
           style={{
             position: 'absolute',
             inset: 0,
-            opacity: 0.025,
+            opacity: 0.03,
             backgroundImage:
               'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
-            backgroundSize: '64px 64px',
+            backgroundSize: '48px 48px',
             pointerEvents: 'none',
-            WebkitMaskImage: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 44%, rgba(0,0,0,0) 78%)',
-            maskImage: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 44%, rgba(0,0,0,0) 78%)',
+            WebkitMaskImage: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%)',
+            maskImage: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%)',
+          }}
+        />
+        {/* Left ambient glow */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 400,
+            height: 400,
+            background: 'radial-gradient(circle, rgba(255,109,63,0.04) 0%, transparent 60%)',
+            pointerEvents: 'none',
+            zIndex: 0,
           }}
         />
         <motion.div
           aria-hidden
           style={{
             position: 'absolute',
-            left: '50%',
-            top: -220,
-            width: 1200,
-            height: 1200,
-            transform: 'translateX(-50%)',
-            background: 'radial-gradient(circle at 50% 35%, rgba(255,109,63,0.08), transparent 60%)',
+            right: -80,
+            top: '50%',
+            width: 700,
+            height: 700,
+            transform: 'translateY(-50%)',
+            background: 'radial-gradient(circle, rgba(255,109,63,0.14) 0%, rgba(255,109,63,0.06) 35%, transparent 70%)',
             pointerEvents: 'none',
             x: prefersReducedMotion ? 0 : heroGlowX,
             y: prefersReducedMotion ? 0 : heroGlowY,
@@ -4288,6 +4350,19 @@ export default function Home() {
               className="mb-6 text-[11px] font-medium uppercase tracking-[0.22em] text-left"
               style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 500, color: 'var(--accent)' }}
             >
+              <span
+                aria-hidden
+                style={{
+                  display: 'inline-block',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#FF6D3F',
+                  marginRight: 8,
+                  verticalAlign: 'middle',
+                  animation: 'pulseOrange 2s ease-in-out infinite',
+                }}
+              />
               AI MIDI Generator
             </p>
             <h1
@@ -4345,7 +4420,7 @@ export default function Home() {
       </section>
 
       {/* Works with any DAW strip */}
-      <section ref={dawStripRef} className="relative px-4 sm:px-8 py-20">
+      <motion.section ref={dawStripRef} className="relative px-4 sm:px-8 py-20" {...scrollSection}>
         <div aria-hidden className="noise-overlay" />
         <motion.div
           className="mx-auto max-w-[1200px] mobile-scroll-row"
@@ -4373,7 +4448,7 @@ export default function Home() {
             <span>Reaper</span>
           </div>
         </motion.div>
-      </section>
+      </motion.section>
 
       {/* ── STATS ── */}
       <motion.section
@@ -4401,8 +4476,8 @@ export default function Home() {
       </motion.section>
 
       {/* ── DEMO / FEATURES ── */}
-      <section id="demo" className="mt-24 px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} ref={demoFeaturesRef}>
-        <div className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
+      <motion.section id="demo" className="mt-24 px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} ref={demoFeaturesRef} {...scrollSection}>
+        <div ref={featuresGridRef} className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
           {[
             {
               title: 'Artist hints',
@@ -4437,30 +4512,49 @@ export default function Home() {
           ].map((card, idx) => (
             <motion.div
               key={card.title}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 transition-[border-color] duration-200 hover:border-[rgba(255,109,63,0.45)] md:p-8"
+              className="relative rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[rgba(255,109,63,0.45)] md:p-8"
               style={{
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 0 rgba(255,255,255,0.03)',
+                transition: 'all 200ms ease',
                 opacity: prefersReducedMotion ? 1 : (idx === 0 ? demoCard0O : idx === 1 ? demoCard1O : demoCard2O),
                 x: prefersReducedMotion ? 0 : (idx === 0 ? demoCard0X : idx === 1 ? demoCard1X : demoCard2X),
                 y: prefersReducedMotion ? 0 : (idx === 0 ? demoCard0Y : idx === 1 ? demoCard1Y : demoCard2Y),
                 rotate: prefersReducedMotion ? 0 : (idx === 0 ? demoCard0R : idx === 1 ? demoCard1R : demoCard2R),
               }}
+              whileHover={{ y: -4 }}
             >
-              <div className="mb-5 flex items-start gap-4">
-                {card.icon}
-                <h2
-                  className="text-lg font-bold leading-tight"
-                  style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}
-                >
-                  {card.title}
-                </h2>
+              {/* Mouse spotlight overlay */}
+              <div
+                aria-hidden
+                style={{
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: 'inherit',
+                  background: 'radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.04), transparent 40%)',
+                  zIndex: 0,
+                }}
+              />
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div className="mb-5 flex items-start gap-4">
+                  {card.icon}
+                  <h2
+                    className="text-lg font-bold leading-tight"
+                    style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}
+                  >
+                    {card.title}
+                  </h2>
+                </div>
+                <p className="text-[15px] leading-relaxed" style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--muted)' }}>
+                  {card.body}
+                </p>
               </div>
-              <p className="text-[15px] leading-relaxed" style={{ fontFamily: 'DM Sans, sans-serif', color: 'var(--muted)' }}>
-                {card.body}
-              </p>
             </motion.div>
           ))}
         </div>
-      </section>
+      </motion.section>
       </>
       )}
 
@@ -6191,7 +6285,7 @@ export default function Home() {
       {/* ── COMPARISON ── */}
       {!generatorOnly && (
       <>
-      <section ref={compareRef} className="mt-20 px-4 sm:px-8 py-20" style={{ background: 'var(--bg)' }}>
+      <motion.section ref={compareRef} className="mt-20 px-4 sm:px-8 py-20" style={{ background: 'var(--bg)' }} {...scrollSection}>
         <div className="mx-auto max-w-[1200px]">
           <div className="mb-10">
             <h2
@@ -6339,7 +6433,7 @@ export default function Home() {
             Pricing and features based on publicly available information as of April 2026. Subject to change.
           </div>
         </div>
-      </section>
+      </motion.section>
 
       <SiteFooter />
       </>

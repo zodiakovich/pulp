@@ -407,6 +407,11 @@ section h2, .section-title {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes pulseOrange {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.6); }
+}
+
 @keyframes shimmer {
   0%   { background-position: -400% 0; }
   100% { background-position:  400% 0; }
