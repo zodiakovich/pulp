@@ -23,14 +23,14 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   openGraph: {
     title: 'Pulp — AI MIDI Generator',
-    description: defaultDescription,
+    description: 'Generate professional multi-track MIDI from text prompts. Melody, chords, bass, and drums in seconds. Ready for any DAW.',
     url: siteUrl,
     siteName: 'Pulp',
     locale: 'en_US',
     type: 'website',
     images: [
       {
-        url: ogImagePath,
+        url: '/opengraph-image',
         width: 1200,
         height: 630,
         alt: 'Pulp — AI MIDI Generator',
@@ -40,8 +40,8 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Pulp — AI MIDI Generator',
-    description: defaultDescription,
-    images: [ogImagePath],
+    description: 'Generate professional multi-track MIDI from text prompts. Melody, chords, bass, and drums in seconds.',
+    images: ['/opengraph-image'],
   },
   icons: {
     icon: [
