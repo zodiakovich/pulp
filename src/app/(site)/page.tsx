@@ -5085,7 +5085,7 @@ export default function Home() {
             )}
             {!effectiveIsSignedIn && (
               <p className="-mt-2 mb-4 text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                No card required · 10 generations per month
+                No card required · 20 generations per month
               </p>
             )}
 

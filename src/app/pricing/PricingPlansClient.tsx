@@ -321,7 +321,7 @@ export function PricingPlansClient() {
                 </span>
               </div>
               <p className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}>
-                10 generations / month
+                20 generations / month
               </p>
             </div>
             <ul className="mb-10 flex flex-col gap-5 flex-1">
@@ -483,7 +483,7 @@ export function PricingPlansClient() {
                     <td className="px-4 py-4 text-center align-middle">
                       {row.label === 'Monthly generations' ? (
                         <span className="text-sm font-medium" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
-                          10
+                          20
                         </span>
                       ) : row.label === 'Genre library (5 → all)' ? (
                         <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>

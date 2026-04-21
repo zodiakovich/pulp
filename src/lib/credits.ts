@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 /** Free tier monthly cap (must match product copy unless changed together). */
-export const FREE_MONTHLY_LIMIT = 10;
+export const FREE_MONTHLY_LIMIT = 20;
 /** Pro tier monthly cap. */
 export const PRO_MONTHLY_LIMIT = 150;
 /** Studio tier monthly cap. */
