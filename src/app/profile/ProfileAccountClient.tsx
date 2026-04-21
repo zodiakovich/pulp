@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import { useToast } from '@/components/toast/useToast';
 
@@ -20,10 +22,28 @@ type Props = {
 export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
   const { signOut } = useClerk();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [cancelledAt, setCancelledAt] = useState<number | null>(null);
+
+  async function handlePortal() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error ?? 'Failed to open billing portal');
+      }
+      router.push(data.url);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to open billing portal', 'danger');
+    } finally {
+      setPortalLoading(false);
+    }
+  }
 
   async function handleCancel() {
     setLoading(true);
@@ -96,15 +116,35 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-          {isPro && !cancelledAt && (
-            <button
-              type="button"
-              className="btn-secondary btn-sm"
-              style={{ color: 'var(--muted)', borderColor: 'var(--border)' }}
-              onClick={() => setShowModal(true)}
+          {isPro ? (
+            <>
+              <button
+                type="button"
+                className="btn-primary btn-sm"
+                onClick={handlePortal}
+                disabled={portalLoading}
+              >
+                {portalLoading ? 'Loading…' : 'Manage subscription'}
+              </button>
+              {!cancelledAt && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  style={{ color: 'var(--muted)', borderColor: 'var(--border)' }}
+                  onClick={() => setShowModal(true)}
+                >
+                  Cancel subscription
+                </button>
+              )}
+            </>
+          ) : (
+            <Link
+              href="/pricing"
+              className="btn-primary btn-sm"
+              style={{ textDecoration: 'none' }}
             >
-              Cancel subscription
-            </button>
+              Upgrade plan
+            </Link>
           )}
           <button
             type="button"

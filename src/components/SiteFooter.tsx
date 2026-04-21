@@ -100,6 +100,7 @@ export function SiteFooter() {
               { label: 'Mix Engine', href: '/build' },
               { label: 'Templates', href: '/create' },
               { label: 'Pricing', href: '/pricing' },
+              { label: 'Settings', href: '/settings' },
               { label: 'Changelog', href: '/changelog' },
             ]}
           />

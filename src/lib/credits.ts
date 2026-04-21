@@ -73,7 +73,7 @@ export async function getOrCreateCredits(userId: string): Promise<UserCreditsRow
     const iso = firstOfCurrentMonthISO();
     const { error: upErr } = await supabaseAdmin
       .from('user_credits')
-      .update({ credits_used: 0, created_at: iso })
+      .update({ credits_used: 0, created_at: iso, low_gen_warning_sent: false })
       .eq('user_id', userId);
     if (upErr) throw upErr;
     return { ...row, credits_used: 0, created_at: iso };

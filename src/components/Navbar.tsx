@@ -2,11 +2,42 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Moon, Sun } from 'lucide-react';
 import { useAuth, SignedIn, SignedOut } from '@clerk/nextjs';
 import { SignInButtonDeferred, UserButtonDeferred } from '@/components/ClerkAuthDeferred';
 import { WhatsNew } from '@/components/WhatsNew';
+
+type CreditsData = { credits_used: number; limit: number; is_pro: boolean; plan_type: string } | null;
+
+function GenerationPill({ data, onClick }: { data: CreditsData; onClick: () => void }) {
+  if (!data) return null;
+  const remaining = Math.max(0, data.limit - data.credits_used);
+  const pct = data.limit > 0 ? remaining / data.limit : 0;
+  const color = pct > 0.5 ? '#00B894' : pct > 0.1 ? '#FF6D3F' : '#E94560';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: 11,
+        color,
+        border: `1px solid ${color}33`,
+        background: `${color}14`,
+        borderRadius: 20,
+        padding: '3px 10px',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        letterSpacing: '0.03em',
+        lineHeight: 1.5,
+      }}
+      title={`${remaining} of ${data.limit} generations remaining`}
+    >
+      {remaining} / {data.limit}
+    </button>
+  );
+}
 
 const STORAGE_KEY = 'pulp_theme';
 
@@ -26,15 +57,32 @@ export function Navbar({
   onHistory,
   historyCount,
 }: {
-  active?: 'create' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog' | 'changelog';
+  active?: 'create' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog' | 'changelog' | 'settings';
   onHistory?: () => void;
   historyCount?: number;
 }) {
   const { isLoaded, isSignedIn } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [credits, setCredits] = useState<CreditsData>(null);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    async function fetchCredits() {
+      try {
+        const res = await fetch('/api/credits');
+        if (res.ok) setCredits(await res.json() as CreditsData);
+      } catch { /* silent */ }
+    }
+    void fetchCredits();
+
+    function onGenerated() { void fetchCredits(); }
+    window.addEventListener('pulp:generation-created', onGenerated);
+    return () => window.removeEventListener('pulp:generation-created', onGenerated);
+  }, [isLoaded, isSignedIn]);
 
   const scrollToGenerator = () => {
     document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -106,6 +154,9 @@ export function Navbar({
       <Link href="/profile" className={navClass(active === 'profile')}>
         Profile
       </Link>
+      <Link href="/settings" className={navClass(active === 'settings')}>
+        Settings
+      </Link>
       <Link href="/pricing" className={navClass(active === 'pricing')}>
         Pricing
       </Link>
@@ -175,6 +226,10 @@ export function Navbar({
             {theme === 'dark' ? <Sun size={16} strokeWidth={1.75} aria-hidden /> : <Moon size={16} strokeWidth={1.75} aria-hidden />}
           </button>
           <SignedIn>
+            <GenerationPill
+              data={credits}
+              onClick={() => router.push(credits?.is_pro ? '/profile' : '/pricing')}
+            />
             {pathname === '/' ? (
               <button type="button" className="btn-primary btn-sm" onClick={() => scrollToGenerator()}>
                 Generate
@@ -207,6 +262,7 @@ export function Navbar({
               <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
               <a href="/build" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Build</a>
               <a href="/profile" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
+              <a href="/settings" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Settings</a>
               <a href="/pricing" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               <a href="/blog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Blog</a>
               <a href="/about" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>About</a>
