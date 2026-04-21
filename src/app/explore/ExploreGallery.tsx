@@ -21,11 +21,9 @@ type GalleryItem = {
 export function ExploreGallery({
   items,
   genres,
-  seedMode,
 }: {
   items: GalleryItem[];
   genres: Array<{ key: string; name: string }>;
-  seedMode: boolean;
 }) {
   const router = useRouter();
   const [selectedGenre, setSelectedGenre] = useState<(typeof EXPLORE_GENRES)[number]>('All');
@@ -93,24 +91,9 @@ export function ExploreGallery({
         </div>
       </div>
 
-      {seedMode && (
-        <p
-          style={{
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 10,
-            color: 'var(--text-micro)',
-            marginBottom: 24,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-          }}
-        >
-          example generations
-        </p>
-      )}
-
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
-        {filteredGenerations.length === 0 && !seedMode && (
+        {filteredGenerations.length === 0 && (
           <div
             className="rounded-2xl p-8 lg:col-span-3"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
@@ -140,7 +123,7 @@ export function ExploreGallery({
           const prompt = (item.prompt ?? '').trim();
           const promptShort =
             prompt.length > 60 ? `${prompt.slice(0, 60).trimEnd()}…` : (prompt || '—');
-          const href = item.isExample ? '/' : `/g/${item.id}`;
+          const href = `/g/${item.id}`;
 
           return (
             <Link
@@ -157,22 +140,6 @@ export function ExploreGallery({
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  {item.isExample && (
-                    <span
-                      className="inline-flex px-2 py-0.5 rounded-md mb-2"
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: 9,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em',
-                        color: 'var(--muted)',
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid var(--border-weak)',
-                      }}
-                    >
-                      example
-                    </span>
-                  )}
                   <p
                     className="text-sm font-semibold mb-2"
                     style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}

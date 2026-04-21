@@ -414,9 +414,6 @@ export function PricingPlansClient() {
               ))}
             </ul>
             <CheckoutCta plan="pro" billing={billing} label="Subscribe" />
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 12 }}>
-              Chosen by 87% of active producers
-            </p>
           </motion.div>
           </div>
 

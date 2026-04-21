@@ -178,10 +178,26 @@ export function Navbar({
       <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between gap-4">
         <Link
           href="/"
-          className="font-extrabold text-xl"
+          className="font-extrabold text-xl flex items-center gap-2"
           style={{ fontFamily: 'Syne, sans-serif', textDecoration: 'none', color: 'var(--accent)' }}
         >
           pulp
+          <span
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 10,
+              fontWeight: 400,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.5)',
+              background: 'rgba(255,255,255,0.08)',
+              borderRadius: 20,
+              padding: '2px 7px',
+              lineHeight: 1.5,
+            }}
+          >
+            Beta
+          </span>
         </Link>
 
         <div className="hidden md:flex items-center gap-8">

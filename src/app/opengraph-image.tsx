@@ -89,9 +89,9 @@ export default function Image() {
           alignItems: 'center',
         }}>
           {[
-            { value: '10,000+', label: 'MIDIs generated' },
             { value: '20+', label: 'Genres' },
             { value: 'Free', label: 'to start' },
+            { value: 'No install', label: 'runs in browser' },
           ].map((stat, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
               {i > 0 && (

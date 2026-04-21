@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     canonical: siteUrl,
   },
   title: {
-    default: 'Pulp — AI MIDI Generator',
+    default: 'Pulp — AI MIDI Generator (Beta)',
     template: '%s — Pulp | AI MIDI Generator',
   },
   description: defaultDescription,
   manifest: '/manifest.json',
   openGraph: {
-    title: 'Pulp — AI MIDI Generator',
-    description: 'Generate professional multi-track MIDI from text prompts. Melody, chords, bass, and drums in seconds. Ready for any DAW.',
+    title: 'Pulp — AI MIDI Generator (Beta)',
+    description: 'Generate professional multi-track MIDI from text prompts — now in beta. Melody, chords, bass, and drums in seconds. Ready for any DAW.',
     url: siteUrl,
     siteName: 'Pulp',
     locale: 'en_US',
@@ -39,8 +39,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pulp — AI MIDI Generator',
-    description: 'Generate professional multi-track MIDI from text prompts. Melody, chords, bass, and drums in seconds.',
+    title: 'Pulp — AI MIDI Generator (Beta)',
+    description: 'Generate professional multi-track MIDI from text prompts — now in beta. Melody, chords, bass, and drums in seconds.',
     images: ['/opengraph-image'],
   },
   icons: {

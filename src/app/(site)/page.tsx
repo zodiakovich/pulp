@@ -80,11 +80,6 @@ const scrollSection = {
   transition: { duration: 0.4, ease: EASE_UI },
 } as const;
 
-const LANDING_STATS: { value: string; label: string }[] = [
-  { value: '10,000+', label: ' track ideas generated' },
-  { value: '300+', label: ' artists' },
-  { value: '50+', label: ' genre models' },
-];
 
 const QUICK_START_TEMPLATES: {
   name: string;
@@ -4380,6 +4375,26 @@ export default function Home() {
               />
               Your AI co-producer
             </p>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                fontWeight: 400,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.5)',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,109,63,0.2)',
+                boxShadow: '0 0 12px rgba(255,109,63,0.12)',
+                borderRadius: 20,
+                padding: '4px 12px',
+                marginBottom: 16,
+              }}
+            >
+              Now in Beta
+            </span>
             <h1
               className="font-extrabold leading-[1.05] tracking-tight text-left"
               style={{
@@ -4465,30 +4480,6 @@ export default function Home() {
         </motion.div>
       </motion.section>
 
-      {/* ── STATS ── */}
-      <motion.section
-        className="mt-24 px-4 sm:px-8 py-24"
-        style={{ background: 'var(--surface)', borderTop: '1px solid var(--divider)', borderBottom: '1px solid var(--divider)' }}
-        {...scrollSection}
-      >
-        <div className="mx-auto flex max-w-[960px] flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0" style={{ borderColor: 'var(--divider)' }}>
-          {LANDING_STATS.map(row => (
-            <div key={row.value + row.label} className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center sm:py-6">
-              <p
-                style={{
-                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-                  fontSize: 15,
-                  lineHeight: 1.4,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{row.value}</span>
-                <span style={{ color: 'var(--muted)' }}>{row.label}</span>
-              </p>
-            </div>
-          ))}
-        </div>
-      </motion.section>
 
       {/* ── DEMO / FEATURES ── */}
       <motion.section id="demo" className="mt-24 px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} ref={demoFeaturesRef} {...scrollSection}>
@@ -6572,7 +6563,7 @@ export default function Home() {
             const rows: { label: string; values: [string, string, string, string] }[] = [
               { label: 'Price', values: ['$7/mo', '$9.99/mo', '$15/mo', '$7.99/mo'] },
               { label: 'Mix Engine', values: ['Built-in', '—', '—', '—'] },
-              { label: 'Artist Mapping', values: ['300+', 'Limited', '—', '—'] },
+              { label: 'Artist Mapping', values: ['✓', 'Limited', '—', '—'] },
               { label: 'MIDI + WAV Export', values: ['✓', '✓', '✓', '✓'] },
               { label: 'Piano Roll Editor', values: ['✓', '—', '—', '✓'] },
               { label: 'Web-based (no install)', values: ['✓', '✓', '✓', '✓'] },
