@@ -1575,24 +1575,50 @@ function HistorySidebar({
     inspiration_source: string | null;
     is_favorite: boolean;
   }>>([]);
-  const [page, setPage] = React.useState(0);
+  const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
   const [fetching, setFetching] = React.useState(false);
+  const [dbError, setDbError] = React.useState<string | null>(null);
+  const [retryKey, setRetryKey] = React.useState(0);
   const listRef = React.useRef<HTMLDivElement>(null);
 
   const PAGE_SIZE = 20;
 
-  const resetAndLoad = React.useCallback(() => {
-    setRows([]);
-    setPage(0);
-    setHasMore(true);
-  }, []);
-
+  // Single effect: resets state and fetches page 0 whenever filter/auth changes.
+  // This avoids the race condition where a stale `page` value from a previous
+  // load is captured by the loadMore callback before the reset state takes effect.
   React.useEffect(() => {
     if (!isSignedIn || !userId) return;
-    resetAndLoad();
-  }, [isSignedIn, userId, tab, genreFilter, resetAndLoad]);
+    let cancelled = false;
+    setRows([]);
+    setPage(1);
+    setHasMore(true);
+    setDbError(null);
+    setFetching(true);
+    const run = async () => {
+      try {
+        let q = supabase
+          .from('generations')
+          .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+        if (tab === 'favorites') q = q.eq('is_favorite', true);
+        if (genreFilter) q = q.eq('genre', genreFilter);
+        const { data, error } = await q.range(0, PAGE_SIZE - 1);
+        if (cancelled) return;
+        if (error) { setDbError(error.message); return; }
+        const next = (data ?? []) as any[];
+        setRows(next);
+        if (next.length < PAGE_SIZE) setHasMore(false);
+      } finally {
+        if (!cancelled) setFetching(false);
+      }
+    };
+    void run();
+    return () => { cancelled = true; };
+  }, [isSignedIn, userId, tab, genreFilter, supabase, retryKey]);
 
+  // Loads subsequent pages on infinite scroll. `page` is 1 after the initial load.
   const loadMore = React.useCallback(async () => {
     if (!isSignedIn || !userId) return;
     if (fetching || !hasMore) return;
@@ -1608,7 +1634,7 @@ function HistorySidebar({
       if (tab === 'favorites') q = q.eq('is_favorite', true);
       if (genreFilter) q = q.eq('genre', genreFilter);
       const { data, error } = await q.range(from, to);
-      if (error) return;
+      if (error) { setDbError(error.message); return; }
       const next = (data ?? []) as any[];
       setRows(prev => [...prev, ...next]);
       setPage(p => p + 1);
@@ -1617,12 +1643,6 @@ function HistorySidebar({
       setFetching(false);
     }
   }, [isSignedIn, userId, supabase, tab, genreFilter, fetching, hasMore, page]);
-
-  React.useEffect(() => {
-    if (!isSignedIn || !userId) return;
-    void loadMore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn, userId, tab, genreFilter]);
 
   const displayed = React.useMemo(() => {
     const ql = query.trim().toLowerCase();
@@ -1688,7 +1708,7 @@ function HistorySidebar({
         >×</button>
       </div>
 
-      {loading ? (
+      {(loading || (fetching && rows.length === 0 && !dbError)) ? (
         <div className="flex-1 overflow-y-auto">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
@@ -1716,6 +1736,22 @@ function HistorySidebar({
           >
             Sign in
           </a>
+        </div>
+      ) : dbError ? (
+        <div className="flex-1 flex flex-col items-center justify-center px-8 gap-4">
+          <p className="text-sm text-center leading-relaxed" style={{ color: 'var(--muted)', fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif' }}>
+            Failed to load history
+          </p>
+          <p className="text-xs text-center font-mono break-all" style={{ color: 'rgba(255,255,255,0.30)', maxWidth: 240 }}>
+            {dbError}
+          </p>
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => setRetryKey(k => k + 1)}
+          >
+            Retry
+          </button>
         </div>
       ) : displayed.length === 0 ? (
         <div className="flex-1 flex items-center justify-center px-6">
@@ -2532,21 +2568,16 @@ export default function Home() {
 
   // Open history from other pages via /?history=1
   useEffect(() => {
-    try {
-      const u = new URL(window.location.href);
-      if (u.searchParams.get('history') === '1') {
-        setShowHistory(true);
-      }
-      const prefill = u.searchParams.get('prompt');
-      if (prefill) {
-        setPrompt(prefill);
-        setActiveStyleTag(null);
-        window.setTimeout(() => promptRef.current?.focus(), 0);
-      }
-    } catch {
-      // ignore
+    if (searchParams.get('history') === '1') {
+      setShowHistory(true);
     }
-  }, []);
+    const prefill = searchParams.get('prompt');
+    if (prefill) {
+      setPrompt(prefill);
+      setActiveStyleTag(null);
+      window.setTimeout(() => promptRef.current?.focus(), 0);
+    }
+  }, [searchParams]);
 
   // Track viewport height for fullscreen editor sizing
   useEffect(() => {
@@ -2580,7 +2611,10 @@ export default function Home() {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (error || !data) return;
+      if (error || !data) {
+        console.error('[history] loadHistoryFromDb failed', error);
+        return;
+      }
 
       const entries: HistoryEntry[] = (data as Array<{
         id: string; prompt: string; genre: string; bpm: number;
@@ -3852,6 +3886,24 @@ export default function Home() {
   }, []);
 
   // ── RENDER ────────────────────────────────────────────────
+  if (!e2eBypass && !isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            border: '2px solid rgba(255,255,255,0.08)',
+            borderTopColor: 'var(--accent)',
+            animation: 'spin 0.7s linear infinite',
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <>
 

@@ -235,7 +235,7 @@ export function ExploreGallery({
                         e.preventDefault();
                         e.stopPropagation();
                         if (!prompt) return;
-                        router.push(`/?prompt=${encodeURIComponent(prompt)}`);
+                        router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
                       }}
                       disabled={!prompt}
                     >

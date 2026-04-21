@@ -10,8 +10,7 @@ function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('Missing STRIPE_SECRET_KEY');
   stripeSingleton = new Stripe(key, {
-    // Keep this pinned to a real Stripe API version supported by stripe-node.
-    apiVersion: '2024-06-20',
+    apiVersion: '2026-03-25.dahlia' as any,
   });
   return stripeSingleton;
 }
@@ -141,9 +140,7 @@ export async function POST(req: Request) {
       doc_url: (stripeError as any)?.doc_url,
     });
 
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Failed to create checkout session' },
-      { status: 500 },
-    );
+    const message = e instanceof Error ? e.message : (typeof e === 'string' ? e : JSON.stringify(e) || 'Failed to create checkout session');
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
