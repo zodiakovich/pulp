@@ -12,6 +12,9 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  alternates: {
+    canonical: siteUrl,
+  },
   title: {
     default: 'pulp — AI MIDI Generator',
     template: '%s — pulp | AI MIDI Generator',

@@ -4208,7 +4208,7 @@ export default function Home() {
                 style={{ border: '1px solid var(--border)', background: 'color-mix(in srgb, var(--surface) 92%, transparent)' }}
               >
                 <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                  {'<iframe src="https://pulp-4ubq.vercel.app/embed" width="100%" height="400" frameborder="0"></iframe>'}
+                  {'<iframe src="https://pulp.bypapaya.com/embed" width="100%" height="400" frameborder="0"></iframe>'}
                 </code>
               </div>
 
@@ -4225,7 +4225,7 @@ export default function Home() {
                   className="btn-download btn-sm copy-label-stack"
                   data-copied={embedCopied ? 'true' : 'false'}
                   onClick={async () => {
-                    const code = `<iframe src="https://pulp-4ubq.vercel.app/embed" width="100%" height="400" frameborder="0"></iframe>`;
+                    const code = `<iframe src="https://pulp.bypapaya.com/embed" width="100%" height="400" frameborder="0"></iframe>`;
                     try {
                       await navigator.clipboard.writeText(code);
                       setEmbedCopied(true);
@@ -4298,6 +4298,15 @@ export default function Home() {
       <main className="min-h-screen" style={{ background: 'var(--bg)' }}>
       {!generatorOnly && (
       <>
+      {/* SEO: crawlable static copy — visually hidden, not aria-hidden so bots index it */}
+      <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+        <h1>pulp — AI MIDI Generator for Music Producers</h1>
+        <p>Generate professional multi-track MIDI from text prompts. Melody, chords, bass, and drums in seconds. Export to Ableton, FL Studio, Logic Pro and any DAW. 20+ genres including Tech House, Deep House, Afro House, Hip Hop, Trap, Lo-Fi and more.</p>
+        <h2>Features</h2>
+        <p>Natural language prompts, piano roll editor, one-click DAW export, REST API, 20 plus genre models, MIDI and WAV export.</p>
+        <h2>Pricing</h2>
+        <p>Free plan with 20 generations per month. Pro plan at 7 dollars per month with 150 generations. Studio plan at 19 dollars per month with 600 generations.</p>
+      </div>
       {/* ── HERO ── */}
       <section ref={heroRef} className="relative overflow-hidden px-4 sm:px-8 pb-28 pt-24" style={{ background: 'var(--bg)' }}>
         {/* Subtle depth: grid pattern + hero glow */}
