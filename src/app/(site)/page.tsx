@@ -2017,7 +2017,10 @@ const VALID_SCALES = ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolyd
   'pentatonic_minor', 'pentatonic_major', 'blues', 'melodic_minor'];
 
 // ─── CONSTANTS ────────────────────────────────────────────────
-const GENRE_LIST = Object.entries(GENRES).map(([key, g]) => ({ key, name: g.name }));
+const HIDDEN_GENRES = ['melodic_techno', 'afro_house'];
+const GENRE_LIST = Object.entries(GENRES)
+  .filter(([key]) => !HIDDEN_GENRES.includes(key))
+  .map(([key, g]) => ({ key, name: g.name }));
 
 const VIBES = [
   { label: 'Dark',       tag: 'Dark Hypnotic Dub',      color: 'var(--muted)' },
