@@ -4570,6 +4570,256 @@ export default function Home() {
           ))}
         </div>
       </motion.section>
+
+      {/* ── HOW IT WORKS ── */}
+      <motion.section className="px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} {...scrollSection}>
+        <div className="mx-auto max-w-[1100px]">
+          {/* Header */}
+          <div className="mb-16 text-center">
+            <p
+              className="mb-4 text-[11px] uppercase tracking-[0.12em]"
+              style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, color: 'var(--accent)' }}
+            >
+              How it works
+            </p>
+            <h2
+              style={{
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 700,
+                fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                letterSpacing: '-0.03em',
+                lineHeight: 1.1,
+                color: 'var(--text)',
+              }}
+            >
+              From idea to session in seconds.
+            </h2>
+          </div>
+
+          {/* Steps */}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Step 1 */}
+            <div
+              className="relative rounded-2xl p-8 flex flex-col gap-5"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: 16,
+                  right: 24,
+                  fontSize: 80,
+                  fontWeight: 800,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  color: 'var(--accent)',
+                  opacity: 0.12,
+                  lineHeight: 1,
+                  pointerEvents: 'none',
+                  userSelect: 'none',
+                }}
+              >
+                1
+              </span>
+              <div style={{ color: 'var(--accent)' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M7 9h5M7 12h8M7 15h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <rect x="14" y="11" width="1.5" height="2" rx="0.5" fill="currentColor" />
+                </svg>
+              </div>
+              <div>
+                <p
+                  style={{
+                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    letterSpacing: '-0.02em',
+                    color: 'var(--text)',
+                    marginBottom: 8,
+                  }}
+                >
+                  Describe your sound
+                </p>
+                <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.65 }}>
+                  Type a genre, mood, tempo, or artist name. Be as vague or specific as you want — pulp understands both.
+                </p>
+              </div>
+              {/* Fake input */}
+              <div
+                className="rounded-xl px-4 py-3 flex items-center gap-3 mt-auto"
+                style={{ background: 'var(--bg)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <span style={{ color: 'var(--accent)', fontSize: 16, lineHeight: 1 }}>✦</span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+                  dark melodic techno, 128bpm, minor key
+                </span>
+                <span
+                  aria-hidden
+                  style={{
+                    display: 'inline-block',
+                    width: 2,
+                    height: 14,
+                    background: 'var(--accent)',
+                    borderRadius: 1,
+                    marginLeft: 2,
+                    animation: 'pulseOrange 1s ease-in-out infinite',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div
+              className="relative rounded-2xl p-8 flex flex-col gap-5"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: 16,
+                  right: 24,
+                  fontSize: 80,
+                  fontWeight: 800,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  color: 'var(--accent)',
+                  opacity: 0.12,
+                  lineHeight: 1,
+                  pointerEvents: 'none',
+                  userSelect: 'none',
+                }}
+              >
+                2
+              </span>
+              <div style={{ color: 'var(--accent)' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M7 15V9M10 15v-4M13 15V8M16 15v-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div>
+                <p
+                  style={{
+                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    letterSpacing: '-0.02em',
+                    color: 'var(--text)',
+                    marginBottom: 8,
+                  }}
+                >
+                  Generate in seconds
+                </p>
+                <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.65 }}>
+                  pulp generates melody, chords, bass, and drums simultaneously. Preview everything in the browser before you export.
+                </p>
+              </div>
+              {/* Mini piano roll hint */}
+              <div
+                className="rounded-xl overflow-hidden mt-auto"
+                style={{ background: 'var(--bg)', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 12px' }}
+              >
+                {[
+                  { label: 'MEL', color: '#FF6D3F', bars: [1,0,1,1,0,1,0,1] },
+                  { label: 'CHD', color: '#00B894', bars: [1,0,0,0,1,0,0,0] },
+                  { label: 'BSS', color: '#6C63FF', bars: [1,1,0,1,1,1,0,1] },
+                  { label: 'DRM', color: '#FF6D3F', bars: [1,0,1,0,1,0,1,0] },
+                ].map(track => (
+                  <div key={track.label} className="flex items-center gap-2 mb-1 last:mb-0">
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: track.color, opacity: 0.7, width: 24, flexShrink: 0 }}>
+                      {track.label}
+                    </span>
+                    <div className="flex items-end gap-px flex-1" style={{ height: 16 }}>
+                      {track.bars.map((on, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            flex: 1,
+                            height: on ? '80%' : '20%',
+                            background: track.color,
+                            borderRadius: 2,
+                            opacity: on ? 0.7 : 0.1,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div
+              className="relative rounded-2xl p-8 flex flex-col gap-5"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: 16,
+                  right: 24,
+                  fontSize: 80,
+                  fontWeight: 800,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  color: 'var(--accent)',
+                  opacity: 0.12,
+                  lineHeight: 1,
+                  pointerEvents: 'none',
+                  userSelect: 'none',
+                }}
+              >
+                3
+              </span>
+              <div style={{ color: 'var(--accent)' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M12 4v12M8 12l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 20h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div>
+                <p
+                  style={{
+                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    letterSpacing: '-0.02em',
+                    color: 'var(--text)',
+                    marginBottom: 8,
+                  }}
+                >
+                  Drop into your DAW
+                </p>
+                <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.65 }}>
+                  Export .mid files and drag them directly into Ableton, Logic, FL Studio, or any DAW. Your MIDI, your rules.
+                </p>
+              </div>
+              {/* DAW logos row */}
+              <div className="flex flex-wrap gap-2 mt-auto">
+                {['Ableton', 'Logic Pro', 'FL Studio', 'Pro Tools'].map(daw => (
+                  <span
+                    key={daw}
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 10,
+                      color: 'rgba(255,255,255,0.40)',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 6,
+                      padding: '3px 8px',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {daw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.section>
+
       </>
       )}
 
