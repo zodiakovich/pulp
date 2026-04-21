@@ -6,8 +6,32 @@ import { checkCreditsAllowed } from '@/lib/credits';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ProfileAccountClient } from './ProfileAccountClient';
+import Stripe from 'stripe';
 
 const db = supabaseAdmin ?? supabase;
+
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe | null {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+  if (!_stripe) _stripe = new Stripe(key, { apiVersion: '2026-03-25.dahlia' as any });
+  return _stripe;
+}
+
+async function fetchCurrentPeriodEnd(userId: string): Promise<number | null> {
+  try {
+    const stripe = getStripe();
+    if (!stripe) return null;
+    const result = await stripe.subscriptions.search({
+      query: `metadata['clerk_user_id']:'${userId}' AND status:'active'`,
+      limit: 1,
+    });
+    const sub = result.data[0];
+    return sub ? (sub.items.data[0]?.current_period_end ?? null) : null;
+  } catch {
+    return null;
+  }
+}
 
 function formatMemberSince(date: Date | null) {
   if (!date) return '—';
@@ -131,6 +155,7 @@ export default async function ProfilePage() {
   let creditsUsed = 0;
   let creditLimit = 10;
   let isPro = false;
+  let currentPeriodEnd: number | null = null;
   let recentGenerations: {
     id: string;
     prompt: string | null;
@@ -172,6 +197,10 @@ export default async function ProfilePage() {
     recentGenerations = (recentRes.data as typeof recentGenerations) ?? [];
   } catch {
     // keep defaults
+  }
+
+  if (isPro) {
+    currentPeriodEnd = await fetchCurrentPeriodEnd(userId);
   }
 
   const favoriteGenre = mostFrequentGenre(favoriteGenreData);
@@ -343,7 +372,7 @@ export default async function ProfilePage() {
 
           {/* SECTION 4 — Account */}
           <section>
-            <ProfileAccountClient isPro={isPro} />
+            <ProfileAccountClient isPro={isPro} currentPeriodEnd={currentPeriodEnd} />
           </section>
         </div>
       </main>

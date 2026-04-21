@@ -1,55 +1,183 @@
 'use client';
 
+import { useState } from 'react';
 import { useClerk } from '@clerk/nextjs';
+import { useToast } from '@/components/toast/useToast';
 
-export function ProfileAccountClient({ isPro }: { isPro: boolean }) {
+function formatDate(ts: number): string {
+  return new Date(ts * 1000).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+type Props = {
+  isPro: boolean;
+  currentPeriodEnd: number | null;
+};
+
+export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
   const { signOut } = useClerk();
+  const { toast } = useToast();
+
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [cancelledAt, setCancelledAt] = useState<number | null>(null);
+
+  async function handleCancel() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/stripe/cancel', { method: 'POST' });
+      const data = await res.json() as { success?: boolean; cancel_at?: number; error?: string };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error ?? 'Something went wrong');
+      }
+      setCancelledAt(data.cancel_at ?? currentPeriodEnd ?? null);
+      setShowModal(false);
+      toast('Subscription cancelled. You keep access until the end of the billing period.', 'info');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to cancel subscription', 'danger');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const endDate = cancelledAt ?? currentPeriodEnd;
 
   return (
-    <div
-      className="rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 flex-wrap"
-      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
-    >
-      <div className="flex flex-col gap-3 min-w-0">
-        <p
-          style={{
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 11,
-            color: 'var(--muted)',
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Account
-        </p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span
-            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+    <>
+      <div
+        className="rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 flex-wrap"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+      >
+        <div className="flex flex-col gap-3 min-w-0">
+          <p
             style={{
               fontFamily: 'JetBrains Mono, monospace',
-              border: '1px solid var(--border)',
-              color: isPro ? '#00B894' : 'var(--foreground-muted)',
-              background: isPro ? 'rgba(0, 184, 148, 0.12)' : 'transparent',
+              fontSize: 11,
+              color: 'var(--muted)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
             }}
           >
-            {isPro ? 'Pro' : 'Free'}
-          </span>
-          {isPro ? (
-            <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage subscription in your billing portal.</span>
-          ) : (
-            <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
-              Running low on credits? Upgrade from the credits card above.
+            Account
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                border: '1px solid var(--border)',
+                color: isPro ? '#00B894' : 'var(--foreground-muted)',
+                background: isPro ? 'rgba(0, 184, 148, 0.12)' : 'transparent',
+              }}
+            >
+              {isPro ? 'Pro' : 'Free'}
             </span>
+            {isPro && endDate ? (
+              cancelledAt ? (
+                <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
+                  Access ends <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>. You can resubscribe anytime.
+                </span>
+              ) : (
+                <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
+                  Next billing date: <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>
+                </span>
+              )
+            ) : isPro ? (
+              <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage subscription in your billing portal.</span>
+            ) : (
+              <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
+                Running low on credits? Upgrade from the credits card above.
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+          {isPro && !cancelledAt && (
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              style={{ color: 'var(--muted)', borderColor: 'var(--border)' }}
+              onClick={() => setShowModal(true)}
+            >
+              Cancel subscription
+            </button>
           )}
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => void signOut({ redirectUrl: '/' })}
+          >
+            Sign out
+          </button>
         </div>
       </div>
-      <button
-        type="button"
-        className="btn-secondary btn-sm"
-        onClick={() => void signOut({ redirectUrl: '/' })}
-      >
-        Sign out
-      </button>
-    </div>
+
+      {/* Confirmation modal */}
+      {showModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
+        >
+          <div
+            className="rounded-2xl p-8 w-full max-w-md"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}
+          >
+            <h2
+              style={{
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 700,
+                fontSize: 20,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.2,
+                color: 'var(--text)',
+                marginBottom: 12,
+              }}
+            >
+              Cancel your subscription?
+            </h2>
+            <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.6 }}>
+              {endDate
+                ? <>You&apos;ll keep Pro access until <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>. After that you&apos;ll move to the Free plan (20 generations/month).</>
+                : <>You&apos;ll keep Pro access until the end of your billing period. After that you&apos;ll move to the Free plan (20 generations/month).</>
+              }
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ flex: 1 }}
+                onClick={() => setShowModal(false)}
+                disabled={loading}
+              >
+                Keep my plan
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                style={{ flex: 1, color: 'var(--muted)' }}
+                onClick={handleCancel}
+                disabled={loading}
+              >
+                {loading ? 'Cancelling…' : 'Cancel subscription'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
