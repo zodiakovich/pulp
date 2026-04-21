@@ -146,6 +146,7 @@ export function SiteFooter() {
               { label: 'Privacy Policy', href: '/privacy' },
               { label: 'Terms of Service', href: '/terms' },
               { label: 'Cookie Policy', href: '/cookies' },
+              { label: 'License', href: '/legal/license' },
             ].map((l, i) => (
               <div key={l.href} className="flex items-center">
                 <Link
@@ -161,7 +162,7 @@ export function SiteFooter() {
                 >
                   {l.label}
                 </Link>
-                {i < 2 ? (
+                {i < 3 ? (
                   <span aria-hidden style={{ margin: '0 10px', opacity: 0.35, color: 'var(--muted)' }}>
                     ·
                   </span>

@@ -287,7 +287,23 @@ export function PricingPlansClient() {
             }}
             onClick={() => setBilling('annual')}
           >
-            Annual <span style={{ color: ACCENT, fontWeight: 600 }}>20% off</span>
+            Annual{' '}
+            {billing === 'annual' && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: ACCENT,
+                  background: 'rgba(255,109,63,0.12)',
+                  borderRadius: 6,
+                  padding: '2px 7px',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                Save 20%
+              </span>
+            )}
           </button>
         </div>
       </section>
