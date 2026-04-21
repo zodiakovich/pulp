@@ -81,9 +81,9 @@ const scrollSection = {
 } as const;
 
 const LANDING_STATS: { value: string; label: string }[] = [
-  { value: '10,000+', label: ' generations' },
+  { value: '10,000+', label: ' track ideas generated' },
   { value: '300+', label: ' artists' },
-  { value: '50+', label: ' genres' },
+  { value: '50+', label: ' genre models' },
 ];
 
 const QUICK_START_TEMPLATES: {
@@ -4378,7 +4378,7 @@ export default function Home() {
                   animation: 'pulseOrange 2s ease-in-out infinite',
                 }}
               />
-              AI MIDI Generator
+              Your AI co-producer
             </p>
             <h1
               className="font-extrabold leading-[1.05] tracking-tight text-left"
@@ -4397,7 +4397,7 @@ export default function Home() {
               className="mt-6 max-w-[620px] text-[16px] leading-snug sm:text-[18px] text-left"
               style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400, color: 'var(--muted)', lineHeight: 1.6 }}
             >
-              Describe a genre, artist, or mood and get MIDI for melody, chords, bass, and drums.
+              Describe a genre, artist, or mood. pulp builds the full arrangement — melody, chords, bass, and drums — so you never start from a blank project again.
             </p>
             <div className="mt-10 flex flex-col items-stretch justify-start gap-4 sm:mt-12 sm:flex-row sm:items-center sm:justify-start">
               {effectiveIsSignedIn ? (
@@ -4406,7 +4406,7 @@ export default function Home() {
                   className="btn-primary btn-hero"
                   style={{ textDecoration: 'none' }}
                 >
-                  Start generating
+                  Beat the blank project
                 </Link>
               ) : (
                 <SignInButtonDeferred mode="modal">
@@ -4414,7 +4414,7 @@ export default function Home() {
                     type="button"
                     className="btn-primary btn-hero w-full sm:w-auto"
                   >
-                    Start generating
+                    Beat the blank project
                   </button>
                 </SignInButtonDeferred>
               )}
@@ -4496,7 +4496,7 @@ export default function Home() {
           {[
             {
               title: 'Artist hints',
-              body: 'Use artist names and style tags to guide the pattern.',
+              body: 'Drop an artist name and pulp maps their signature sound — tempo, key, chord style, and groove — into your MIDI.',
               icon: (
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
                   <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -4506,7 +4506,7 @@ export default function Home() {
             },
             {
               title: 'Piano roll',
-              body: 'Edit notes, timing, and velocity before you export.',
+              body: 'Edit every note before you commit. Adjust timing, velocity, and pitch directly in the browser.',
               icon: (
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
                   <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
@@ -4516,7 +4516,7 @@ export default function Home() {
             },
             {
               title: 'MIDI export',
-              body: 'Download a .mid file or drag layers into your DAW.',
+              body: 'Drag stems straight into your DAW timeline. Works with Ableton, Logic, FL Studio, and every other major DAW.',
               icon: (
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
                   <path d="M12 4v12M8 12l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -6538,7 +6538,7 @@ export default function Home() {
               </div>
             )}
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)', letterSpacing: '0.04em' }}>
-              20 genres · 15 styles · 4 independent tracks · .mid export
+              20+ genre models · drag-to-DAW · melody, chords, bass &amp; drums · .mid and .wav export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.30)' }}>
               Press G to generate · ? for shortcuts · ⌘K for commands
