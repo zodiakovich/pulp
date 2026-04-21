@@ -2372,6 +2372,9 @@ export default function Home() {
   const [showAudioToMidiModal, setShowAudioToMidiModal] = useState(false);
   const [promptCardsDismissed, setPromptCardsDismissed] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   const result = variations[selectedVariation]?.result ?? null;
 
@@ -3937,7 +3940,7 @@ export default function Home() {
   }, []);
 
   // ── RENDER ────────────────────────────────────────────────
-  if (!e2eBypass && !isLoaded) {
+  if (mounted && !e2eBypass && !isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
         <div

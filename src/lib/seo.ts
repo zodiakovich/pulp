@@ -1,5 +1,5 @@
 /** Site URL for canonical, sitemap, robots, JSON-LD (no trailing slash). */
-export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://pulp-4ubq.vercel.app').replace(/\/$/, '');
+export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://pulp.bypapaya.com').replace(/\/$/, '');
 
 /** Prefer WebP for smaller OG payload; PNG kept for legacy sharers. */
 export const ogImagePath = '/og-image.webp';
