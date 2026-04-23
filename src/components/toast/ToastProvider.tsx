@@ -32,12 +32,54 @@ function toneStyles(tone: ToastTone): { accent: string } {
     case 'success':
       return { accent: '#00B894' };
     case 'danger':
-      // No red in the design system — use primary accent.
       return { accent: '#FF6D3F' };
     case 'info':
     default:
       return { accent: '#FF6D3F' };
   }
+}
+
+function ToneIcon({ tone }: { tone: ToastTone }) {
+  const style: React.CSSProperties = {
+    width: 16,
+    height: 16,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    fontSize: 10,
+    fontWeight: 700,
+    lineHeight: 1,
+  };
+
+  if (tone === 'success') {
+    return (
+      <span aria-hidden style={{ ...style, background: 'rgba(0,184,148,0.18)', color: '#00B894', border: '1px solid rgba(0,184,148,0.35)' }}>
+        <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+          <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    );
+  }
+  if (tone === 'danger') {
+    return (
+      <span aria-hidden style={{ ...style, background: 'rgba(255,109,63,0.18)', color: '#FF6D3F', border: '1px solid rgba(255,109,63,0.35)' }}>
+        <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+          <path d="M2 2L7 7M7 2L2 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span aria-hidden style={{ ...style, background: 'rgba(255,109,63,0.18)', color: '#FF6D3F', border: '1px solid rgba(255,109,63,0.35)' }}>
+      <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+        <circle cx="4.5" cy="4.5" r="1" fill="currentColor" />
+        <path d="M4.5 2V2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M4.5 6V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </span>
+  );
 }
 
 function uid(): string {
@@ -64,7 +106,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     const item: ToastItem = { id, title, tone, createdAt: Date.now(), visible: false };
     setToasts(prev => [item, ...prev].slice(0, 5));
 
-    // next tick to allow CSS transition
     window.setTimeout(() => {
       setToasts(prev => prev.map(t => (t.id === id ? { ...t, visible: true } : t)));
     }, 10);
@@ -97,7 +138,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <div
         aria-live="polite"
         aria-relevant="additions removals"
-        className="fixed top-6 right-6 z-[120] flex flex-col gap-2"
+        className="fixed bottom-6 right-6 z-[120] flex flex-col-reverse gap-2"
       >
         <AnimatePresence initial={false}>
           {toasts.map(t => {
@@ -108,53 +149,55 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <motion.div
                 key={t.id}
                 role="status"
-                initial={{ opacity: 0, y: -12, x: 12, scale: 0.98 }}
+                initial={{ opacity: 0, y: 16, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{
                   opacity: 0,
-                  y: -8,
-                  scale: 0.98,
-                  transition: { duration: 0.22, ease: [0.55, 0, 1, 0.45] },
+                  y: 12,
+                  scale: 0.97,
+                  transition: { duration: 0.2, ease: [0.55, 0, 1, 0.45] },
                 }}
-                transition={{ type: 'tween', duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+                transition={{ type: 'tween', duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
                 className="glass-elevated overflow-hidden rounded-xl"
-                style={{
-                  width: 320,
-                }}
+                style={{ width: 320 }}
               >
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    padding: '12px 12px',
+                    padding: '11px 12px',
                     background: 'transparent',
-                    borderBottom: `1px solid var(--divider)`,
                   }}
                 >
-                  <span style={{ width: 8, height: 8, borderRadius: 999, background: s.accent }} />
-                  <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>
+                  <ToneIcon tone={t.tone} />
+                  <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: 'var(--text)', fontWeight: 500, flex: 1, lineHeight: 1.4 }}>
                     {t.title}
                   </span>
                   <button
                     onClick={() => dismiss(t.id)}
                     aria-label="Dismiss toast"
                     style={{
-                      marginLeft: 'auto',
-                      width: 30,
-                      height: 30,
-                      borderRadius: 8,
+                      marginLeft: 4,
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
                       border: `1px solid var(--border)`,
                       background: 'transparent',
                       color: 'var(--foreground-muted)',
                       fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 12,
+                      fontSize: 14,
                       cursor: 'pointer',
-                      transition: 'transform 140ms var(--ease-ui), background 180ms var(--ease-ui)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      transition: 'opacity 140ms var(--ease-ui)',
                     }}
-                    onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.98)')}
-                    onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = '0.6')}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                    onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.92)')}
+                    onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
                   >
                     ×
                   </button>
@@ -164,11 +207,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   aria-hidden
                   initial={false}
                   animate={{ scaleX: 0 }}
-                  transition={{ duration: remaining / 1000, ease: [0.23, 1, 0.32, 1] }}
+                  transition={{ duration: remaining / 1000, ease: 'linear' }}
                   style={{
                     height: 2,
                     background: s.accent,
-                    opacity: 0.35,
+                    opacity: 0.55,
                     transformOrigin: 'left',
                   }}
                 />
@@ -180,4 +223,3 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     </ToastContext.Provider>
   );
 }
-

@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { EmptyState } from '@/components/EmptyState';
+import { ScrollReveal } from '@/components/ScrollReveal';
 
 const EXPLORE_GENRES = ['All', 'Tech House', 'Afro House', 'Melodic Techno', 'Deep House', 'Hard Techno', 'Melodic House', 'Techno', 'Trance', 'Drum & Bass'] as const;
 
@@ -17,6 +19,16 @@ type GalleryItem = {
   timeAgo: string;
   isExample: boolean;
 };
+
+function MusicEmptyIcon() {
+  return (
+    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" role="presentation">
+      <path d="M9 18V5l12-2v13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="18" cy="16" r="3" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
 
 export function ExploreGallery({
   items,
@@ -36,6 +48,10 @@ export function ExploreGallery({
       return matchesGenre && matchesSearch;
     });
   }, [items, selectedGenre, searchQuery]);
+
+  const isFiltered = searchQuery.length > 0 || selectedGenre !== 'All';
+  const emptyTitle = isFiltered ? 'No patterns match your filter' : 'Nothing here yet';
+  const emptySubtitle = isFiltered ? 'Try a different genre or search term' : 'Be the first to share a generation';
 
   return (
     <div className="max-w-[1280px] mx-auto px-8">
@@ -94,134 +110,117 @@ export function ExploreGallery({
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
         {filteredGenerations.length === 0 && (
-          <div
-            className="rounded-2xl p-8 lg:col-span-3"
-            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-          >
-            <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
-              No generations yet. Be the first to create one.
-            </div>
-            <p className="mt-2" style={{ color: 'var(--muted)', lineHeight: 1.7 }}>
-              Start from a simple prompt like “tech house, 128bpm, Am” and generate three variations.
-            </p>
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center mt-5 h-10 px-4 rounded-xl text-sm font-semibold transition-all"
-              style={{
-                background: 'var(--accent)',
-                border: '1px solid rgba(255,109,63,0.45)',
-                color: 'var(--bg)',
-                textDecoration: 'none',
-                width: 'fit-content',
-              }}
-            >
-              Start generating
-            </Link>
-          </div>
+          <EmptyState
+            icon={<MusicEmptyIcon />}
+            title={emptyTitle}
+            subtitle={emptySubtitle}
+            actionLabel={isFiltered ? undefined : 'Start generating'}
+            actionHref={isFiltered ? undefined : '/'}
+          />
         )}
-        {filteredGenerations.map(item => {
+        {filteredGenerations.map((item, idx) => {
           const prompt = (item.prompt ?? '').trim();
           const promptShort =
-            prompt.length > 60 ? `${prompt.slice(0, 60).trimEnd()}…` : (prompt || '—');
+            prompt.length > 60 ? `${prompt.slice(0, 60).trimEnd()}...` : (prompt || '-');
           const href = `/g/${item.id}`;
 
           return (
-            <Link
-              key={item.id}
-              href={href}
-              className="block rounded-2xl p-6 transition-all"
-              style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                textDecoration: 'none',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p
-                    className="text-sm font-semibold mb-2"
-                    style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}
-                    title={prompt || undefined}
-                  >
-                    {promptShort}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span
-                      className="px-2 py-1 rounded-md text-xs"
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        color: 'var(--accent)',
-                        background: 'rgba(255,109,63,0.10)',
-                        border: '1px solid rgba(255,109,63,0.25)',
-                      }}
+            <ScrollReveal key={item.id} delay={Math.min(idx % 6, 5) * 60}>
+              <Link
+                href={href}
+                className="block rounded-2xl p-6 transition-all h-full"
+                style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p
+                      className="text-sm font-semibold mb-2"
+                      style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}
+                      title={prompt || undefined}
                     >
-                      {item.genreLabel}
-                    </span>
-                    <span
-                      className="px-2 py-1 rounded-md text-xs"
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        color: 'var(--muted)',
-                        background: 'var(--surface-weak)',
-                        border: '1px solid var(--border)',
-                      }}
-                    >
-                      {item.bpm} BPM
-                    </span>
-                    {item.style_tag && (
+                      {promptShort}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
                       <span
                         className="px-2 py-1 rounded-md text-xs"
                         style={{
                           fontFamily: 'JetBrains Mono, monospace',
                           color: 'var(--accent)',
-                          background: 'rgba(255,109,63,0.1)',
+                          background: 'rgba(255,109,63,0.10)',
                           border: '1px solid rgba(255,109,63,0.25)',
                         }}
                       >
-                        {item.style_tag}
+                        {item.genreLabel}
                       </span>
-                    )}
-                  </div>
+                      <span
+                        className="px-2 py-1 rounded-md text-xs"
+                        style={{
+                          fontFamily: 'JetBrains Mono, monospace',
+                          color: 'var(--muted)',
+                          background: 'var(--surface-weak)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        {item.bpm} BPM
+                      </span>
+                      {item.style_tag && (
+                        <span
+                          className="px-2 py-1 rounded-md text-xs"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            color: 'var(--accent)',
+                            background: 'rgba(255,109,63,0.1)',
+                            border: '1px solid rgba(255,109,63,0.25)',
+                          }}
+                        >
+                          {item.style_tag}
+                        </span>
+                      )}
+                    </div>
 
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 text-xs"
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        color: 'var(--accent)',
-                        textDecoration: 'none',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: 0,
-                        cursor: prompt ? 'pointer' : 'not-allowed',
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!prompt) return;
-                        router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
-                      }}
-                      disabled={!prompt}
-                    >
-                      Use this prompt →
-                    </button>
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-xs"
+                        style={{
+                          fontFamily: 'JetBrains Mono, monospace',
+                          color: 'var(--accent)',
+                          textDecoration: 'none',
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          cursor: prompt ? 'pointer' : 'not-allowed',
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!prompt) return;
+                          router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
+                        }}
+                        disabled={!prompt}
+                      >
+                        Use this prompt
+                      </button>
+                    </div>
                   </div>
+                  <span
+                    className="text-xs flex-shrink-0"
+                    style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-micro)' }}
+                  >
+                    {item.timeAgo}
+                  </span>
                 </div>
-                <span
-                  className="text-xs flex-shrink-0"
-                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-micro)' }}
-                >
-                  {item.timeAgo}
-                </span>
-              </div>
-            </Link>
+              </Link>
+            </ScrollReveal>
           );
         })}
       </div>
     </div>
   );
 }
-

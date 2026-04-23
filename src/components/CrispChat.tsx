@@ -9,12 +9,15 @@ declare global {
   }
 }
 
+const CRISP_ID =
+  process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID ?? 'a52220fb-f0ea-4a02-b3a4-637ea180f899';
+
 export default function CrispChat() {
   useEffect(() => {
+    if (!CRISP_ID) return;
     const load = () => {
       window.$crisp = [];
-      window.CRISP_WEBSITE_ID = 'a52220fb-f0ea-4a02-b3a4-637ea180f899';
-      window.$crisp.push(['do', 'chat:hide']);
+      window.CRISP_WEBSITE_ID = CRISP_ID;
       const s = document.createElement('script');
       s.src = 'https://client.crisp.chat/l.js';
       s.async = true;

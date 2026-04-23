@@ -46,7 +46,8 @@ export async function playTonePreview(
   layer: TonePreviewLayer,
   genre: string,
   onComplete?: () => void,
+  instrument?: string,
 ) {
   const m = await ensurePreview();
-  return m.playTonePreview(notes, bpm, layer, genre, onComplete);
+  return m.playTonePreview(notes, bpm, layer, genre, onComplete, instrument);
 }

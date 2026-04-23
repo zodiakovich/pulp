@@ -18,6 +18,7 @@ import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
 import { generateAbletonAlsBlob } from '@/lib/ableton-export';
 import { mapArtistProfileToHints, resolveArtistPromptChain } from '@/lib/artist-resolver';
+import { loadPreferences } from '@/lib/user-preferences';
 import dynamic from 'next/dynamic';
 import { Navbar } from '@/components/Navbar';
 import type { MidiUploadSuccessPayload } from '@/components/StudioMidiUploadModal';
@@ -492,6 +493,38 @@ const LAYER_COLORS: Record<string, string> = LAYER_VIZ_COLORS;
 const LAYERS = ['melody', 'chords', 'bass', 'drums'] as const;
 const EDITOR_LAYERS = [...LAYERS, 'imported'] as const;
 
+// ─── INSTRUMENT SELECTORS ─────────────────────────────────────
+const LAYER_INSTRUMENT_OPTIONS: Record<string, { label: string; value: string }[]> = {
+  melody: [
+    { label: 'Piano',         value: 'acoustic_grand_piano' },
+    { label: 'Electric Piano', value: 'electric_piano_1' },
+    { label: 'Strings',       value: 'string_ensemble_1' },
+    { label: 'Synth Lead',    value: 'lead_2_sawtooth' },
+    { label: 'Marimba',       value: 'marimba' },
+    { label: 'Vibraphone',    value: 'vibraphone' },
+  ],
+  chords: [
+    { label: 'Strings',       value: 'string_ensemble_1' },
+    { label: 'Pad',           value: 'pad_2_warm' },
+    { label: 'Piano',         value: 'acoustic_grand_piano' },
+    { label: 'Electric Piano', value: 'electric_piano_1' },
+    { label: 'Church Organ',  value: 'church_organ' },
+    { label: 'Rhodes',        value: 'electric_piano_1' },
+  ],
+  bass: [
+    { label: 'Electric Bass', value: 'electric_bass_finger' },
+    { label: 'Upright Bass',  value: 'acoustic_bass' },
+    { label: 'Synth Bass',    value: 'lead_1_square' },
+    { label: 'Tuba',          value: 'tuba' },
+  ],
+};
+
+const DEFAULT_LAYER_INSTRUMENTS: Record<string, string> = {
+  melody: 'acoustic_grand_piano',
+  chords: 'string_ensemble_1',
+  bass:   'electric_bass_finger',
+};
+
 function makeDraggableMidi(notes: NoteEvent[], bpm: number, filename: string) {
   const midi = generateMidiFormat0(notes, bpm, filename);
   const ab = new ArrayBuffer(midi.byteLength);
@@ -502,14 +535,16 @@ function makeDraggableMidi(notes: NoteEvent[], bpm: number, filename: string) {
 
 // ─── LAYER CARD ───────────────────────────────────────────────
 function LayerCard({
-  name, notes, bpm, genre, enabled, onDownload, onRegenerate,
+  name, notes, bpm, genre, enabled, onDownload, onRegenerate, instrument, onInstrumentChange,
 }: {
   name: string; notes: NoteEvent[]; bpm: number; genre: string;
   enabled: boolean; onDownload: () => void; onRegenerate: () => void;
+  instrument?: string; onInstrumentChange?: (v: string) => void;
 }) {
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState(false);
   const color = LAYER_COLORS[name] || DS.accent;
+  const instrumentOptions = LAYER_INSTRUMENT_OPTIONS[name] ?? [];
 
   const handlePlay = async () => {
     if (playing) { stopTonePreview(); setPlaying(false); return; }
@@ -519,7 +554,7 @@ function LayerCard({
       name === 'bass' ? 'bass' :
       name === 'chords' ? 'chords' :
       'melody';
-    await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false));
+    await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false), instrument);
   };
 
   return (
@@ -552,6 +587,35 @@ function LayerCard({
             <p className="text-xs mt-0.5" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>
               {notes.length} notes
             </p>
+            {instrumentOptions.length > 0 && onInstrumentChange && (
+              <select
+                value={instrument}
+                onChange={e => { onInstrumentChange(e.target.value); }}
+                onClick={e => e.stopPropagation()}
+                className="mt-1.5 block"
+                style={{
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                  fontSize: 11,
+                  color: 'var(--text)',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 6,
+                  padding: '2px 20px 2px 7px',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 6px center',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  maxWidth: 120,
+                }}
+              >
+                {instrumentOptions.map(o => (
+                  <option key={o.value + o.label} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
         <div className="flex gap-1.5">
@@ -1282,22 +1346,22 @@ function VariationCard({
       <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
         <button
           onClick={onPlayToggle}
-          className="flex-1 h-8 flex items-center justify-center rounded-lg text-xs transition-all"
+          className="flex-1 h-8 flex items-center justify-center rounded-lg text-xs transition-all tip"
+          data-tip={isPlaying ? 'Stop preview' : 'Preview'}
           style={{ border: '1px solid rgba(255,255,255,0.08)', fontSize: 12 }}
           onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')}
           onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
-          title={isPlaying ? 'Stop' : 'Play'}
         >
           {isPlaying ? '■' : '▶'}
         </button>
         <button
           onClick={onDownload}
           disabled={!selected}
-          className="flex-1 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
+          className="flex-1 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30 tip"
+          data-tip={selected ? 'Download all tracks' : 'Select to download'}
           style={{ border: selected ? '1px solid rgba(0,184,148,0.4)' : '1px solid rgba(255,255,255,0.08)' }}
           onMouseEnter={e => { if (selected) e.currentTarget.style.borderColor = 'rgba(0,184,148,0.7)'; }}
           onMouseLeave={e => { if (selected) e.currentTarget.style.borderColor = 'rgba(0,184,148,0.4)'; }}
-          title={selected ? 'Download all tracks' : 'Select this variation to download'}
         >
           ↓ All
         </button>
@@ -1500,47 +1564,42 @@ function CommandBar({
 
 const SHORTCUT_OVERLAY_GROUPS: { title: string; rows: { k: string; d: string }[] }[] = [
   {
-    title: 'General',
+    title: 'Global',
     rows: [
-      { k: 'G', d: 'New generation' },
-      { k: 'S', d: 'Share link' },
-      { k: '?', d: 'Show shortcuts overlay' },
+      { k: '?', d: 'Show keyboard shortcuts' },
       { k: 'Esc', d: 'Close modal, overlay, or fullscreen' },
       { k: '⌘ / Ctrl + K', d: 'Open command bar' },
-      { k: 'R', d: 'Regenerate' },
-      { k: 'I', d: 'Toggle Inspire' },
-      { k: 'B', d: 'Open blog' },
-      { k: 'P', d: 'Go to pricing' },
-      { k: 'C', d: 'Toggle Compare mode' },
-      { k: '1 / 2 / 3', d: 'Select variation' },
     ],
   },
   {
-    title: 'Piano roll',
+    title: 'Generator',
+    rows: [
+      { k: 'G', d: 'New generation' },
+      { k: 'R', d: 'Regenerate current variation' },
+      { k: 'I', d: 'Toggle Inspire mode' },
+      { k: 'S', d: 'Share link' },
+      { k: 'C', d: 'Toggle Compare mode' },
+      { k: '1 / 2 / 3', d: 'Select variation' },
+      { k: 'Space', d: 'Play / pause current variation' },
+      { k: 'B', d: 'Open blog' },
+      { k: 'P', d: 'Go to pricing' },
+      { k: '⌘ / Ctrl + S', d: 'Export MIDI (full arrangement)' },
+      { k: '⌘ / Ctrl + Shift + S', d: 'Export WAV' },
+    ],
+  },
+  {
+    title: 'Piano Roll',
     rows: [
       { k: 'E', d: 'Toggle piano roll / sheet view' },
       { k: 'F', d: 'Fullscreen piano roll' },
       { k: 'D', d: 'Toggle chord detection overlay' },
       { k: '⌘ / Ctrl + E', d: 'Extend variation (+8 bars)' },
-      {
-        k: '⌘ / Ctrl + Z',
-        d: 'Undo (click the piano grid first so the roll has focus)',
-      },
-      {
-        k: '⌘ / Ctrl + Shift + Z',
-        d: 'Redo (when the piano roll has focus)',
-      },
-    ],
-  },
-  {
-    title: 'Playback',
-    rows: [{ k: 'Space', d: 'Play / pause current variation' }],
-  },
-  {
-    title: 'Export',
-    rows: [
-      { k: '⌘ / Ctrl + S', d: 'Export MIDI (full arrangement)' },
-      { k: '⌘ / Ctrl + Shift + S', d: 'Export WAV' },
+      { k: 'Del / Backspace', d: 'Delete selected notes' },
+      { k: '⌘ / Ctrl + A', d: 'Select all notes' },
+      { k: '⌘ / Ctrl + Z', d: 'Undo' },
+      { k: '⌘ / Ctrl + Shift + Z', d: 'Redo' },
+      { k: '← → ↑ ↓', d: 'Nudge selected notes (time / pitch)' },
+      { k: '⌘ / Ctrl + Scroll', d: 'Zoom in / out' },
     ],
   },
 ];
@@ -2307,7 +2366,18 @@ export default function Home() {
   const generatorOnly = Boolean(effectiveIsSignedIn);
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
-  const [params, setParams] = useState<GenerationParams>(getDefaultParams());
+  const [params, setParams] = useState<GenerationParams>(() => {
+    const saved = loadPreferences();
+    const base = getDefaultParams(saved.defaultGenre);
+    return {
+      ...base,
+      key: saved.defaultKey,
+      scale: saved.defaultScale,
+      bars: saved.defaultBars,
+      ...(saved.defaultBpm !== null ? { bpm: saved.defaultBpm } : {}),
+    };
+  });
+  const [layerInstruments, setLayerInstruments] = useState<Record<string, string>>(DEFAULT_LAYER_INSTRUMENTS);
   const [variations, setVariations] = useState<{ result: GenerationResult; params: GenerationParams }[]>([]);
   const [selectedVariation, setSelectedVariation] = useState(0);
   const [playingVariationIndex, setPlayingVariationIndex] = useState<number | null>(null);
@@ -2315,6 +2385,9 @@ export default function Home() {
   useEffect(() => { playingVariationIndexRef.current = playingVariationIndex; }, [playingVariationIndex]);
   const [editorPlayheadBeat, setEditorPlayheadBeat] = useState(0);
   const [prompt, setPrompt] = useState('');
+  const [promptHasTyped, setPromptHasTyped] = useState(false);
+  const [promptFocused, setPromptFocused] = useState(false);
+  const [bpmHovered, setBpmHovered] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStage, setGeneratingStage] = useState('');
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -2325,6 +2398,7 @@ export default function Home() {
   const [playingAll, setPlayingAll] = useState(false);
   const playingAllRef = useRef(false);
   useEffect(() => { playingAllRef.current = playingAll; }, [playingAll]);
+  const autoPlayPendingRef = useRef(false);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIndex, setCompareIndex] = useState(0);
   const [showManual, setShowManual] = useState(false);
@@ -2346,6 +2420,7 @@ export default function Home() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [exportFlash, setExportFlash] = useState<'midi' | 'ableton' | 'wav' | null>(null);
   const [isRenderingWav, setIsRenderingWav] = useState(false);
   const [isPianoFullscreen, setIsPianoFullscreen] = useState(false);
   const [viewportH, setViewportH] = useState<number>(() => (typeof window !== 'undefined' ? window.innerHeight : 800));
@@ -2792,10 +2867,9 @@ export default function Home() {
     for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
     generatingStageTimeoutsRef.current = [
       window.setTimeout(() => setGeneratingStage('Analyzing prompt...'), 0),
-      window.setTimeout(() => setGeneratingStage('Building chord progression...'), 600),
-      window.setTimeout(() => setGeneratingStage('Writing melody...'), 1200),
-      window.setTimeout(() => setGeneratingStage('Layering bass & drums...'), 1800),
-      window.setTimeout(() => setGeneratingStage('Humanizing feel...'), 2400),
+      window.setTimeout(() => setGeneratingStage('Composing melody...'), 800),
+      window.setTimeout(() => setGeneratingStage('Adding harmony...'), 1600),
+      window.setTimeout(() => setGeneratingStage('Building rhythm...'), 2400),
     ];
 
     // Try Claude AI prompt parsing, fall back silently
@@ -3016,7 +3090,7 @@ export default function Home() {
       } else if (msg === 'invalid input' || msg.includes('invalid')) {
         setGenerationError('Invalid input. Simplify your prompt and try again.');
       } else {
-        setGenerationError('Generation failed. Try again or simplify your prompt.');
+        setGenerationError('Generation failed — the AI is taking a break. Try again in a moment.');
       }
       setGenBar('error');
     } finally {
@@ -3027,9 +3101,26 @@ export default function Home() {
       if (!genFailed) {
         setGenBar('complete');
         window.setTimeout(() => setGenBar('idle'), 800);
+        if (loadPreferences().autoPlay) {
+          window.setTimeout(() => autoPlayPendingRef.current = true, 100);
+        }
+        // Check for newly earned badges (fire-and-forget, signed-in only)
+        if (effectiveIsSignedIn) {
+          void (async () => {
+            try {
+              const res = await fetch('/api/badges/check', { method: 'POST' });
+              if (res.ok) {
+                const data = await res.json() as { newBadges?: { name: string }[] };
+                for (const b of data.newBadges ?? []) {
+                  toast.toast(`🏆 Badge earned: ${b.name}`, 'success');
+                }
+              }
+            } catch { /* silent */ }
+          })();
+        }
       }
     }
-  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, loadHistoryFromDb, loadInspirationChipsFromDb, supabase]);
+  }, [params, prompt, e2eBypass, effectiveIsSignedIn, effectiveUserId, activeStyleTag, loadHistoryFromDb, loadInspirationChipsFromDb, supabase, toast]);
 
   const handleStyleTag = (tag: string) => {
     const preset = STYLE_TAGS[tag];
@@ -3092,6 +3183,14 @@ export default function Home() {
     );
     void schedule();
   };
+
+  useEffect(() => {
+    if (autoPlayPendingRef.current && variations.length > 0 && !playingAll) {
+      autoPlayPendingRef.current = false;
+      handlePlayAll();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variations]);
 
   const stopCompare = useCallback((opts?: { stopAudio?: boolean }) => {
     if (compareTimerRef.current !== null) window.clearTimeout(compareTimerRef.current);
@@ -3202,6 +3301,11 @@ export default function Home() {
     ));
   }, [selectedVariation]);
 
+  const flashExport = useCallback((key: 'midi' | 'ableton' | 'wav') => {
+    setExportFlash(key);
+    window.setTimeout(() => setExportFlash(null), 1500);
+  }, []);
+
   const handleDownloadAll = () => {
     const sel = variations[selectedVariation];
     if (!sel) return;
@@ -3215,6 +3319,7 @@ export default function Home() {
     const genre = GENRES[p.genre]?.name || 'track';
     track('midi_downloaded', { genre: p.genre, layer: 'full' });
     downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
+    flashExport('midi');
   };
 
   const handleDownloadTrackOnly = (layer: 'melody' | 'chords' | 'bass' | 'drums') => {
@@ -3264,6 +3369,7 @@ export default function Home() {
 
       await downloadBlob(blob, filename);
       toast.toast('WAV exported', 'success');
+      flashExport('wav');
     } catch {
       toast.toast('WAV export failed. Try again.', 'danger');
     } finally {
@@ -3285,10 +3391,11 @@ export default function Home() {
       });
       await downloadBlob(blob, filename);
       toast.toast('Ableton project exported', 'success');
+      flashExport('ableton');
     } catch {
       toast.toast('Export failed. Try again.', 'danger');
     }
-  }, [variations, selectedVariation, toast]);
+  }, [variations, selectedVariation, toast, flashExport]);
 
   const handleDownloadJson = useCallback(() => {
     const sel = variations[selectedVariation];
@@ -4846,17 +4953,28 @@ export default function Home() {
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: 'var(--accent)' }}>✦</span>
                 <input
+                  id="main-prompt"
                   ref={promptRef}
                   type="text"
                   value={prompt}
                   readOnly={isGenerating}
-                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); if (e.target.value.trim().length > 0) setPromptCardsDismissed(false); }}
+                  onChange={e => { setPrompt(e.target.value); setActiveStyleTag(null); if (!promptHasTyped) setPromptHasTyped(true); if (e.target.value.trim().length > 0) setPromptCardsDismissed(false); }}
+                  onFocus={() => setPromptFocused(true)}
+                  onBlur={() => setPromptFocused(false)}
                   onKeyDown={e => e.key === 'Enter' && effectiveIsSignedIn && void handleGenerate()}
                   placeholder="e.g. Deep house, 122 BPM, minor key"
-                  className="input-field pr-4 w-full"
-                  style={{ paddingLeft: 40, opacity: isGenerating ? 0.55 : 1 }}
+                  className="input-field pr-16 w-full"
+                  style={{ paddingLeft: 40, opacity: isGenerating ? 0.55 : 1, borderColor: promptFocused ? 'rgba(255,255,255,0.20)' : undefined, transition: 'border-color 200ms ease, opacity 150ms ease', outline: promptFocused ? 'none' : undefined }}
                   aria-busy={isGenerating}
                 />
+                {promptHasTyped && prompt.length > 0 && (
+                  <span
+                    className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: prompt.length > 260 ? '#F59E0B' : 'rgba(255,255,255,0.28)' }}
+                  >
+                    {prompt.length} / 280
+                  </span>
+                )}
               </div>
 
               {templatesOpen && !isGenerating && (
@@ -5262,17 +5380,26 @@ export default function Home() {
                 <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
                   {generationError}
                 </p>
-                <button
-                  type="button"
-                  className="mt-2 text-sm font-medium"
-                  style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
-                  onClick={() => {
-                    setGenerationError(null);
-                    setGenBar('idle');
-                  }}
-                >
-                  Retry
-                </button>
+                <div className="flex items-center justify-center gap-3 mt-2">
+                  {generationError.includes('Upgrade') ? (
+                    <a
+                      href="/pricing"
+                      className="text-sm font-medium"
+                      style={{ color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                    >
+                      Upgrade for more →
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-sm font-medium"
+                      style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                      onClick={() => { setGenerationError(null); setGenBar('idle'); }}
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {effectiveIsSignedIn && (
@@ -5509,7 +5636,7 @@ export default function Home() {
                     letterSpacing: '0.04em',
                     fontWeight: activeStyleTag === vibe.tag ? 600 : 400,
                   }}>
-                    {vibe.label}
+                    {activeStyleTag === vibe.tag ? '✓ ' : ''}{vibe.label}
                   </span>
                 </button>
               ))}
@@ -5730,12 +5857,32 @@ export default function Home() {
                               {(variations.length > 0 ? variations[selectedVariation]?.params.key : null) ?? params.key}{' '}
                               {scaleLabel((variations.length > 0 ? variations[selectedVariation]?.params.scale : null) ?? params.scale)}
                             </span>
-                            <span
-                              className="text-xs font-semibold"
-                              style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}
+                            <div
+                              className="flex items-center gap-1"
+                              onMouseEnter={() => setBpmHovered(true)}
+                              onMouseLeave={() => setBpmHovered(false)}
                             >
-                              {params.bpm}
-                            </span>
+                              {bpmHovered && (
+                                <button
+                                  type="button"
+                                  onClick={() => setParams(p => ({ ...p, bpm: Math.max(60, p.bpm - 1) }))}
+                                  style={{ width: 18, height: 18, borderRadius: 4, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                >−</button>
+                              )}
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace', minWidth: 28, textAlign: 'center' }}
+                              >
+                                {params.bpm}
+                              </span>
+                              {bpmHovered && (
+                                <button
+                                  type="button"
+                                  onClick={() => setParams(p => ({ ...p, bpm: Math.min(200, p.bpm + 1) }))}
+                                  style={{ width: 18, height: 18, borderRadius: 4, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                >+</button>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
@@ -5963,12 +6110,13 @@ export default function Home() {
                   >
                     <div className="relative inline-flex">
                       <SpotlightButton onClick={handleDownloadAll} className="btn-download btn-sm">
-                        ↓  Download MIDI
+                        {exportFlash === 'midi' ? '✓  Downloaded' : '↓  Download MIDI'}
                       </SpotlightButton>
                       <button
                         type="button"
-                        className="btn-download btn-sm"
+                        className="btn-download btn-sm tip"
                         aria-label="Download options"
+                        data-tip="Download individual layers"
                         style={{
                           marginLeft: 8,
                           minWidth: 44,
@@ -6045,24 +6193,24 @@ export default function Home() {
                     </div>
                   </div>
                   <SpotlightButton onClick={() => void handleExportAbleton()} className="btn-download btn-sm">
-                    ↓  Export to Ableton
+                    {exportFlash === 'ableton' ? '✓  Exported' : '↓  Export to Ableton'}
                   </SpotlightButton>
                   <SpotlightButton
                     type="button"
                     onClick={() => void handleDownloadWav()}
-                    className="btn-download btn-sm"
+                    className="btn-download btn-sm tip"
+                    data-tip="Render and download WAV"
                     disabled={isRenderingWav}
-                    title="Render and download WAV"
                   >
-                    {isRenderingWav ? <ButtonLoadingDots label="Rendering WAV" /> : '↓  Download WAV'}
+                    {isRenderingWav ? <ButtonLoadingDots label="Rendering WAV" /> : exportFlash === 'wav' ? '✓  Exported' : '↓  Download WAV'}
                   </SpotlightButton>
                   <SpotlightButton
                     type="button"
                     onClick={handleShare}
-                    className="btn-secondary btn-sm copy-label-stack"
+                    className="btn-secondary btn-sm copy-label-stack tip"
+                    data-tip="Copy shareable link"
                     data-copied={shareCopied ? 'true' : 'false'}
                     disabled={!variationIds[selectedVariation]}
-                    title="Copy share link"
                   >
                     <span className="copy-label-stack__a">⧉  Share</span>
                     <span className="copy-label-stack__b">Copied</span>
@@ -6173,6 +6321,8 @@ export default function Home() {
                         enabled={params.layers[layer]}
                         onRegenerate={() => handleRegenerateLayer(layer)}
                         onDownload={() => handleDownloadLayer(layer, result[layer])}
+                        instrument={layerInstruments[layer]}
+                        onInstrumentChange={v => setLayerInstruments(prev => ({ ...prev, [layer]: v }))}
                       />
                     )
                   )}

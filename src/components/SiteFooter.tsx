@@ -95,8 +95,8 @@ export function SiteFooter() {
           <FooterCol
             title="Product"
             links={[
-              { label: 'Generator', href: '/create' },
-              { label: 'Piano Roll', href: '/create' },
+              { label: 'Generator', href: '/' },
+              { label: 'Piano Roll', href: '/' },
               { label: 'Mix Engine', href: '/build' },
               { label: 'Templates', href: '/create' },
               { label: 'Pricing', href: '/pricing' },
@@ -119,7 +119,6 @@ export function SiteFooter() {
           <FooterCol
             title="Company"
             links={[
-              { label: 'About', href: '/about' },
               { label: 'Contact', href: '/contact' },
               { label: 'Twitter / X', href: '/twitter' },
               { label: 'Discord', href: '/discord', muted: true },
@@ -139,7 +138,18 @@ export function SiteFooter() {
               opacity: 0.5,
             }}
           >
-            © 2026 papaya. All rights reserved.
+            <span>© {new Date().getFullYear()} papaya. All rights reserved.</span>
+            <span
+              style={{
+                display: 'block',
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontSize: 12,
+                marginTop: 4,
+                opacity: 0.6,
+              }}
+            >
+              Made with ♥ in Madrid
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

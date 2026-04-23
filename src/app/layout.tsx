@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/toast/ToastProvider';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import { InstallPromptBanner } from '@/components/InstallPromptBanner';
 import CrispChat from '@/components/CrispChat';
+import { NavigationProgress } from '@/components/NavigationProgress';
 import { SiteJsonLd } from '@/components/seo/SiteJsonLd';
 import { defaultDescription, ogImagePath, siteUrl } from '@/lib/seo';
 import './fonts.css';
@@ -103,6 +104,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteJsonLd />
           <ServiceWorkerRegister />
           <CrispChat />
+          <NavigationProgress />
           <ToastProvider>
             {children}
             <InstallPromptBanner />

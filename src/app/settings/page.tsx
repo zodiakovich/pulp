@@ -5,13 +5,17 @@ import { useAuth, useUser, useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { useToast } from '@/components/toast/useToast';
+import { UserAvatar, AVATAR_COLORS } from '@/components/UserAvatar';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { GENRES, NOTE_NAMES, SCALE_INTERVALS } from '@/lib/music-engine';
 
-type Tab = 'profile' | 'account' | 'billing' | 'notifications' | 'danger';
+type Tab = 'profile' | 'account' | 'billing' | 'preferences' | 'notifications' | 'danger';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'account', label: 'Account & Security' },
   { id: 'billing', label: 'Billing' },
+  { id: 'preferences', label: 'Preferences' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'danger', label: 'Danger Zone' },
 ];
@@ -110,6 +114,18 @@ function ProfileSection() {
   const [lastName, setLastName] = useState(user?.lastName ?? '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [avatarColor, setAvatarColor] = useState<string | null>(null);
+  const [colorSaving, setColorSaving] = useState(false);
+
+  // Load persisted avatar color
+  useEffect(() => {
+    fetch('/api/user/avatar')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { avatarColor?: string | null } | null) => {
+        if (d?.avatarColor) setAvatarColor(d.avatarColor);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSave() {
     if (!user) return;
@@ -139,8 +155,24 @@ function ProfileSection() {
     }
   }
 
+  async function handleColorPick(color: string) {
+    setAvatarColor(color);
+    setColorSaving(true);
+    try {
+      await fetch('/api/user/avatar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarColor: color }),
+      });
+    } catch {
+      // non-blocking
+    } finally {
+      setColorSaving(false);
+    }
+  }
+
   const email = user?.emailAddresses?.[0]?.emailAddress ?? '';
-  const displayInitial = (user?.firstName?.[0] ?? email[0] ?? '?').toUpperCase();
+  const displayName = user?.firstName ?? user?.username ?? email.split('@')[0] ?? 'User';
 
   return (
     <div className="space-y-3">
@@ -148,30 +180,14 @@ function ProfileSection() {
       <SectionCard>
         <SectionLabel>Profile photo</SectionLabel>
         <div className="flex items-center gap-5">
-          {user?.imageUrl ? (
-            <img
-              src={user.imageUrl}
-              alt="Profile"
-              width={72}
-              height={72}
-              className="rounded-full flex-shrink-0"
-              style={{ border: '1px solid var(--border)', objectFit: 'cover' }}
-            />
-          ) : (
-            <div
-              className="flex items-center justify-center rounded-full flex-shrink-0 font-bold text-xl"
-              style={{
-                width: 72,
-                height: 72,
-                border: '1px solid var(--border)',
-                background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
-                color: 'var(--accent)',
-                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-              }}
-            >
-              {displayInitial}
-            </div>
-          )}
+          <UserAvatar
+            userId={user?.id}
+            name={displayName}
+            imageUrl={user?.imageUrl}
+            avatarColor={avatarColor}
+            size={72}
+            style={{ border: '1px solid var(--border)' }}
+          />
           <div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             <button
@@ -187,6 +203,44 @@ function ProfileSection() {
             </p>
           </div>
         </div>
+
+        {/* Color picker — only shown when no Clerk photo */}
+        {!user?.imageUrl && (
+          <div style={{ marginTop: 20 }}>
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>
+              Avatar color {colorSaving && <span style={{ opacity: 0.5 }}>— saving…</span>}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {AVATAR_COLORS.map(c => {
+                const active = (avatarColor ?? AVATAR_COLORS[0]) === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => handleColorPick(c)}
+                    aria-label={`Avatar color ${c}`}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: `${c}22`,
+                      border: active ? `2px solid ${c}` : `2px solid ${c}44`,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'transform 120ms',
+                      transform: active ? 'scale(1.18)' : 'scale(1)',
+                      outline: 'none',
+                    }}
+                  >
+                    <span style={{ width: 14, height: 14, borderRadius: '50%', background: c, display: 'block' }} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </SectionCard>
 
       {/* Display name */}
@@ -476,18 +530,277 @@ function BillingSection() {
   );
 }
 
+function SelectField({
+  id,
+  value,
+  onChange,
+  options,
+}: {
+  id?: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        display: 'block',
+        width: '100%',
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        padding: '10px 14px',
+        fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+        fontSize: 14,
+        color: 'var(--foreground)',
+        outline: 'none',
+        boxSizing: 'border-box',
+        cursor: 'pointer',
+      }}
+    >
+      {options.map(o => (
+        <option key={o.value} value={o.value} style={{ background: '#1A1A1E' }}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+const GENRE_OPTIONS = Object.entries(GENRES).map(([key, g]) => ({ value: key, label: g.name }));
+const KEY_OPTIONS = NOTE_NAMES.map(n => ({ value: n, label: n }));
+const SCALE_OPTIONS = Object.keys(SCALE_INTERVALS).map(s => ({
+  value: s,
+  label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+}));
+const BARS_OPTIONS = [2, 4, 8, 16].map(n => ({ value: String(n), label: `${n} bars` }));
+
+function SavedBadge({ visible }: { visible: boolean }) {
+  return (
+    <span
+      style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: 11,
+        color: '#00B894',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.3s ease',
+        marginLeft: 8,
+      }}
+    >
+      Saved
+    </span>
+  );
+}
+
+function PreferencesSection() {
+  const { prefs, update, saved } = useUserPreferences();
+
+  return (
+    <div className="space-y-3">
+      {/* Generation Defaults */}
+      <SectionCard>
+        <div className="flex items-center justify-between mb-4">
+          <SectionLabel>Generation defaults</SectionLabel>
+          <SavedBadge visible={saved} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <FieldLabel htmlFor="pref-genre">Genre</FieldLabel>
+            <SelectField
+              id="pref-genre"
+              value={prefs.defaultGenre}
+              onChange={v => update({ defaultGenre: v })}
+              options={GENRE_OPTIONS}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="pref-key">Key</FieldLabel>
+            <SelectField
+              id="pref-key"
+              value={prefs.defaultKey}
+              onChange={v => update({ defaultKey: v })}
+              options={KEY_OPTIONS}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="pref-scale">Scale</FieldLabel>
+            <SelectField
+              id="pref-scale"
+              value={prefs.defaultScale}
+              onChange={v => update({ defaultScale: v })}
+              options={SCALE_OPTIONS}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="pref-bars">Default bars</FieldLabel>
+            <SelectField
+              id="pref-bars"
+              value={String(prefs.defaultBars)}
+              onChange={v => update({ defaultBars: parseInt(v, 10) })}
+              options={BARS_OPTIONS}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="pref-bpm">Default BPM override</FieldLabel>
+            <input
+              id="pref-bpm"
+              type="number"
+              min={60}
+              max={200}
+              value={prefs.defaultBpm ?? ''}
+              placeholder="Use genre default"
+              onChange={e => {
+                const v = e.target.value;
+                update({ defaultBpm: v === '' ? null : Math.max(60, Math.min(200, parseInt(v, 10))) });
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                padding: '10px 14px',
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontSize: 14,
+                color: 'var(--foreground)',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>
+              Leave blank to use the genre&apos;s default
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Playback */}
+      <SectionCard>
+        <SectionLabel>Playback</SectionLabel>
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <FieldLabel>Master volume</FieldLabel>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
+                {prefs.masterVolume}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={prefs.masterVolume}
+              onChange={e => update({ masterVolume: parseInt(e.target.value, 10) })}
+              style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>
+              Volume preference is saved but audio wiring is applied at playback time
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+            <div>
+              <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--foreground)', fontWeight: 500, marginBottom: 4 }}>
+                Auto-play after generation
+              </p>
+              <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+                Automatically start playback when a generation finishes
+              </p>
+            </div>
+            <Toggle id="pref-autoplay" checked={prefs.autoPlay} onChange={v => update({ autoPlay: v })} />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+            <div>
+              <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--foreground)', fontWeight: 500, marginBottom: 4 }}>
+                Metronome
+              </p>
+              <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+                Play a click track alongside generated patterns
+              </p>
+            </div>
+            <Toggle id="pref-metronome" checked={prefs.metronome} onChange={v => update({ metronome: v })} />
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Export */}
+      <SectionCard>
+        <SectionLabel>Export</SectionLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <FieldLabel htmlFor="pref-format">Default format</FieldLabel>
+            <SelectField
+              id="pref-format"
+              value={prefs.exportFormat}
+              onChange={v => update({ exportFormat: v as 'midi' | 'wav' })}
+              options={[
+                { value: 'midi', label: 'MIDI (.mid)' },
+                { value: 'wav', label: 'WAV (rendered audio)' },
+              ]}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="pref-prefix">Custom filename prefix</FieldLabel>
+            <TextInput
+              id="pref-prefix"
+              value={prefs.customPrefix}
+              onChange={v => update({ customPrefix: v })}
+              placeholder="e.g. myproject"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel htmlFor="pref-pattern">Filename pattern</FieldLabel>
+            <TextInput
+              id="pref-pattern"
+              value={prefs.filenamePattern}
+              onChange={v => update({ filenamePattern: v })}
+              placeholder="pulp-{genre}-{bpm}"
+            />
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>
+              Variables: {'{genre}'} {'{bpm}'} {'{key}'} {'{scale}'}
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          <div>
+            <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--foreground)', fontWeight: 500, marginBottom: 4 }}>
+              Include tempo track
+            </p>
+            <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+              Embed BPM information in exported MIDI files
+            </p>
+          </div>
+          <Toggle id="pref-tempo" checked={prefs.includeTempoTrack} onChange={v => update({ includeTempoTrack: v })} />
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
 const NOTIF_STORAGE_KEY = 'pulp_notification_prefs';
 
 type NotifPrefs = {
   low_gen_warning: boolean;
   new_features: boolean;
   tips: boolean;
+  weekly_digest: boolean;
+  badge_emails: boolean;
+  inapp_generation_complete: boolean;
+  inapp_badge_earned: boolean;
 };
 
 const DEFAULT_PREFS: NotifPrefs = {
   low_gen_warning: true,
   new_features: true,
   tips: false,
+  weekly_digest: false,
+  badge_emails: true,
+  inapp_generation_complete: true,
+  inapp_badge_earned: true,
 };
 
 function Toggle({
@@ -535,96 +848,81 @@ function Toggle({
 }
 
 function NotificationsSection() {
-  const { toast } = useToast();
   const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_PREFS);
-  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const flashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(NOTIF_STORAGE_KEY);
-      if (stored) setPrefs(JSON.parse(stored) as NotifPrefs);
+      if (stored) setPrefs({ ...DEFAULT_PREFS, ...(JSON.parse(stored) as Partial<NotifPrefs>) });
     } catch { /* ignore */ }
   }, []);
 
   function toggle(key: keyof NotifPrefs) {
-    setPrefs(p => ({ ...p, [key]: !p[key] }));
-    setDirty(true);
+    setPrefs(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      if (flashRef.current) clearTimeout(flashRef.current);
+      setSaved(true);
+      flashRef.current = setTimeout(() => setSaved(false), 1500);
+      return next;
+    });
   }
 
-  function handleSave() {
-    try {
-      localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(prefs));
-      setDirty(false);
-      toast('Notification preferences saved', 'success');
-      // TODO: persist to Supabase user_settings table when available
-    } catch {
-      toast('Failed to save preferences', 'danger');
-    }
-  }
-
-  const rows: { key: keyof NotifPrefs; label: string; description: string }[] = [
-    {
-      key: 'low_gen_warning',
-      label: 'Low generation warning',
-      description: 'Email me when I\'m running low on generations this month',
-    },
-    {
-      key: 'new_features',
-      label: 'New genres & features',
-      description: 'Email me about new genres, updates, and product releases',
-    },
-    {
-      key: 'tips',
-      label: 'Tips & tutorials',
-      description: 'Occasional emails with beat-making tips and tutorials',
-    },
+  const emailRows: { key: keyof NotifPrefs; label: string; description: string }[] = [
+    { key: 'low_gen_warning', label: 'Low generation warning', description: 'Alert when running low on generations this month' },
+    { key: 'new_features', label: 'New genres & features', description: 'Product updates, new genres, and releases' },
+    { key: 'tips', label: 'Tips & tutorials', description: 'Occasional beat-making tips and tutorials' },
+    { key: 'weekly_digest', label: 'Weekly digest', description: 'A weekly summary of your activity and trending patterns' },
+    { key: 'badge_emails', label: 'Badge earned', description: 'Email when you unlock a new achievement badge' },
   ];
+
+  const inappRows: { key: keyof NotifPrefs; label: string; description: string }[] = [
+    { key: 'inapp_generation_complete', label: 'Generation complete', description: 'In-app toast when a pattern finishes generating' },
+    { key: 'inapp_badge_earned', label: 'Badge earned', description: 'In-app toast when you unlock a new badge' },
+  ];
+
+  function renderRows(rows: typeof emailRows) {
+    return rows.map((row, i) => (
+      <div
+        key={row.key}
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 16,
+          paddingTop: i === 0 ? 0 : 16,
+          paddingBottom: i < rows.length - 1 ? 16 : 0,
+          borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none',
+        }}
+      >
+        <div>
+          <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--foreground)', fontWeight: 500, marginBottom: 4 }}>
+            {row.label}
+          </p>
+          <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+            {row.description}
+          </p>
+        </div>
+        <Toggle id={`notif-${row.key}`} checked={prefs[row.key]} onChange={() => toggle(row.key)} />
+      </div>
+    ));
+  }
 
   return (
     <div className="space-y-3">
       <SectionCard>
-        <SectionLabel>Email notifications</SectionLabel>
-        <div>
-          {rows.map((row, i) => (
-            <div
-              key={row.key}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                gap: 16,
-                paddingTop: i === 0 ? 0 : 16,
-                paddingBottom: i < rows.length - 1 ? 16 : 0,
-                borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none',
-              }}
-            >
-              <div>
-                <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--foreground)', fontWeight: 500, marginBottom: 4 }}>
-                  {row.label}
-                </p>
-                <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-                  {row.description}
-                </p>
-              </div>
-              <Toggle
-                id={`notif-${row.key}`}
-                checked={prefs[row.key]}
-                onChange={() => toggle(row.key)}
-              />
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <SectionLabel>Email notifications</SectionLabel>
+          <SavedBadge visible={saved} />
         </div>
-        <div className="mt-5">
-          <button
-            type="button"
-            className="btn-primary btn-sm"
-            onClick={handleSave}
-            disabled={!dirty}
-            style={{ opacity: dirty ? 1 : 0.5 }}
-          >
-            Save preferences
-          </button>
-        </div>
+        <div>{renderRows(emailRows)}</div>
+      </SectionCard>
+
+      <SectionCard>
+        <SectionLabel>In-app notifications</SectionLabel>
+        <div>{renderRows(inappRows)}</div>
       </SectionCard>
     </div>
   );
@@ -825,6 +1123,7 @@ export default function SettingsPage() {
           {activeTab === 'profile' && <ProfileSection />}
           {activeTab === 'account' && <AccountSection />}
           {activeTab === 'billing' && <BillingSection />}
+          {activeTab === 'preferences' && <PreferencesSection />}
           {activeTab === 'notifications' && <NotificationsSection />}
           {activeTab === 'danger' && <DangerSection />}
         </div>

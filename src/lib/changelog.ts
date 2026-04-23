@@ -2,27 +2,37 @@ export type ChangelogEntry = {
   version: string;
   date: string; // YYYY-MM-DD
   title: string;
-  description: string;
+  changes: string[];
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '1.2',
-    date: '2026-04-08',
-    title: 'Live Mode + Audio to MIDI',
-    description: 'Jam in real time and convert any sample to MIDI',
+    version: 'Beta 0.1',
+    date: '2026-04-23',
+    title: 'Welcome to pulp Beta',
+    changes: [
+      'Professional piano roll — resize, move, multi-select, undo/redo',
+      '4 premium genres with real audio samples',
+      'Export to MIDI, WAV, Ableton .als, MusicXML',
+      'Share generations publicly with a link',
+      'Studio plan: drag-to-DAW and MIDI upload',
+    ],
   },
   {
-    version: '1.1',
+    version: '0.0.1',
     date: '2026-04-01',
-    title: 'Inspire from songs',
-    description: 'Type any artist or song and pulp matches the vibe',
-  },
-  {
-    version: '1.0',
-    date: '2026-03-25',
-    title: 'pulp launches',
-    description: 'AI MIDI generator with 20 genres and 4 independent tracks',
+    title: 'Initial release',
+    changes: [
+      'AI MIDI generation — melody, chords, bass, drums',
+      '3 variations per generation',
+      'Export MIDI Format 0/1, WAV, Ableton .als, MusicXML, JSON',
+      'Clerk authentication',
+      'Stripe subscription (Free / Pro / Studio)',
+      'Generation history with favorites',
+      'Public share links',
+      'Collab sessions',
+      'Inspire mode, Quick start templates',
+      'Style tags and manual controls',
+    ],
   },
 ];
-

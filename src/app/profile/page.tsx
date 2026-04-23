@@ -6,6 +6,8 @@ import { checkCreditsAllowed } from '@/lib/credits';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ProfileAccountClient } from './ProfileAccountClient';
+import { BADGE_DEFS, getUserBadges, type EarnedBadge } from '@/lib/badges';
+import { UserAvatar } from '@/components/UserAvatar';
 import Stripe from 'stripe';
 
 const db = supabaseAdmin ?? supabase;
@@ -136,6 +138,92 @@ function CreditsStatWithUpgrade({ value, isPro }: { value: string; isPro: boolea
   );
 }
 
+function BadgesSection({ earned }: { earned: EarnedBadge[] }) {
+  const earnedMap = new Map(earned.map(b => [b.id, b]));
+
+  return (
+    <section>
+      <p
+        style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 11,
+          color: 'var(--muted)',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          marginBottom: 12,
+        }}
+      >
+        Badges
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+        {BADGE_DEFS.map(badge => {
+          const e = earnedMap.get(badge.id);
+          const isEarned = !!e;
+          const earnedDate = e
+            ? new Date(e.earned_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+            : null;
+
+          return (
+            <div
+              key={badge.id}
+              className="rounded-2xl p-4 flex flex-col items-center text-center gap-2"
+              style={{
+                border: `1px solid ${isEarned ? 'rgba(255,109,63,0.30)' : 'var(--border)'}`,
+                background: isEarned ? 'rgba(255,109,63,0.06)' : 'var(--surface)',
+                filter: isEarned ? 'none' : 'grayscale(1)',
+                opacity: isEarned ? 1 : 0.5,
+                transition: 'opacity 200ms',
+              }}
+              title={isEarned ? `Earned ${earnedDate ?? ''}` : 'Locked'}
+            >
+              <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden>
+                {isEarned ? badge.icon : '🔒'}
+              </span>
+              <div>
+                <p
+                  style={{
+                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    letterSpacing: '-0.01em',
+                    color: isEarned ? 'var(--foreground)' : 'var(--muted)',
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {badge.name}
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 9,
+                    color: 'var(--muted)',
+                    marginTop: 3,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {badge.description}
+                </p>
+                {earnedDate && (
+                  <p
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 9,
+                      color: 'var(--accent)',
+                      marginTop: 4,
+                    }}
+                  >
+                    {earnedDate}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default async function ProfilePage() {
   const user = await currentUser();
   if (!user) redirect('/');
@@ -145,7 +233,6 @@ export default async function ProfilePage() {
   const displayName = user.username || user.firstName || email.split('@')[0] || 'Member';
   const memberSince = formatMemberSince(user.createdAt ? new Date(user.createdAt) : null);
   const avatarUrl = user.imageUrl;
-  const initial = (email.split('@')[0]?.[0] || displayName[0] || '?').toUpperCase();
 
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
 
@@ -163,9 +250,11 @@ export default async function ProfilePage() {
     bpm: number;
     created_at: string;
   }[] = [];
+  let earnedBadges: EarnedBadge[] = [];
+  let avatarColor: string | null = null;
 
   try {
-    const [totalRes, monthRes, genreRes, recentRes, creditSnap] = await Promise.all([
+    const [totalRes, monthRes, genreRes, recentRes, creditSnap, badgesSnap, avatarSnap] = await Promise.all([
       db.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', userId),
       db
         .from('generations')
@@ -186,6 +275,8 @@ export default async function ProfilePage() {
         allowed: true,
         plan_type: 'free' as const,
       })),
+      getUserBadges(userId).catch(() => [] as EarnedBadge[]),
+      db.from('user_credits').select('avatar_color').eq('user_id', userId).maybeSingle(),
     ]);
 
     totalGenerations = totalRes.count ?? 0;
@@ -195,6 +286,8 @@ export default async function ProfilePage() {
     creditLimit = creditSnap.limit;
     isPro = creditSnap.is_pro;
     recentGenerations = (recentRes.data as typeof recentGenerations) ?? [];
+    earnedBadges = badgesSnap;
+    avatarColor = (avatarSnap.data as { avatar_color?: string | null } | null)?.avatar_color ?? null;
   } catch {
     // keep defaults
   }
@@ -220,33 +313,13 @@ export default async function ProfilePage() {
             style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
           >
             <div className="flex items-center gap-4 min-w-0">
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={`${displayName} profile photo`}
-                  width={72}
-                  height={72}
-                  className="rounded-full flex-shrink-0"
-                  style={{ border: '1px solid var(--border)', objectFit: 'cover' }}
-                />
-              ) : (
-                <div
-                  className="flex items-center justify-center rounded-full flex-shrink-0 font-extrabold text-2xl"
-                  style={{
-                    width: 72,
-                    height: 72,
-                    border: '1px solid var(--border)',
-                    background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
-                    color: 'var(--accent)',
-                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-                    fontWeight: 700,
-                    letterSpacing: '-0.02em',
-                  }}
-                  aria-hidden
-                >
-                  {initial}
-                </div>
-              )}
+              <UserAvatar
+                userId={userId}
+                name={displayName}
+                imageUrl={avatarUrl}
+                avatarColor={avatarColor}
+                size={72}
+              />
               <div className="min-w-0">
                 <h1 className="truncate" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--foreground)' }}>
                   {displayName}
@@ -290,7 +363,10 @@ export default async function ProfilePage() {
             </div>
           </section>
 
-          {/* SECTION 3 — Recent generations */}
+          {/* SECTION 3 — Badges */}
+          <BadgesSection earned={earnedBadges} />
+
+          {/* SECTION 4 — Recent generations */}
           <section>
             <p
               style={{
@@ -370,7 +446,7 @@ export default async function ProfilePage() {
             </div>
           </section>
 
-          {/* SECTION 4 — Account */}
+          {/* SECTION 5 — Account */}
           <section>
             <ProfileAccountClient isPro={isPro} currentPeriodEnd={currentPeriodEnd} />
           </section>

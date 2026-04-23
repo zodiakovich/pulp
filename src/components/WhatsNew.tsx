@@ -1,53 +1,54 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CHANGELOG } from '@/lib/changelog';
 
-const STORAGE_KEY = 'pulp_seen_version';
-
-function formatDate(iso: string) {
-  const d = new Date(iso + 'T00:00:00');
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+function seenKey(version: string) {
+  return `pulp_whats_new_seen_v${version}`;
 }
 
 export function WhatsNew() {
-  const latest = CHANGELOG[0]?.version ?? '0.0';
+  const latest = CHANGELOG[0];
   const [open, setOpen] = useState(false);
-  const [seen, setSeen] = useState<string | null>(null);
+  const [hasSeen, setHasSeen] = useState(true);
 
   useEffect(() => {
-    try {
-      setSeen(localStorage.getItem(STORAGE_KEY));
-    } catch {
-      setSeen(null);
-    }
-  }, []);
+    if (!latest) return;
+    const alreadySeen = localStorage.getItem(seenKey(latest.version)) === '1';
+    setHasSeen(alreadySeen);
+    if (!alreadySeen) setOpen(true);
+  }, [latest?.version]);
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
-      setOpen(false);
+      handleClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
-  const hasNew = useMemo(() => {
-    if (!seen) return true;
-    return seen !== latest;
-  }, [seen, latest]);
+  function markSeen() {
+    if (!latest) return;
+    try { localStorage.setItem(seenKey(latest.version), '1'); } catch { /* ignore */ }
+    setHasSeen(true);
+  }
 
-  const markSeen = () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, latest);
-    } catch {
-      // ignore
-    }
-    setSeen(latest);
-  };
+  function handleClose() {
+    markSeen();
+    setOpen(false);
+  }
+
+  function handleStartCreating() {
+    handleClose();
+    window.setTimeout(() => {
+      document.getElementById('main-prompt')?.focus();
+    }, 50);
+  }
+
+  if (!latest) return null;
 
   return (
     <>
@@ -57,10 +58,9 @@ export function WhatsNew() {
         aria-label="What's new"
         className="h-9 px-3 rounded-lg flex items-center gap-2 transition-all duration-200 ease-ui text-sm"
         style={{ background: 'rgba(255,109,63,0.1)', color: 'var(--accent)', position: 'relative', zIndex: 45 }}
-        title="What's new"
       >
-        What’s new
-        {hasNew && (
+        What&apos;s new
+        {!hasSeen && (
           <span
             aria-hidden="true"
             style={{
@@ -79,110 +79,127 @@ export function WhatsNew() {
       {open && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            style={{ zIndex: 9998 }}
+            onClick={handleClose}
           />
           <div
-            className="fixed z-[51] w-[min(980px,calc(100vw-32px))] rounded-xl p-6"
-            style={{
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: '#0A0A0B',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 12,
-              maxHeight: 'calc(100vh - 48px)',
-              overflowY: 'auto',
-            }}
             role="dialog"
             aria-modal="true"
             aria-label="What's new"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed rounded-2xl"
+            style={{
+              zIndex: 9999,
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 'min(560px, calc(100vw - 32px))',
+              background: '#0A0A0B',
+              border: '1px solid rgba(255,255,255,0.08)',
+              maxHeight: 'calc(100vh - 48px)',
+              overflowY: 'auto',
+              padding: '32px',
+            }}
+            onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4" style={{ marginBottom: 24 }}>
               <div>
-                <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
-                  What’s new
-                </div>
-                <div style={{ marginTop: 6, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                  Latest: <span style={{ color: 'var(--accent)' }}>v{latest}</span>
-                </div>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: 'var(--accent)',
+                    border: '1px solid rgba(255,109,63,0.35)',
+                    background: 'rgba(255,109,63,0.1)',
+                    padding: '3px 9px',
+                    borderRadius: 20,
+                    marginBottom: 10,
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  v{latest.version}
+                </span>
+                <h2
+                  style={{
+                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 24,
+                    letterSpacing: '-0.02em',
+                    lineHeight: 1.2,
+                    color: 'var(--text)',
+                    margin: 0,
+                  }}
+                >
+                  {latest.title}
+                </h2>
               </div>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={handleClose}
                 aria-label="Close"
-                className="h-9 w-9 rounded-lg transition-all duration-200 ease-ui grid place-items-center"
                 style={{
-                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
-                  color: 'var(--text)',
-                  fontFamily: 'JetBrains Mono, monospace',
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.1)',
                   background: 'transparent',
-                  fontSize: 14,
-                  lineHeight: 1,
+                  color: 'var(--muted)',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
                 ×
               </button>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {CHANGELOG.map((e) => (
-                <div
-                  key={e.version}
-                  className="rounded-2xl p-5"
-                  style={{
-                    border: '1px solid var(--border)',
-                    background: 'color-mix(in srgb, var(--surface) 92%, transparent)',
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: 12,
-                        color: 'var(--purple)',
-                        border: '1px solid rgba(167,139,250,0.35)',
-                        background: 'rgba(167,139,250,0.10)',
-                        padding: '4px 8px',
-                        borderRadius: 8,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      v{e.version}
-                    </span>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                      {formatDate(e.date)}
-                    </span>
-                  </div>
-                  <div className="mt-3" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
-                    {e.title}
-                  </div>
-                  <div className="mt-2" style={{ color: 'var(--muted)' }}>
-                    {e.description}
-                  </div>
-                </div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {latest.changes.map((item, i) => (
+                <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <span
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: 'rgba(255,109,63,0.12)',
+                      border: '1px solid rgba(255,109,63,0.30)',
+                      color: 'var(--accent)',
+                      fontSize: 9,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: 2,
+                    }}
+                  >
+                    ✦
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                      fontSize: 15,
+                      color: 'var(--text)',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {item}
+                  </span>
+                </li>
               ))}
-            </div>
+            </ul>
 
-            <div className="mt-6 flex items-center justify-end gap-3">
+            <div style={{ marginTop: 28, display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                className="btn-secondary btn-sm"
+                onClick={handleStartCreating}
+                className="btn-primary"
               >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  markSeen();
-                  setOpen(false);
-                }}
-                className="btn-primary btn-sm"
-                style={{ background: 'var(--accent)' }}
-              >
-                Got it
+                Start creating →
               </button>
             </div>
           </div>
@@ -191,4 +208,3 @@ export function WhatsNew() {
     </>
   );
 }
-

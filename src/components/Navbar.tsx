@@ -13,8 +13,11 @@ type CreditsData = { credits_used: number; limit: number; is_pro: boolean; plan_
 function GenerationPill({ data, onClick }: { data: CreditsData; onClick: () => void }) {
   if (!data) return null;
   const remaining = Math.max(0, data.limit - data.credits_used);
-  const pct = data.limit > 0 ? remaining / data.limit : 0;
-  const color = pct > 0.5 ? '#00B894' : pct > 0.1 ? '#FF6D3F' : '#E94560';
+  const usedPct = data.limit > 0 ? data.credits_used / data.limit : 0;
+  const exhausted = usedPct >= 1;
+  const warning = !exhausted && usedPct >= 0.8;
+  const color = exhausted ? '#E94560' : warning ? '#F59E0B' : '#00B894';
+  const textColor = warning ? '#1a0f00' : color;
   return (
     <button
       type="button"
@@ -22,15 +25,16 @@ function GenerationPill({ data, onClick }: { data: CreditsData; onClick: () => v
       style={{
         fontFamily: 'JetBrains Mono, monospace',
         fontSize: 11,
-        color,
-        border: `1px solid ${color}33`,
-        background: `${color}14`,
+        color: textColor,
+        border: `1px solid ${color}55`,
+        background: warning ? '#F59E0B33' : `${color}14`,
         borderRadius: 20,
         padding: '3px 10px',
         cursor: 'pointer',
         whiteSpace: 'nowrap',
         letterSpacing: '0.03em',
         lineHeight: 1.5,
+        animation: exhausted ? 'generate-glow-pulse 1.4s ease infinite' : 'none',
       }}
       title={`${remaining} of ${data.limit} generations remaining`}
     >
@@ -92,6 +96,10 @@ export function Navbar({
     const resolved = document.documentElement.classList.contains('light') ? 'light' : 'dark';
     setTheme(resolved);
   }, []);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);

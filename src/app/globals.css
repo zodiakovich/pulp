@@ -171,7 +171,7 @@ html.light {
   opacity: 1;
 }
 .nav-link--active {
-  color: var(--foreground);
+  color: rgba(255, 255, 255, 0.9);
   opacity: 1;
 }
 .nav-link--active::after {
@@ -180,8 +180,9 @@ html.light {
   left: 0;
   right: 0;
   bottom: -8px;
-  height: 1px;
-  background: color-mix(in srgb, var(--text) 35%, transparent);
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
 }
 button.nav-link {
   background: none;
@@ -470,6 +471,12 @@ section h2, .section-title {
 .stagger-4 { animation-delay: 240ms; }
 .stagger-5 { animation-delay: 300ms; }
 
+/* Generate button pulsing glow */
+@keyframes generate-glow-pulse {
+  0%, 100% { box-shadow: 0 0 56px rgba(255,109,63,0.15); }
+  50%       { box-shadow: 0 0 48px rgba(255,109,63,0.55), 0 0 96px rgba(255,109,63,0.22); }
+}
+
 /* Scroll reveal */
 .reveal {
   opacity: 0;
@@ -531,10 +538,10 @@ section h2, .section-title {
   filter: none;
   box-shadow: 0 0 48px rgba(255,109,63,0.14);
 }
-.btn-primary:active:not(:disabled) { transform: scale(0.98); transition-duration: 100ms; }
+.btn-primary:active:not(:disabled) { transform: scale(0.97); transition-duration: 80ms; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; filter: none; box-shadow: none; transform: none; pointer-events: none; }
 .btn-primary:disabled:hover { transform: none; box-shadow: none; filter: none; }
-.btn-primary.pulsing { animation: none; }
+.btn-primary.pulsing { animation: generate-glow-pulse 1.2s var(--ease-ui) infinite; }
 
 /* Home hero — single dominant CTA above the fold */
 .btn-hero {
@@ -569,7 +576,7 @@ section h2, .section-title {
   flex-shrink: 0;
 }
 .btn-secondary:hover:not(:disabled) { transform: scale(1.02); background: var(--surface-weak); border-color: var(--border); }
-.btn-secondary:active:not(:disabled) { transform: scale(0.98); transition-duration: 100ms; }
+.btn-secondary:active:not(:disabled) { transform: scale(0.97); transition-duration: 80ms; }
 .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .btn-secondary:disabled:hover { transform: none; background: transparent; }
 
@@ -602,7 +609,7 @@ html.light .btn-secondary {
   filter: brightness(1.1);
   box-shadow: 0 0 28px rgba(0,184,148,0.22);
 }
-.btn-download:active:not(:disabled) { transform: scale(0.98); transition-duration: 100ms; }
+.btn-download:active:not(:disabled) { transform: scale(0.97); transition-duration: 80ms; }
 .btn-download:disabled { opacity: 0.4; cursor: not-allowed; filter: none; box-shadow: none; transform: none; pointer-events: none; }
 .btn-download:disabled:hover { transform: none; box-shadow: none; filter: none; }
 
@@ -1013,5 +1020,52 @@ button.copy-label-stack {
   .generator-progress-bar__fill { animation: none !important; }
   .conn-dot--connected,
   .conn-dot--reconnecting { animation: none !important; }
+  .btn-primary.pulsing { animation: none !important; }
+}
+
+/* ─── CSS TOOLTIP ─── */
+/* Usage: add class="tip" data-tip="label" to any element */
+.tip {
+  position: relative;
+}
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #1A1A1E;
+  color: rgba(255, 255, 255, 0.90);
+  font-family: 'DM Sans', system-ui, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-ui), transform 140ms var(--ease-ui);
+  transition-delay: 0ms;
+  z-index: 200;
+}
+.tip:hover::after,
+.tip:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  transition-delay: 400ms;
+}
+/* Flip below when near viewport top: add .tip--below modifier */
+.tip--below::after {
+  bottom: auto;
+  top: calc(100% + 7px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.tip--below:hover::after,
+.tip--below:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip::after { transition: none; }
 }
 

@@ -39,6 +39,7 @@ export async function playTonePreview(
   layer: TonePreviewLayer,
   genre: string,
   onComplete?: () => void,
+  instrument?: string,
 ) {
   stopTonePreview();
   const ctx = getAudioContext();
@@ -79,7 +80,7 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     } else {
-      const inst = await getInstrument('acoustic_grand_piano');
+      const inst = await getInstrument(instrument ?? 'acoustic_grand_piano');
       for (const note of notes) {
         const t   = now + note.startTime * secondsPerBeat;
         const d   = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
@@ -117,7 +118,7 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     } else {
-      const inst = await getInstrument('string_ensemble_1');
+      const inst = await getInstrument(instrument ?? 'string_ensemble_1');
       for (const note of notes) {
         const t   = now + note.startTime * secondsPerBeat;
         const d   = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
@@ -155,7 +156,7 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     } else {
-      const inst = await getInstrument('electric_bass_finger');
+      const inst = await getInstrument(instrument ?? 'electric_bass_finger');
       for (const note of notes) {
         const t   = now + note.startTime * secondsPerBeat;
         const d   = Math.max(0.1, note.duration * secondsPerBeat * 0.9);

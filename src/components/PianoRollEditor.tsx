@@ -983,6 +983,20 @@ export function PianoRollEditor({
         >
           Clear
         </button>
+
+        {/* Note count */}
+        <span
+          style={{
+            ...inactiveBtn,
+            border: 'none',
+            marginLeft: 'auto',
+            color: 'rgba(255,255,255,0.35)',
+            fontSize: 10,
+            letterSpacing: '0.04em',
+          }}
+        >
+          {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+        </span>
       </div>
 
       {/* Main layout: piano + grid */}
@@ -1167,13 +1181,24 @@ export function PianoRollEditor({
         </div>
       </div>
 
-      {/* Shortcut hint */}
-      <p
-        className="px-3 py-1 text-[9px] font-mono border-t shrink-0"
-        style={{ color: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.06)', lineHeight: 1.6 }}
+      {/* Status bar */}
+      <div
+        className="px-3 py-1 border-t shrink-0 flex items-center justify-between gap-4"
+        style={{ borderColor: 'rgba(255,255,255,0.06)' }}
       >
-        Draw: click add · right-edge resize · drag move · RMB delete &nbsp;·&nbsp; Select: drag rubber-band &nbsp;·&nbsp; Del remove · Shift+click multi · ←→↑↓ nudge · Ctrl+A all · Ctrl+Z undo · Ctrl+scroll zoom
-      </p>
+        <p
+          className="text-[9px] font-mono"
+          style={{ color: 'rgba(255,255,255,0.18)', lineHeight: 1.6, margin: 0 }}
+        >
+          Draw: click add · right-edge resize · drag move · RMB delete &nbsp;·&nbsp; Select: drag rubber-band &nbsp;·&nbsp; Del remove · Shift+click multi · ←→↑↓ nudge · Ctrl+A all · Ctrl+Z undo · Ctrl+scroll zoom
+        </p>
+        <span
+          className="text-[9px] font-mono shrink-0"
+          style={{ color: 'rgba(255,255,255,0.28)', letterSpacing: '0.04em' }}
+        >
+          Snap: {SNAP_OPTIONS.find(o => o.step === snapStep)?.label ?? '1/16'}
+        </span>
+      </div>
     </div>
   );
 }
