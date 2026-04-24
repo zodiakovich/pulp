@@ -1,5 +1,16 @@
-export const SAMPLE_SET_SLUGS = ['acid-drop', 'uk-garage', 'deep-hypnotic', 'bouncy-funk'] as const;
+export const SAMPLE_SET_SLUGS = ['acid-drop', 'uk-garage', 'deep-hypnotic', 'bouncy-funk', 'afro-house'] as const;
 export type SampleSetSlug = (typeof SAMPLE_SET_SLUGS)[number];
+
+export type SampleSet = {
+  kick: AudioBuffer;
+  snare: AudioBuffer;
+  'closed-hat': AudioBuffer;
+  'open-hat': AudioBuffer;
+  perc: AudioBuffer;
+  bass: AudioBuffer;
+  lead: AudioBuffer;
+  pad: AudioBuffer;
+};
 
 /**
  * Map generator genre keys (from `music-engine`) to a sample folder slug.
@@ -17,6 +28,7 @@ export function resolveSampleSetSlug(genreKey: string): SampleSetSlug | null {
   if (g === 'uk_garage') return 'uk-garage';
   if (g === 'minimal_tech') return 'deep-hypnotic';
   if (g === 'tech_house') return 'bouncy-funk';
+  if (g === 'afro_house' || g === 'afro-house') return 'afro-house';
 
   return null;
 }

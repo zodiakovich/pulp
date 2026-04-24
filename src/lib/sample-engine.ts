@@ -1,17 +1,10 @@
 import { getAudioContext } from './audio-context';
+import { loadAfroHouseSampleSet } from './afro-house-samples';
 
-export type SampleSet = {
-  kick: AudioBuffer;
-  snare: AudioBuffer;
-  'closed-hat': AudioBuffer;
-  'open-hat': AudioBuffer;
-  perc: AudioBuffer;
-  bass: AudioBuffer;
-  lead: AudioBuffer;
-  pad: AudioBuffer;
-};
+export type { SampleSet } from './sample-sets';
+import type { SampleSet } from './sample-sets';
 
-export const PREMIUM_GENRES = ['acid-drop', 'uk-garage', 'deep-hypnotic', 'bouncy-funk'];
+export const PREMIUM_GENRES = ['acid-drop', 'uk-garage', 'deep-hypnotic', 'bouncy-funk', 'afro-house'];
 
 const sampleCache = new Map<string, Promise<SampleSet>>();
 
@@ -23,6 +16,10 @@ async function fetchAndDecode(url: string): Promise<AudioBuffer> {
 }
 
 export function loadSampleSet(genre: string): Promise<SampleSet> {
+  // Afro House uses dynamic Supabase Storage samples — bypass static cache so
+  // each playback gets a fresh random selection from the cached file lists.
+  if (genre === 'afro-house') return loadAfroHouseSampleSet();
+
   const existing = sampleCache.get(genre);
   if (existing) return existing;
 
