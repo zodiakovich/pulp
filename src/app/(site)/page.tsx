@@ -3395,6 +3395,31 @@ export default function Home() {
     stopAllPlayback();
     setPlayingAll(false);
     setPlayingVariationIndex(i);
+
+    // afro-house loads samples from Supabase Storage via playAll — mix-engine
+    // only knows about static /samples/ paths so we bypass it here.
+    const genre = v.params.genre;
+    if (genre === 'afro_house' || genre === 'afro-house') {
+      const schedule = () => playAll(
+        {
+          melody: params.layers.melody ? v.result.melody : undefined,
+          chords: params.layers.chords ? v.result.chords : undefined,
+          bass:   params.layers.bass   ? v.result.bass   : undefined,
+          drums:  params.layers.drums  ? v.result.drums  : undefined,
+        },
+        v.params.bpm,
+        genre,
+        () => {
+          window.setTimeout(() => {
+            if (playingVariationIndexRef.current !== i) return;
+            schedule();
+          }, 0);
+        },
+      );
+      void schedule();
+      return;
+    }
+
     const schedule = () => playNotes({
       melody: params.layers.melody ? v.result.melody : undefined,
       chords: params.layers.chords ? v.result.chords : undefined,
