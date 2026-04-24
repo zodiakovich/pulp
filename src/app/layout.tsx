@@ -177,20 +177,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <meta id="theme-color" name="theme-color" content="#0A0A0B" />
         </head>
         <body className="min-h-screen font-body antialiased" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-          <PostHogProvider>
-            <SiteJsonLd />
-            <ServiceWorkerRegister />
-            <CrispChat />
-            <NavigationProgress />
-            <PostHogIdentify />
-            <SentryErrorBoundary>
-              <ToastProvider>
-                {children}
-                <InstallPromptBanner />
-              </ToastProvider>
-            </SentryErrorBoundary>
-            <LazyVercelMetrics />
-          </PostHogProvider>
+          <PostHogProvider />
+          <PostHogIdentify />
+          <SiteJsonLd />
+          <ServiceWorkerRegister />
+          <CrispChat />
+          <NavigationProgress />
+          <SentryErrorBoundary>
+            <ToastProvider>
+              {children}
+              <InstallPromptBanner />
+            </ToastProvider>
+          </SentryErrorBoundary>
+          <LazyVercelMetrics />
         </body>
       </html>
     </ClerkProvider>

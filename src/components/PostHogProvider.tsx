@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 
 export { posthog };
 
-export function PostHogProvider({ children }: { children: React.ReactNode }) {
+export function PostHogProvider() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') return;
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -20,5 +20,5 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  return <>{children}</>;
+  return null;
 }
