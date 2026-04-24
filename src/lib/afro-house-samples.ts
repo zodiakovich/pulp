@@ -72,61 +72,81 @@ function makeSilence(ctx: AudioContext, duration = 0.1): AudioBuffer {
 }
 
 export async function loadAfroHouseSampleSet(): Promise<SampleSet> {
-  const [
-    kicks, snares, claps, closedHats, openHats,
-    percussion, shakers, bassFiles, synthFiles,
-  ] = await Promise.all([
-    listFolder(FOLDERS.kicks),
-    listFolder(FOLDERS.snares),
-    listFolder(FOLDERS.claps),
-    listFolder(FOLDERS.closedHats),
-    listFolder(FOLDERS.openHats),
-    listFolder(FOLDERS.percussion),
-    listFolder(FOLDERS.shakers),
-    listFolder(FOLDERS.bass),
-    listFolder(FOLDERS.synth),
-  ]);
+  try {
+    console.log('[afro-house] starting load');
 
-  const ctx = getAudioContext();
+    const [
+      kicks, snares, claps, closedHats, openHats,
+      percussion, shakers, bassFiles, synthFiles,
+    ] = await Promise.all([
+      listFolder(FOLDERS.kicks),
+      listFolder(FOLDERS.snares),
+      listFolder(FOLDERS.claps),
+      listFolder(FOLDERS.closedHats),
+      listFolder(FOLDERS.openHats),
+      listFolder(FOLDERS.percussion),
+      listFolder(FOLDERS.shakers),
+      listFolder(FOLDERS.bass),
+      listFolder(FOLDERS.synth),
+    ]);
 
-  // snare: alternate between snares and claps
-  const useClap = claps.length > 0 && Math.random() < 0.5;
-  const snareFolder = useClap ? FOLDERS.claps : FOLDERS.snares;
-  const snarePool = useClap ? claps : (snares.length > 0 ? snares : claps);
+    console.log('[afro-house] file counts:', {
+      kicks: kicks.length,
+      snares: snares.length,
+      claps: claps.length,
+      closedHats: closedHats.length,
+      openHats: openHats.length,
+      percussion: percussion.length,
+      shakers: shakers.length,
+      bassFiles: bassFiles.length,
+      synthFiles: synthFiles.length,
+    });
 
-  // perc: alternate across percussion and shakers
-  const percPool = Math.random() < 0.5 && shakers.length > 0 ? shakers : percussion;
-  const percFolder = percPool === shakers ? FOLDERS.shakers : FOLDERS.percussion;
+    const ctx = getAudioContext();
 
-  const kickFile   = pick(kicks.length      > 0 ? kicks      : snares);
-  const snareFile  = pick(snarePool.length  > 0 ? snarePool  : kicks);
-  const cHatFile   = pick(closedHats.length > 0 ? closedHats : openHats);
-  const oHatFile   = pick(openHats.length   > 0 ? openHats   : closedHats);
-  const percFile   = pick(percPool.length   > 0 ? percPool   : kicks);
-  const bassFile   = pick(bassFiles.length  > 0 ? bassFiles  : synthFiles);
-  const synthFile1 = pick(synthFiles.length > 0 ? synthFiles : bassFiles);
-  const synthFile2 = pick(synthFiles.length > 0 ? synthFiles : bassFiles);
+    // snare: alternate between snares and claps
+    const useClap = claps.length > 0 && Math.random() < 0.5;
+    const snareFolder = useClap ? FOLDERS.claps : FOLDERS.snares;
+    const snarePool = useClap ? claps : (snares.length > 0 ? snares : claps);
 
-  async function decode(folderPath: string, file: string | null): Promise<AudioBuffer> {
-    if (!file) return makeSilence(ctx);
-    try {
-      return await fetchAndDecode(buildUrl(folderPath, file));
-    } catch (e) {
-      console.error('[afro-house] decode failed', e);
-      return makeSilence(ctx);
+    // perc: alternate across percussion and shakers
+    const percPool = Math.random() < 0.5 && shakers.length > 0 ? shakers : percussion;
+    const percFolder = percPool === shakers ? FOLDERS.shakers : FOLDERS.percussion;
+
+    const kickFile   = pick(kicks.length      > 0 ? kicks      : snares);
+    const snareFile  = pick(snarePool.length  > 0 ? snarePool  : kicks);
+    const cHatFile   = pick(closedHats.length > 0 ? closedHats : openHats);
+    const oHatFile   = pick(openHats.length   > 0 ? openHats   : closedHats);
+    const percFile   = pick(percPool.length   > 0 ? percPool   : kicks);
+    const bassFile   = pick(bassFiles.length  > 0 ? bassFiles  : synthFiles);
+    const synthFile1 = pick(synthFiles.length > 0 ? synthFiles : bassFiles);
+    const synthFile2 = pick(synthFiles.length > 0 ? synthFiles : bassFiles);
+
+    async function decode(folderPath: string, file: string | null): Promise<AudioBuffer> {
+      if (!file) return makeSilence(ctx);
+      console.log('[afro-house] decoding:', buildUrl(folderPath, file));
+      try {
+        return await fetchAndDecode(buildUrl(folderPath, file));
+      } catch (e) {
+        console.error('[afro-house] decode error:', e);
+        return makeSilence(ctx);
+      }
     }
+
+    const [kick, snare, closedHat, openHat, perc, bass, lead, pad] = await Promise.all([
+      decode(FOLDERS.kicks,      kickFile),
+      decode(snareFolder,        snareFile),
+      decode(FOLDERS.closedHats, cHatFile),
+      decode(FOLDERS.openHats,   oHatFile),
+      decode(percFolder,         percFile),
+      decode(FOLDERS.bass,       bassFile),
+      decode(FOLDERS.synth,      synthFile1),
+      decode(FOLDERS.synth,      synthFile2),
+    ]);
+
+    return { kick, snare, 'closed-hat': closedHat, 'open-hat': openHat, perc, bass, lead, pad };
+  } catch (e) {
+    console.error('[afro-house] top-level load error:', e);
+    throw e;
   }
-
-  const [kick, snare, closedHat, openHat, perc, bass, lead, pad] = await Promise.all([
-    decode(FOLDERS.kicks,      kickFile),
-    decode(snareFolder,        snareFile),
-    decode(FOLDERS.closedHats, cHatFile),
-    decode(FOLDERS.openHats,   oHatFile),
-    decode(percFolder,         percFile),
-    decode(FOLDERS.bass,       bassFile),
-    decode(FOLDERS.synth,      synthFile1),
-    decode(FOLDERS.synth,      synthFile2),
-  ]);
-
-  return { kick, snare, 'closed-hat': closedHat, 'open-hat': openHat, perc, bass, lead, pad };
 }
