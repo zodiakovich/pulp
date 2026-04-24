@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { PlanType } from '@/lib/credits';
 import { sendEmail } from '@/lib/email';
+import { getLoopsClient } from '@/lib/loops';
 
 export const runtime = 'nodejs';
 
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
   if (event.type === 'customer.subscription.created') {
     const sub = event.data.object as Stripe.Subscription;
     const email = await resolveCustomerEmail(stripe, sub.customer);
+    const planType: PlanType = (sub.metadata?.plan_type === 'studio') ? 'studio' : 'pro';
     if (email) {
       await sendEmail({
         to: email,
@@ -94,6 +96,20 @@ export async function POST(req: Request) {
 </body>
 </html>`,
       }).catch(() => {});
+
+      try {
+        const loops = getLoopsClient();
+        if (loops) {
+          await loops.updateContact({ email, properties: { plan: planType } });
+          await loops.sendEvent({
+            email,
+            eventName: 'plan_upgraded',
+            eventProperties: { plan: planType },
+          });
+        }
+      } catch (error) {
+        console.error('[loops]', error);
+      }
     }
   }
 

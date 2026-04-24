@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email';
+import { getLoopsClient } from '@/lib/loops';
 
 export const runtime = 'nodejs';
 
@@ -46,7 +47,8 @@ export async function POST(req: Request) {
     const primary = data.email_addresses.find(e => e.id === data.primary_email_address_id)
       ?? data.email_addresses[0];
     const email = primary?.email_address;
-    const name = data.first_name || data.username || email?.split('@')[0] || 'there';
+    const firstName = data.first_name || data.username || email?.split('@')[0] || 'there';
+    const userId = data.id;
 
     if (email) {
       await sendEmail({
@@ -61,7 +63,7 @@ export async function POST(req: Request) {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#111113;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:40px 40px 32px;">
         <tr><td>
           <p style="font-family:Syne,system-ui,sans-serif;font-size:28px;font-weight:700;color:#FF6D3F;margin:0 0 24px;">pulp.</p>
-          <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em;margin:0 0 16px;color:#FAFAFA;">Hey ${name}, welcome to pulp.</h1>
+          <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em;margin:0 0 16px;color:#FAFAFA;">Hey ${firstName}, welcome to pulp.</h1>
           <p style="font-size:15px;line-height:1.7;color:#A1A1AA;margin:0 0 24px;">You have <strong style="color:#FAFAFA;">20 free generations</strong> this month. Start creating beats with nothing but a prompt.</p>
           <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
             <tr><td style="background:#FF6D3F;border-radius:10px;">
@@ -76,6 +78,23 @@ export async function POST(req: Request) {
 </body>
 </html>`,
       });
+
+      try {
+        const loops = getLoopsClient();
+        if (loops) {
+          await loops.createContact({
+            email,
+            properties: { firstName, userId, source: 'pulp_signup', plan: 'free' },
+          });
+          await loops.sendEvent({
+            email,
+            eventName: 'onboarding_started',
+            eventProperties: { firstName },
+          });
+        }
+      } catch (error) {
+        console.error('[loops]', error);
+      }
     }
   }
 
