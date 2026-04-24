@@ -129,6 +129,34 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             color: '#8A8A9A',
             fontSize: '13px',
           },
+          userButtonPopoverCard: {
+            backgroundColor: '#1A1A2E',
+            border: '1px solid rgba(255,255,255,0.08)',
+          },
+          userButtonPopoverActionButton: {
+            color: 'rgba(255,255,255,0.9)',
+          },
+          userButtonPopoverActionButton__manageAccount: {
+            color: 'rgba(255,255,255,0.9)',
+          },
+          userButtonPopoverActionButton__signOut: {
+            color: 'rgba(255,255,255,0.9)',
+          },
+          userButtonPopoverActionButtonText: {
+            color: 'rgba(255,255,255,0.9)',
+          },
+          userButtonPopoverActionButtonIcon: {
+            color: 'rgba(255,255,255,0.6)',
+          },
+          userButtonPopoverFooter: {
+            display: 'none',
+          },
+          userPreviewMainIdentifier: {
+            color: 'rgba(255,255,255,0.9)',
+          },
+          userPreviewSecondaryIdentifier: {
+            color: 'rgba(255,255,255,0.5)',
+          },
         },
       }}
     >

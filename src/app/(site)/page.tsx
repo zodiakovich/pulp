@@ -1620,6 +1620,7 @@ function HistorySidebar({
   const [query, setQuery] = React.useState('');
   const [tab, setTab] = React.useState<'all' | 'favorites'>('all');
   const [genreFilter, setGenreFilter] = React.useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set());
   const [rows, setRows] = React.useState<Array<{
     id: string;
     prompt: string;
@@ -1725,6 +1726,18 @@ function HistorySidebar({
     for (const r of rows) if (r.genre) set.add(r.genre);
     return [...set].sort((a, b) => (GENRES[a]?.name || a).localeCompare(GENRES[b]?.name || b));
   }, [rows]);
+
+  // Group rows that share the same prompt + same minute into one history entry.
+  const groupedDisplayed = React.useMemo(() => {
+    const map = new Map<string, typeof displayed>();
+    for (const row of displayed) {
+      const key = `${row.prompt || row.id}|${row.created_at.slice(0, 16)}`;
+      const g = map.get(key) ?? [];
+      g.push(row);
+      map.set(key, g);
+    }
+    return [...map.values()];
+  }, [displayed]);
 
   const toggleFavorite = React.useCallback(async (id: string, next: boolean) => {
     setRows(prev => prev.map(r => (r.id === id ? { ...r, is_favorite: next } : r)));
@@ -1897,80 +1910,169 @@ function HistorySidebar({
             )}
           </div>
 
-          {displayed.map(row => {
-            const ts = new Date(row.created_at);
-            const keyGuess = guessKeyFromLayers(row.layers);
-            const genreName = GENRES[row.genre]?.name || row.genre;
-            return (
+          {groupedDisplayed.map(group => {
+            const primary = group[0]!;
+            const ts = new Date(primary.created_at);
+            const keyGuess = guessKeyFromLayers(primary.layers);
+            const genreName = GENRES[primary.genre]?.name || primary.genre;
+            const rawPrompt = (primary.prompt || '').trim();
+            const displayPrompt = rawPrompt
+              ? (rawPrompt.length > 60 ? rawPrompt.slice(0, 60) + '…' : rawPrompt)
+              : genreName;
+            const groupKey = `${primary.prompt || primary.id}|${primary.created_at.slice(0, 16)}`;
+            const isExpanded = expandedGroups.has(groupKey);
+
+            const makeEntry = (row: typeof primary): HistoryEntry => {
+              const kg = guessKeyFromLayers(row.layers);
+              return {
+                id: row.id,
+                prompt: row.prompt,
+                genre: row.genre,
+                key: kg === '—' ? 'C' : kg,
+                scale: 'minor',
+                bpm: row.bpm,
+                bars: 4,
+                result: row.layers,
+                params: { ...getDefaultParams(), genre: row.genre, bpm: row.bpm },
+                timestamp: new Date(row.created_at),
+              };
+            };
+
+            const renderVariationCard = (row: typeof primary, label: string, isMuted: boolean) => (
               <button
                 key={row.id}
-                onClick={() => {
-                  const entry: HistoryEntry = {
-                    id: row.id,
-                    prompt: row.prompt,
-                    genre: row.genre,
-                    key: keyGuess === '—' ? 'C' : keyGuess,
-                    scale: 'minor',
-                    bpm: row.bpm,
-                    bars: 4,
-                    result: row.layers,
-                    params: { ...getDefaultParams(), genre: row.genre, bpm: row.bpm },
-                    timestamp: ts,
-                  };
-                  onRestore(entry);
-                }}
-                className="w-full text-left px-4 py-4 mx-3 mb-3 max-w-[calc(100%-24px)] history-gen-card card-tilt-hover"
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
-                onMouseLeave={e => (e.currentTarget.style.background = '')}
+                type="button"
+                onClick={() => onRestore(makeEntry(row))}
+                className="w-full text-left px-4 py-3 mx-3 max-w-[calc(100%-24px)] history-gen-card"
+                style={{ background: isMuted ? 'rgba(255,255,255,0.02)' : undefined, marginBottom: isMuted ? 2 : 0 }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                onMouseLeave={e => (e.currentTarget.style.background = isMuted ? 'rgba(255,255,255,0.02)' : '')}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
-                        {genreName}
-                      </span>
-                      <span className="text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.50)' }}>
-                        {keyGuess} · {row.bpm} BPM
-                      </span>
-                    </div>
-                    {row.inspiration_source && (
-                      <p className="mt-1 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)' }}>
-                        {row.inspiration_source}
-                      </p>
-                    )}
-                    <div className="mt-2">
-                      <MiniPianoRollThumb layers={row.layers} />
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p
                       className="text-xs"
-                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.35)' }}
+                      style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
-                      {formatTimeAgo(ts)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        void toggleFavorite(row.id, !row.is_favorite);
-                      }}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
-                      style={{
-                        borderColor: row.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
-                        background: row.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
-                        color: row.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.50)',
-                        cursor: 'pointer',
-                      }}
-                      title={row.is_favorite ? 'Unfavorite' : 'Favorite'}
-                      aria-label="Toggle favorite"
-                    >
-                      {row.is_favorite ? '★' : '☆'}
-                    </button>
+                      {label}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.25)' }}>
+                      {GENRES[row.genre]?.name || row.genre} · {row.bpm} BPM · {guessKeyFromLayers(row.layers)}
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); void toggleFavorite(row.id, !row.is_favorite); }}
+                    className="w-6 h-6 rounded-md flex items-center justify-center border transition-colors flex-shrink-0"
+                    style={{
+                      borderColor: row.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.08)',
+                      background: row.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
+                      color: row.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.35)',
+                      cursor: 'pointer',
+                    }}
+                    title={row.is_favorite ? 'Unfavorite' : 'Favorite'}
+                    aria-label="Toggle favorite"
+                  >
+                    {row.is_favorite ? '★' : '☆'}
+                  </button>
                 </div>
               </button>
+            );
+
+            return (
+              <div key={groupKey} className="mb-2">
+                {/* Primary card */}
+                <button
+                  type="button"
+                  onClick={() => onRestore(makeEntry(primary))}
+                  className="w-full text-left px-4 py-4 mx-3 max-w-[calc(100%-24px)] history-gen-card card-tilt-hover"
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      {/* Line 1: prompt */}
+                      <p
+                        style={{
+                          fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: 'rgba(255,255,255,0.88)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {displayPrompt}
+                      </p>
+                      {/* Line 2: genre · BPM · key */}
+                      <p
+                        className="mt-1"
+                        style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.40)', lineHeight: 1.4 }}
+                      >
+                        {genreName} · {primary.bpm} BPM · {keyGuess}
+                      </p>
+                      {/* Line 3: relative date */}
+                      <p
+                        className="mt-0.5"
+                        style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.25)', lineHeight: 1.4 }}
+                      >
+                        {formatTimeAgo(ts)}
+                      </p>
+                      {/* Variations pill */}
+                      {group.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setExpandedGroups(prev => {
+                              const next = new Set(prev);
+                              next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey);
+                              return next;
+                            });
+                          }}
+                          className="mt-2 inline-flex items-center gap-1"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 10,
+                            color: 'rgba(255,255,255,0.45)',
+                            background: 'rgba(255,255,255,0.06)',
+                            border: '1px solid rgba(255,255,255,0.10)',
+                            borderRadius: 20,
+                            padding: '2px 8px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {isExpanded ? '▴ hide' : `▾ ${group.length} variations`}
+                        </button>
+                      )}
+                    </div>
+                    {/* Favorite */}
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); void toggleFavorite(primary.id, !primary.is_favorite); }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors flex-shrink-0"
+                      style={{
+                        borderColor: primary.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
+                        background: primary.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
+                        color: primary.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.50)',
+                        cursor: 'pointer',
+                        marginTop: 2,
+                      }}
+                      title={primary.is_favorite ? 'Unfavorite' : 'Favorite'}
+                      aria-label="Toggle favorite"
+                    >
+                      {primary.is_favorite ? '★' : '☆'}
+                    </button>
+                  </div>
+                </button>
+
+                {/* Expanded variations */}
+                {isExpanded && group.slice(1).map((v, vi) =>
+                  renderVariationCard(v, `Variation ${vi + 2}`, true)
+                )}
+              </div>
             );
           })}
 
