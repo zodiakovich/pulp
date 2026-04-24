@@ -9,6 +9,8 @@ import { NavigationProgress } from '@/components/NavigationProgress';
 import { SiteJsonLd } from '@/components/seo/SiteJsonLd';
 import { defaultDescription, ogImagePath, siteUrl } from '@/lib/seo';
 import { SentryErrorBoundary } from '@/components/SentryErrorBoundary';
+import { PostHogProvider } from '@/components/PostHogProvider';
+import { PostHogIdentify } from '@/components/PostHogIdentify';
 import './fonts.css';
 import './globals.css';
 
@@ -175,17 +177,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <meta id="theme-color" name="theme-color" content="#0A0A0B" />
         </head>
         <body className="min-h-screen font-body antialiased" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-          <SiteJsonLd />
-          <ServiceWorkerRegister />
-          <CrispChat />
-          <NavigationProgress />
-          <SentryErrorBoundary>
-            <ToastProvider>
-              {children}
-              <InstallPromptBanner />
-            </ToastProvider>
-          </SentryErrorBoundary>
-          <LazyVercelMetrics />
+          <PostHogProvider>
+            <SiteJsonLd />
+            <ServiceWorkerRegister />
+            <CrispChat />
+            <NavigationProgress />
+            <PostHogIdentify />
+            <SentryErrorBoundary>
+              <ToastProvider>
+                {children}
+                <InstallPromptBanner />
+              </ToastProvider>
+            </SentryErrorBoundary>
+            <LazyVercelMetrics />
+          </PostHogProvider>
         </body>
       </html>
     </ClerkProvider>

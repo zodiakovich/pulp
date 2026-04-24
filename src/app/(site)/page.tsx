@@ -15,6 +15,7 @@ import { playNotesWithMix as playNotes, renderNotesWithMixToWav, stopAllPlayback
 import { playAll, stopPlayAll, playTonePreview, stopTonePreview } from '@/lib/tone-lazy';
 import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { track } from '@vercel/analytics';
+import { posthog } from '@/components/PostHogProvider';
 import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { useToast } from '@/components/toast/useToast';
 import { generateAbletonAlsBlob } from '@/lib/ableton-export';
@@ -2964,6 +2965,11 @@ export default function Home() {
     setIsGenerating(true);
     setGeneratingStage('Analyzing prompt...');
     setVariationIds([]);
+    posthog.capture('generation_started', {
+      genre: params.genre,
+      bpm: params.bpm,
+      prompt_length: (overridePrompt ?? prompt ?? '').trim().length,
+    });
 
     // Premium staged loading sequence (purely UI timing).
     for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
@@ -3128,6 +3134,10 @@ export default function Home() {
         genre: finalParams.genre,
         bpm: finalParams.bpm,
         style_tag: activeStyleTag ?? '',
+      });
+      posthog.capture('generation_completed', {
+        genre: finalParams.genre,
+        variation_count: 3,
       });
 
       // Persist to Supabase + update credits
@@ -3420,6 +3430,7 @@ export default function Home() {
     const midi = generateMidiFormat1(tracks, p.bpm);
     const genre = GENRES[p.genre]?.name || 'track';
     track('midi_downloaded', { genre: p.genre, layer: 'full' });
+    posthog.capture('midi_exported', { format: 'midi', genre: p.genre });
     downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
     flashExport('midi');
   };
@@ -3493,6 +3504,7 @@ export default function Home() {
       });
       await downloadBlob(blob, filename);
       toast.toast('Ableton project exported', 'success');
+      posthog.capture('midi_exported', { format: 'ableton', genre: p.genre });
       flashExport('ableton');
     } catch {
       toast.toast('Export failed. Try again.', 'danger');
@@ -3634,6 +3646,7 @@ export default function Home() {
     }
     const genreKey = variations[selectedVariation]?.params.genre ?? params.genre;
     track('generation_shared', { genre: genreKey });
+    posthog.capture('share_clicked', { genre: genreKey });
 
     const url = `https://pulp.bypapaya.com/g/${id}`;
     void (async () => {

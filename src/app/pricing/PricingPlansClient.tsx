@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { posthog } from '@/components/PostHogProvider';
 import { motion } from 'framer-motion';
 import { ButtonLoadingDots } from '@/components/ButtonLoadingDots';
 
@@ -144,6 +145,7 @@ function CheckoutCta({
           if (loading) return;
           setError(null);
           setLoading(true);
+          posthog.capture('plan_upgrade_clicked', { plan, billing });
           try {
             const res = await fetch('/api/stripe/checkout', {
               method: 'POST',
