@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth, useUser, useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { useToast } from '@/components/toast/useToast';
 import { UserAvatar, AVATAR_COLORS } from '@/components/UserAvatar';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
@@ -1126,8 +1127,32 @@ export default function SettingsPage() {
           {activeTab === 'preferences' && <PreferencesSection />}
           {activeTab === 'notifications' && <NotificationsSection />}
           {activeTab === 'danger' && <DangerSection />}
+
+          {/* Help & Support — always visible */}
+          <div style={{ marginTop: 40 }}>
+            <div style={{ height: 1, background: 'var(--border)', marginBottom: 40 }} />
+            <SectionCard>
+              <SectionLabel>Help &amp; Support</SectionLabel>
+              <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                Have a question or need help? Chat with our support team directly.
+              </p>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => {
+                  try {
+                    window.$crisp?.push(['do', 'chat:show']);
+                    window.$crisp?.push(['do', 'chat:open']);
+                  } catch { /* ignore */ }
+                }}
+              >
+                Chat with support
+              </button>
+            </SectionCard>
+          </div>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

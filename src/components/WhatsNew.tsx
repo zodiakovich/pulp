@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CHANGELOG } from '@/lib/changelog';
 
 function seenKey(version: string) {
@@ -11,6 +12,16 @@ export function WhatsNew() {
   const latest = CHANGELOG[0];
   const [open, setOpen] = useState(false);
   const [hasSeen, setHasSeen] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     if (!latest) return;
@@ -50,6 +61,40 @@ export function WhatsNew() {
 
   if (!latest) return null;
 
+  const mobileModalStyle: React.CSSProperties = {
+    zIndex: 9999,
+    position: 'fixed',
+    bottom: 0,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '95vw',
+    background: '#0A0A0B',
+    border: '1px solid rgba(255,255,255,0.08)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    maxHeight: '85vh',
+    overflowY: 'auto',
+    padding: '24px 24px 32px',
+    borderRadius: '16px 16px 0 0',
+  };
+
+  const desktopModalStyle: React.CSSProperties = {
+    zIndex: 9999,
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: 'min(560px, calc(100vw - 32px))',
+    background: '#0A0A0B',
+    border: '1px solid rgba(255,255,255,0.08)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    maxHeight: '80vh',
+    overflowY: 'auto',
+    padding: '32px',
+    borderRadius: '16px',
+  };
+
   return (
     <>
       <button
@@ -76,30 +121,17 @@ export function WhatsNew() {
         )}
       </button>
 
-      {open && (
+      {mounted && open && createPortal(
         <>
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            style={{ zIndex: 9998 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 9998 }}
             onClick={handleClose}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label="What's new"
-            className="fixed rounded-2xl"
-            style={{
-              zIndex: 9999,
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 'min(560px, calc(100vw - 32px))',
-              background: '#0A0A0B',
-              border: '1px solid rgba(255,255,255,0.08)',
-              maxHeight: 'calc(100vh - 48px)',
-              overflowY: 'auto',
-              padding: '32px',
-            }}
+            style={isMobile ? mobileModalStyle : desktopModalStyle}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4" style={{ marginBottom: 24 }}>
@@ -203,7 +235,8 @@ export function WhatsNew() {
               </button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </>
   );

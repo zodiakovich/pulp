@@ -1746,10 +1746,10 @@ function HistorySidebar({
         style={{ borderBottom: '1px solid var(--border)' }}>
         <span className="text-sm font-semibold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em' }}>
           History
-          {!loading && history.length > 0 && (
+          {!fetching && rows.length > 0 && (
             <span className="ml-2 text-xs font-normal"
               style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-              ({history.length})
+              ({rows.length})
             </span>
           )}
         </span>
@@ -1764,7 +1764,7 @@ function HistorySidebar({
 
       {(loading || (fetching && rows.length === 0 && !dbError)) ? (
         <div className="flex-1 overflow-y-auto">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
               className="w-full px-6 py-4"
@@ -1811,12 +1811,7 @@ function HistorySidebar({
         <div className="flex-1 flex items-center justify-center px-6">
           {rows.length === 0 && tab === 'all' ? (
             <EmptyState
-              title="Your generations will appear here"
-              actionLabel="Create your first"
-              onAction={() => {
-                onClose();
-                window.setTimeout(() => document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
-              }}
+              title="No generations yet. Create your first one above."
             />
           ) : rows.length === 0 && tab === 'favorites' ? (
             <EmptyState
@@ -4089,8 +4084,8 @@ export default function Home() {
         {showShortcuts && (
           <>
             <motion.div
-              className="fixed inset-0 z-40 backdrop-blur-md"
-              style={{ background: 'rgba(10,10,11,0.55)' }}
+              className="fixed inset-0 backdrop-blur-md"
+              style={{ background: 'rgba(10,10,11,0.6)', zIndex: 9998 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -4098,12 +4093,14 @@ export default function Home() {
               onClick={() => setShowShortcuts(false)}
             />
             <motion.div
-              className="fixed left-1/2 top-1/2 z-[41] w-[min(920px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-48px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl p-6"
+              className="fixed left-1/2 top-1/2 w-[min(680px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-48px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overflow-x-hidden rounded-2xl"
               style={{
-                background: 'color-mix(in srgb, var(--surface) 78%, transparent)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
+                zIndex: 9999,
+                padding: '24px',
+                background: '#0A0A0B',
+                border: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
                 boxShadow: '0 24px 80px rgba(0,0,0,0.45)',
               }}
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -4161,7 +4158,7 @@ export default function Home() {
                       {group.rows.map(row => (
                         <div
                           key={`${group.title}-${row.k}`}
-                          className="flex items-start gap-4 rounded-xl px-4 py-3"
+                          className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-xl px-4 py-3"
                           style={{
                             border: '1px solid rgba(255,255,255,0.08)',
                             background: 'rgba(255,255,255,0.04)',
@@ -4180,6 +4177,7 @@ export default function Home() {
                               WebkitBackdropFilter: 'blur(12px)',
                               padding: '6px 10px',
                               borderRadius: 10,
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             {row.k}
@@ -4191,6 +4189,7 @@ export default function Home() {
                               lineHeight: 1.45,
                               color: 'var(--muted)',
                               paddingTop: 2,
+                              minWidth: 0,
                             }}
                           >
                             {row.d}

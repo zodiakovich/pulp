@@ -1,4 +1,5 @@
 import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { pageMeta } from '@/lib/seo-metadata';
 
 export const revalidate = 3600;
@@ -237,6 +238,7 @@ export default function BlogIndexPage() {
           </div>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

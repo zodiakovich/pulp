@@ -173,7 +173,7 @@ export function Navbar({
 
   return (
     <nav
-      className="sticky top-0 left-0 right-0 z-50"
+      className="sticky top-0 left-0 right-0 z-50 navbar-always-dark"
       style={{
         background: 'rgba(10,10,11,0.7)',
         backdropFilter: 'blur(16px)',

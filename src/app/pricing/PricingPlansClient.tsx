@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
-import { motion, useReducedMotion, useScroll, useSpring, useTransform } from 'framer-motion';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { ButtonLoadingDots } from '@/components/ButtonLoadingDots';
 
 const BG = 'var(--bg)';
@@ -196,17 +196,6 @@ const COMPARE_ROWS: { label: string; free: boolean; pro: boolean; studio: boolea
 
 export function PricingPlansClient() {
   const [billing, setBilling] = useState<Billing>('monthly');
-  const prefersReducedMotion = useReducedMotion();
-
-  // Subtle scroll-driven parallax for plan cards (depth).
-  const plansRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress: plansProgress } = useScroll({
-    target: plansRef,
-    offset: ['start 0.85', 'end 0.25'],
-  });
-  const plansP = useSpring(plansProgress, { stiffness: 140, damping: 34, mass: 0.55 });
-  const sideY = useTransform(plansP, [0, 1], [10, -10]);
-  const centerY = useTransform(plansP, [0, 1], [7, -7]);
 
   return (
     <div style={{ background: BG, color: 'var(--text)' }}>
@@ -309,9 +298,9 @@ export function PricingPlansClient() {
       </section>
 
       <section className="px-4 sm:px-8 pb-24">
-        <div ref={plansRef} className="mx-auto max-w-[1200px] grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+        <div className="mx-auto max-w-[1200px] grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
           {/* Free */}
-          <motion.div className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover" style={{ y: prefersReducedMotion ? 0 : sideY }}>
+          <div className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover">
             <div className="mb-10">
               <p
                 className="mb-6 text-xs uppercase tracking-[0.12em]"
@@ -343,11 +332,7 @@ export function PricingPlansClient() {
             <ul className="mb-10 flex flex-col gap-5 flex-1">
               {FREE_FEATURES.map(f => (
                 <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400 }}>
-                  <span
-                    className="h-5 w-5 flex-shrink-0 rounded-full"
-                    style={{ background: ACCENT }}
-                    aria-hidden
-                  />
+                  <span className="h-5 w-5 flex-shrink-0 rounded-full" style={{ background: ACCENT }} aria-hidden />
                   {f}
                 </li>
               ))}
@@ -365,33 +350,13 @@ export function PricingPlansClient() {
             >
               Start free
             </Link>
-          </motion.div>
+          </div>
 
-          {/* Pro */}
-          <div style={{ transform: 'scale(1.03)', transformOrigin: 'center' }}>
-          <motion.div
-            className="relative flex flex-col rounded-2xl p-10 card-tilt-hover"
-            style={{
-              y: prefersReducedMotion ? 0 : centerY,
-              border: '1.5px solid rgba(255,109,63,0.35)',
-              background: 'rgba(255,109,63,0.04)',
-              boxShadow: '0 0 0 1px rgba(255,109,63,0.08), 0 24px 48px -12px rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-            }}
+          {/* Pro — accent border only, same background as others */}
+          <div
+            className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover"
+            style={{ border: `1px solid ${ACCENT}` }}
           >
-            {/* Radial highlight at top */}
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                inset: -1,
-                borderRadius: 'inherit',
-                background: 'radial-gradient(ellipse at 50% 0%, rgba(255,109,63,0.06) 0%, transparent 60%)',
-                zIndex: -1,
-                pointerEvents: 'none',
-              }}
-            />
             <div className="mb-10">
               <p
                 className="mb-6 text-xs uppercase tracking-[0.12em]"
@@ -414,24 +379,14 @@ export function PricingPlansClient() {
               ))}
             </ul>
             <CheckoutCta plan="pro" billing={billing} label="Subscribe" />
-          </motion.div>
           </div>
 
-          {/* Studio — featured */}
-          <motion.div
-            className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover"
-            style={{
-              background: STUDIO_BG,
-              border: `2px solid ${ACCENT}`,
-              boxShadow: 'var(--shadow), 0 0 52px rgba(255,109,63,0.12)',
-              y: prefersReducedMotion ? 0 : sideY,
-            }}
-          >
-            <div className="mb-10 flex flex-wrap items-start gap-4">
-              <div>
+          {/* Studio */}
+          <div className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover">
+            <div className="mb-10">
               <p
                 className="mb-6 text-xs uppercase tracking-[0.12em]"
-                style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: ACCENT }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}
               >
                 Studio
               </p>
@@ -440,7 +395,6 @@ export function PricingPlansClient() {
                 600 generations / month
                 {billing === 'annual' ? ' · billed annually' : ''}
               </p>
-              </div>
             </div>
             <ul className="mb-10 flex flex-col gap-5 flex-1">
               {[...FREE_FEATURES, ...PRO_EXTRA, ...STUDIO_EXTRA].map(f => (
@@ -451,7 +405,7 @@ export function PricingPlansClient() {
               ))}
             </ul>
             <CheckoutCta plan="studio" billing={billing} label="Subscribe" />
-          </motion.div>
+          </div>
         </div>
       </section>
 

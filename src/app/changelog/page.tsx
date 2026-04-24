@@ -1,4 +1,5 @@
 import { Navbar } from '@/components/Navbar'
+import { SiteFooter } from '@/components/SiteFooter'
 import { CHANGELOG } from '@/lib/changelog'
 import { pageMeta } from '@/lib/seo-metadata'
 
@@ -156,6 +157,7 @@ export default function ChangelogPage() {
           </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   )
 }

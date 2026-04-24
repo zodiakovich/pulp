@@ -2,11 +2,13 @@ import { currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { checkCreditsAllowed } from '@/lib/credits';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ProfileAccountClient } from './ProfileAccountClient';
-import { BADGE_DEFS, getUserBadges, type EarnedBadge } from '@/lib/badges';
+import { getUserBadges, type EarnedBadge } from '@/lib/badges';
+import { BadgesSection } from './BadgesSection';
 import { UserAvatar } from '@/components/UserAvatar';
 import Stripe from 'stripe';
 
@@ -138,91 +140,6 @@ function CreditsStatWithUpgrade({ value, isPro }: { value: string; isPro: boolea
   );
 }
 
-function BadgesSection({ earned }: { earned: EarnedBadge[] }) {
-  const earnedMap = new Map(earned.map(b => [b.id, b]));
-
-  return (
-    <section>
-      <p
-        style={{
-          fontFamily: 'JetBrains Mono, monospace',
-          fontSize: 11,
-          color: 'var(--muted)',
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          marginBottom: 12,
-        }}
-      >
-        Badges
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        {BADGE_DEFS.map(badge => {
-          const e = earnedMap.get(badge.id);
-          const isEarned = !!e;
-          const earnedDate = e
-            ? new Date(e.earned_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-            : null;
-
-          return (
-            <div
-              key={badge.id}
-              className="rounded-2xl p-4 flex flex-col items-center text-center gap-2"
-              style={{
-                border: `1px solid ${isEarned ? 'rgba(255,109,63,0.30)' : 'var(--border)'}`,
-                background: isEarned ? 'rgba(255,109,63,0.06)' : 'var(--surface)',
-                filter: isEarned ? 'none' : 'grayscale(1)',
-                opacity: isEarned ? 1 : 0.5,
-                transition: 'opacity 200ms',
-              }}
-              title={isEarned ? `Earned ${earnedDate ?? ''}` : 'Locked'}
-            >
-              <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden>
-                {isEarned ? badge.icon : '🔒'}
-              </span>
-              <div>
-                <p
-                  style={{
-                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-                    fontWeight: 700,
-                    fontSize: 12,
-                    letterSpacing: '-0.01em',
-                    color: isEarned ? 'var(--foreground)' : 'var(--muted)',
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {badge.name}
-                </p>
-                <p
-                  style={{
-                    fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: 9,
-                    color: 'var(--muted)',
-                    marginTop: 3,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {badge.description}
-                </p>
-                {earnedDate && (
-                  <p
-                    style={{
-                      fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 9,
-                      color: 'var(--accent)',
-                      marginTop: 4,
-                    }}
-                  >
-                    {earnedDate}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
 
 export default async function ProfilePage() {
   const user = await currentUser();
@@ -452,6 +369,7 @@ export default async function ProfilePage() {
           </section>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

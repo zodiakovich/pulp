@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { CrispSupportLink } from '@/components/CrispSupportLink';
 
 type FooterLink = {
   label: string;
@@ -116,15 +119,60 @@ export function SiteFooter() {
             ]}
           />
 
-          <FooterCol
-            title="Company"
-            links={[
-              { label: 'Contact', href: '/contact' },
-              { label: 'Twitter / X', href: '/twitter' },
-              { label: 'Discord', href: '/discord', muted: true },
-              { label: 'GitHub', href: '/github' },
-            ]}
-          />
+          {/* Company + Help */}
+          <div className="min-w-0">
+            <div
+              className="mb-5"
+              style={{
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: '0.02em',
+                color: 'var(--text)',
+              }}
+            >
+              Company
+            </div>
+            <ul className="flex flex-col gap-3">
+              {[
+                { label: 'Contact', href: '/contact' },
+                { label: 'Twitter / X', href: '/twitter' },
+                { label: 'Discord', href: '/discord', muted: true },
+                { label: 'GitHub', href: '/github' },
+              ].map(l => (
+                <li key={l.label} className="min-w-0">
+                  <Link
+                    href={l.href}
+                    className={[
+                      'block w-fit max-w-full truncate transition-opacity duration-200 ease-ui',
+                      l.muted ? 'opacity-[0.35] hover:opacity-[0.55]' : 'opacity-50 hover:opacity-80',
+                    ].join(' ')}
+                    style={{
+                      fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                      color: 'var(--text)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+              <li className="min-w-0">
+                <CrispSupportLink
+                  label="Support"
+                  className="block w-fit max-w-full truncate transition-opacity duration-200 ease-ui opacity-50 hover:opacity-80"
+                  style={{
+                    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    color: 'var(--text)',
+                  }}
+                />
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div className="mt-16" style={{ height: 1, background: 'var(--divider)' }} />

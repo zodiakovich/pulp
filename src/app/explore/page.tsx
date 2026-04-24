@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { GENRES } from '@/lib/music-engine';
 import { ExploreGallery } from './ExploreGallery';
 import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { pageMeta } from '@/lib/seo-metadata';
 
 export const metadata = pageMeta({
@@ -55,6 +56,7 @@ export default async function ExplorePage() {
       <Navbar active="explore" />
 
       <ExploreGallery items={items} genres={genres} />
+      <SiteFooter />
     </div>
   );
 }

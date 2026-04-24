@@ -17,6 +17,7 @@ export default function CrispChat() {
     if (!CRISP_ID) return;
     const load = () => {
       window.$crisp = [];
+      window.$crisp.push(['do', 'chat:hide']);
       window.CRISP_WEBSITE_ID = CRISP_ID;
       const s = document.createElement('script');
       s.src = 'https://client.crisp.chat/l.js';
