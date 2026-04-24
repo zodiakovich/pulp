@@ -1661,8 +1661,6 @@ function HistorySidebar({
         if (tab === 'favorites') q = q.eq('is_favorite', true);
         if (genreFilter) q = q.eq('genre', genreFilter);
         const { data, error } = await q.range(0, PAGE_SIZE - 1);
-        // DEBUG: remove before prod
-        console.log('[history:sidebar] userId=%s | rows=%d | error=%s', userId, data?.length ?? 0, error?.message ?? 'none', { data, error });
         if (cancelled) return;
         if (error) { setDbError(error.message); return; }
         const next = (data ?? []) as any[];
@@ -2835,8 +2833,7 @@ export default function Home() {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      // DEBUG: remove before prod
-      console.log('[history:loadHistoryFromDb] uid=%s | rows=%d | error=%s', uid, data?.length ?? 0, error?.message ?? 'none', { data, error });
+
 
       if (error || !data) {
         console.error('[history] loadHistoryFromDb failed', error);
