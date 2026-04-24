@@ -1,4 +1,9 @@
-import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(
+  'https://wakqmkbdeottfvgtezym.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indha3Fta2JkZW90dGZ2Z3RlenltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Njk3MjYsImV4cCI6MjA5MTE0NTcyNn0.CYTv96nzXN3e6nQSdhNZBKz4DkRYeZaBfcieM0nZeI4',
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
 import { getAudioContext } from './audio-context';
 import type { SampleSet } from './sample-sets';
 
