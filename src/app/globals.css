@@ -135,6 +135,7 @@ html.light {
 /* Always-dark navbar: forces dark-mode tokens inside the nav
    so it stays #1A1A1E-bg + white text regardless of color scheme */
 .navbar-always-dark {
+  --bg: #0A0A0B;
   --surface: rgba(255, 255, 255, 0.04);
   --surface-strong: rgba(255, 255, 255, 0.05);
   --surface-weak: rgba(255, 255, 255, 0.03);
@@ -145,6 +146,21 @@ html.light {
   --foreground: rgba(255, 255, 255, 0.90);
   --foreground-muted: rgba(255, 255, 255, 0.50);
   --muted: rgba(255, 255, 255, 0.50);
+}
+
+/* Force nav-link to white inside the always-dark navbar */
+.navbar-always-dark .nav-link {
+  color: rgba(255, 255, 255, 0.65);
+  opacity: 1;
+}
+.navbar-always-dark .nav-link:hover,
+.navbar-always-dark .nav-link:focus-visible {
+  color: rgba(255, 255, 255, 0.9);
+  opacity: 1;
+}
+.navbar-always-dark .nav-link--active {
+  color: rgba(255, 255, 255, 0.9);
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {

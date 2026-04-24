@@ -13,7 +13,12 @@ function createClerkAwareSupabase(getAccessToken: () => Promise<string | null>):
       fetch: async (input, init = {}) => {
         const headers = new Headers(init.headers);
         const token = await getAccessToken();
-        if (token) headers.set('Authorization', `Bearer ${token}`);
+        if (token) {
+          headers.set('Authorization', `Bearer ${token}`);
+        } else {
+          // DEBUG: remove before prod
+          console.warn('[supabase-clerk] No JWT obtained — request will be unauthenticated. Check Clerk JWT template "supabase" is configured.');
+        }
         return fetch(input, { ...init, headers });
       },
     },

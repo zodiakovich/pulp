@@ -175,7 +175,7 @@ export function Navbar({
     <nav
       className="sticky top-0 left-0 right-0 z-50 navbar-always-dark"
       style={{
-        background: 'rgba(10,10,11,0.7)',
+        background: 'rgba(10,10,11,0.97)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -217,7 +217,7 @@ export function Navbar({
           className="md:hidden flex flex-col gap-1.5 p-2 rounded-lg transition-all"
           onClick={() => setMobileMenuOpen(v => !v)}
           aria-label="Toggle menu"
-          style={{ color: 'var(--foreground-muted)' }}
+          style={{ color: 'rgba(255,255,255,0.5)' }}
         >
           <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(5px) rotate(45deg)' : 'none' }} />
           <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, opacity: mobileMenuOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
@@ -231,7 +231,7 @@ export function Navbar({
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             className="h-9 w-9 rounded-lg flex items-center justify-center transition-opacity hover:opacity-90"
-            style={{ color: 'var(--foreground-muted)', border: '1px solid var(--border-weak)', background: 'var(--surface-weak)' }}
+            style={{ color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)' }}
             onClick={() => {
               const html = document.documentElement;
               const next: 'dark' | 'light' = theme === 'dark' ? 'light' : 'dark';
@@ -278,7 +278,7 @@ export function Navbar({
       {mobileMenuOpen && (
         <div
           className="md:hidden px-6 pb-4 flex flex-col gap-1"
-          style={{ borderTop: '1px solid var(--border)', background: 'color-mix(in srgb, var(--bg) 95%, transparent)' }}
+          style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(10,10,11,0.97)' }}
         >
           {isLoaded && isSignedIn ? (
             <>

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useState, useCallback, useRef, useEffect, useMemo, type DragEvent } from 'react';
 import { motion, AnimatePresence, type Variants, useReducedMotion, useScroll, useSpring, useTransform } from 'framer-motion';
 import { useAuth } from '@clerk/nextjs';
@@ -1659,6 +1660,8 @@ function HistorySidebar({
         if (tab === 'favorites') q = q.eq('is_favorite', true);
         if (genreFilter) q = q.eq('genre', genreFilter);
         const { data, error } = await q.range(0, PAGE_SIZE - 1);
+        // DEBUG: remove before prod
+        console.log('[history:sidebar] userId=%s | rows=%d | error=%s', userId, data?.length ?? 0, error?.message ?? 'none', { data, error });
         if (cancelled) return;
         if (error) { setDbError(error.message); return; }
         const next = (data ?? []) as any[];
@@ -1794,7 +1797,7 @@ function HistorySidebar({
       ) : dbError ? (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-4">
           <p className="text-sm text-center leading-relaxed" style={{ color: 'var(--muted)', fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif' }}>
-            Failed to load history
+            Couldn't load history — try refreshing
           </p>
           <p className="text-xs text-center font-mono break-all" style={{ color: 'rgba(255,255,255,0.30)', maxWidth: 240 }}>
             {dbError}
@@ -2730,8 +2733,12 @@ export default function Home() {
         .order('created_at', { ascending: false })
         .limit(10);
 
+      // DEBUG: remove before prod
+      console.log('[history:loadHistoryFromDb] uid=%s | rows=%d | error=%s', uid, data?.length ?? 0, error?.message ?? 'none', { data, error });
+
       if (error || !data) {
         console.error('[history] loadHistoryFromDb failed', error);
+        setHistory([]);
         return;
       }
 
@@ -2752,8 +2759,9 @@ export default function Home() {
       }));
 
       setHistory(entries);
-    } catch {
-      // Ignore
+    } catch (err) {
+      console.error('[history] loadHistoryFromDb threw', err);
+      setHistory([]);
     } finally {
       setHistoryLoading(false);
     }
@@ -4080,141 +4088,162 @@ export default function Home() {
       />
 
       {/* ── SHORTCUTS MODAL ── */}
-      <AnimatePresence>
-        {showShortcuts && (
-          <>
-            <motion.div
-              className="fixed inset-0 backdrop-blur-md"
-              style={{ background: 'rgba(10,10,11,0.6)', zIndex: 9998 }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              onClick={() => setShowShortcuts(false)}
-            />
-            <motion.div
-              className="fixed left-1/2 top-1/2 w-[min(680px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-48px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overflow-x-hidden rounded-2xl"
+      {mounted && showShortcuts && createPortal(
+        <>
+          {/* Overlay */}
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              background: 'rgba(0,0,0,0.6)',
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
+            }}
+            onClick={() => setShowShortcuts(false)}
+          />
+          {/* Modal */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Keyboard shortcuts"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 10000,
+              width: 'min(680px, 90vw)',
+              maxHeight: '80vh',
+              background: '#0A0A0B',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 16,
+              boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header — fixed, never scrolls */}
+            <div
               style={{
-                zIndex: 9999,
-                padding: '24px',
-                background: '#0A0A0B',
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                boxShadow: '0 24px 80px rgba(0,0,0,0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '20px 24px 16px',
+                flexShrink: 0,
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
               }}
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: EASE_UI }}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Keyboard shortcuts"
-              onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
-                    Keyboard shortcuts
-                  </div>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-                    Press <span style={{ color: 'var(--accent)' }}>Esc</span> or click outside to close
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowShortcuts(false)}
-                  className="h-9 px-3 rounded-lg text-xs transition-all shrink-0"
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.6)',
-                    color: 'var(--text)',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    background: 'rgba(255,255,255,0.06)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                  }}
-                >
-                  Esc
-                </button>
-              </div>
-
-              <div className="mt-6 space-y-8">
-                {SHORTCUT_OVERLAY_GROUPS.map(group => (
-                  <div key={group.title}>
-                    <div
-                      style={{
-                        fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-                        fontWeight: 600,
-                        fontSize: 12,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        color: 'rgba(255,255,255,0.45)',
-                        marginBottom: 12,
-                      }}
-                    >
-                      {group.title}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {group.rows.map(row => (
-                        <div
-                          key={`${group.title}-${row.k}`}
-                          className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-xl px-4 py-3"
-                          style={{
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            background: 'rgba(255,255,255,0.04)',
-                          }}
-                        >
-                          <span
-                            className="shrink-0"
-                            style={{
-                              fontFamily: 'JetBrains Mono, monospace',
-                              fontSize: 11,
-                              lineHeight: 1.4,
-                              color: 'rgba(255,255,255,0.92)',
-                              border: '1px solid rgba(255,255,255,0.6)',
-                              background: 'rgba(255,255,255,0.06)',
-                              backdropFilter: 'blur(12px)',
-                              WebkitBackdropFilter: 'blur(12px)',
-                              padding: '6px 10px',
-                              borderRadius: 10,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {row.k}
-                          </span>
-                          <span
-                            style={{
-                              fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-                              fontSize: 14,
-                              lineHeight: 1.45,
-                              color: 'var(--muted)',
-                              paddingTop: 2,
-                              minWidth: 0,
-                            }}
-                          >
-                            {row.d}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <p
-                className="mt-8 text-center"
+              <div
                 style={{
                   fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-                  fontSize: 12,
-                  color: 'rgba(255,255,255,0.38)',
+                  fontWeight: 700,
+                  fontSize: 20,
+                  letterSpacing: '-0.02em',
+                  lineHeight: 1.2,
+                  color: '#FFFFFF',
                 }}
               >
-                Press ? anytime to see shortcuts
-              </p>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+                Keyboard shortcuts
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setShowShortcuts(false)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Scrollable content */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '20px 24px 24px' }}>
+              {SHORTCUT_OVERLAY_GROUPS.map((group, gi) => (
+                <div key={group.title} style={{ marginTop: gi > 0 ? 24 : 0 }}>
+                  <div
+                    style={{
+                      fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                      fontWeight: 600,
+                      fontSize: 11,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: 'rgba(255,255,255,0.4)',
+                      marginBottom: 6,
+                    }}
+                  >
+                    {group.title}
+                  </div>
+                  <div>
+                    {group.rows.map(row => (
+                      <div
+                        key={`${group.title}-${row.k}`}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          height: 40,
+                          padding: '0 12px',
+                          borderRadius: 8,
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        }}
+                      >
+                        <span
+                          style={{
+                            flex: 1,
+                            marginRight: 16,
+                            fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                            fontSize: 14,
+                            lineHeight: 1.4,
+                            color: 'rgba(255,255,255,0.65)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {row.d}
+                        </span>
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            lineHeight: 1,
+                            color: 'rgba(255,255,255,0.9)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            background: 'rgba(255,255,255,0.07)',
+                            padding: '5px 9px',
+                            borderRadius: 7,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {row.k}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
 
       {showKbdShortcutsTrigger && (
         <button

@@ -86,7 +86,52 @@ const THEME_BOOT_SCRIPT = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      appearance={{
+        // Enable Google, Apple, and GitHub in Clerk Dashboard:
+        // Dashboard → User & Authentication → Social Connections
+        // Recommended order: Google → Apple → GitHub
+        layout: {
+          socialButtonsPlacement: 'top',
+          socialButtonsVariant: 'blockButton',
+        },
+        variables: {
+          colorBackground: '#0F0F12',
+          colorText: '#FFFFFF',
+          colorTextSecondary: '#8A8A9A',
+          colorPrimary: '#FF6D3F',
+          colorInputBackground: '#1A1A1E',
+          colorInputText: '#FFFFFF',
+          borderRadius: '12px',
+          fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+        },
+        elements: {
+          card: {
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+          },
+          socialButtonsBlockButton: {
+            borderRadius: '10px',
+            fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+            fontWeight: 500,
+          },
+          socialButtonsBlockButton__google: {
+            background: '#FFFFFF',
+            color: '#1F1F1F',
+            border: '1px solid rgba(0,0,0,0.12)',
+          },
+          socialButtonsBlockButton__apple: {
+            background: '#000000',
+            color: '#FFFFFF',
+            border: '1px solid rgba(255,255,255,0.12)',
+          },
+          dividerText: {
+            color: '#8A8A9A',
+            fontSize: '13px',
+          },
+        },
+      }}
+    >
       <html lang="en" suppressHydrationWarning>
         <head>
           <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />

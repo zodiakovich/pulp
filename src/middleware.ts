@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher(['/create(.*)', '/explore(.*)']);
+const isProtectedRoute = createRouteMatcher(['/create(.*)']);
 
 function papayaHost(host: string | null): boolean {
   const h = (host ?? '').split(':')[0]?.toLowerCase() ?? '';
