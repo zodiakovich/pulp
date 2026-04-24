@@ -1298,7 +1298,7 @@ function quantizeDurations(seed: NoteEvent[]): number[] {
 function VariationCard({
   label, result: vResult, variationParams, selected, isPlaying,
   onSelect, onPlayToggle, onDownload, onExtend,
-  compareHighlight,
+  compareHighlight, isPublic, onTogglePublic,
 }: {
   label: string;
   result: GenerationResult;
@@ -1306,10 +1306,12 @@ function VariationCard({
   selected: boolean;
   isPlaying: boolean;
   compareHighlight?: boolean;
+  isPublic?: boolean;
   onSelect: () => void;
   onPlayToggle: (e: React.MouseEvent) => void;
   onDownload: (e: React.MouseEvent) => void;
   onExtend?: (e: React.MouseEvent) => void;
+  onTogglePublic?: (e: React.MouseEvent) => void;
 }) {
   return (
     <motion.div
@@ -1332,9 +1334,29 @@ function VariationCard({
         <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em', color: selected ? DS.accent : 'var(--text)' }}>
           {label}
         </span>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
-          {variationParams.bpm} BPM
-        </span>
+        <div className="flex items-center gap-2">
+          {onTogglePublic && (
+            <button
+              onClick={onTogglePublic}
+              className="w-5 h-5 flex items-center justify-center rounded transition-colors"
+              style={{
+                color: isPublic ? '#00B894' : 'rgba(255,255,255,0.30)',
+                fontSize: 11,
+                fontFamily: 'JetBrains Mono, monospace',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+              title={isPublic ? 'Make private' : 'Make public'}
+              aria-label="Toggle visibility"
+            >
+              {isPublic ? '◎' : '○'}
+            </button>
+          )}
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
+            {variationParams.bpm} BPM
+          </span>
+        </div>
       </div>
       <PianoRoll notes={vResult.melody} color={DS.accent} height={56} />
       <div className="flex gap-1.5 flex-wrap mt-3 mb-1">
@@ -1631,6 +1653,7 @@ function HistorySidebar({
     layers: GenerationResult;
     inspiration_source: string | null;
     is_favorite: boolean;
+    is_public: boolean;
   }>>([]);
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -1656,7 +1679,7 @@ function HistorySidebar({
       try {
         let q = supabase
           .from('generations')
-          .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite')
+          .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite, is_public')
           .eq('user_id', userId)
           .order('created_at', { ascending: false });
         if (tab === 'favorites') q = q.eq('is_favorite', true);
@@ -1747,6 +1770,15 @@ function HistorySidebar({
       setRows(prev => prev.map(r => (r.id === id ? { ...r, is_favorite: !next } : r)));
     }
   }, [supabase]);
+
+  const togglePublic = React.useCallback(async (id: string, next: boolean) => {
+    setRows(prev => prev.map(r => (r.id === id ? { ...r, is_public: next } : r)));
+    try {
+      await supabase.from('generations').update({ is_public: next }).eq('id', id).eq('user_id', userId!);
+    } catch {
+      setRows(prev => prev.map(r => (r.id === id ? { ...r, is_public: !next } : r)));
+    }
+  }, [supabase, userId]);
 
   return (
     <motion.div
@@ -1959,21 +1991,40 @@ function HistorySidebar({
                       {GENRES[row.genre]?.name || row.genre} · {row.bpm} BPM · {guessKeyFromLayers(row.layers)}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); void toggleFavorite(row.id, !row.is_favorite); }}
-                    className="w-6 h-6 rounded-md flex items-center justify-center border transition-colors flex-shrink-0"
-                    style={{
-                      borderColor: row.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.08)',
-                      background: row.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
-                      color: row.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.35)',
-                      cursor: 'pointer',
-                    }}
-                    title={row.is_favorite ? 'Unfavorite' : 'Favorite'}
-                    aria-label="Toggle favorite"
-                  >
-                    {row.is_favorite ? '★' : '☆'}
-                  </button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); void togglePublic(row.id, !row.is_public); }}
+                      className="w-6 h-6 rounded-md flex items-center justify-center border transition-colors"
+                      style={{
+                        borderColor: row.is_public ? 'rgba(0,184,148,0.45)' : 'rgba(255,255,255,0.08)',
+                        background: row.is_public ? 'rgba(0,184,148,0.10)' : 'transparent',
+                        color: row.is_public ? '#00B894' : 'rgba(255,255,255,0.35)',
+                        cursor: 'pointer',
+                        fontSize: 10,
+                        fontFamily: 'JetBrains Mono, monospace',
+                      }}
+                      title={row.is_public ? 'Make private' : 'Make public'}
+                      aria-label="Toggle visibility"
+                    >
+                      {row.is_public ? '◎' : '○'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); void toggleFavorite(row.id, !row.is_favorite); }}
+                      className="w-6 h-6 rounded-md flex items-center justify-center border transition-colors"
+                      style={{
+                        borderColor: row.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.08)',
+                        background: row.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
+                        color: row.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.35)',
+                        cursor: 'pointer',
+                      }}
+                      title={row.is_favorite ? 'Unfavorite' : 'Favorite'}
+                      aria-label="Toggle favorite"
+                    >
+                      {row.is_favorite ? '★' : '☆'}
+                    </button>
+                  </div>
                 </div>
               </button>
             );
@@ -2047,23 +2098,41 @@ function HistorySidebar({
                         </button>
                       )}
                     </div>
-                    {/* Favorite */}
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); void toggleFavorite(primary.id, !primary.is_favorite); }}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors flex-shrink-0"
-                      style={{
-                        borderColor: primary.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
-                        background: primary.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
-                        color: primary.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.50)',
-                        cursor: 'pointer',
-                        marginTop: 2,
-                      }}
-                      title={primary.is_favorite ? 'Unfavorite' : 'Favorite'}
-                      aria-label="Toggle favorite"
-                    >
-                      {primary.is_favorite ? '★' : '☆'}
-                    </button>
+                    {/* Actions */}
+                    <div className="flex flex-col gap-1 flex-shrink-0" style={{ marginTop: 2 }}>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); void togglePublic(primary.id, !primary.is_public); }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
+                        style={{
+                          borderColor: primary.is_public ? 'rgba(0,184,148,0.45)' : 'rgba(255,255,255,0.10)',
+                          background: primary.is_public ? 'rgba(0,184,148,0.10)' : 'transparent',
+                          color: primary.is_public ? '#00B894' : 'rgba(255,255,255,0.50)',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontFamily: 'JetBrains Mono, monospace',
+                        }}
+                        title={primary.is_public ? 'Make private' : 'Make public'}
+                        aria-label="Toggle visibility"
+                      >
+                        {primary.is_public ? '◎' : '○'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); void toggleFavorite(primary.id, !primary.is_favorite); }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
+                        style={{
+                          borderColor: primary.is_favorite ? 'rgba(255,109,63,0.45)' : 'rgba(255,255,255,0.10)',
+                          background: primary.is_favorite ? 'rgba(255,109,63,0.10)' : 'transparent',
+                          color: primary.is_favorite ? 'var(--accent)' : 'rgba(255,255,255,0.50)',
+                          cursor: 'pointer',
+                        }}
+                        title={primary.is_favorite ? 'Unfavorite' : 'Favorite'}
+                        aria-label="Toggle favorite"
+                      >
+                        {primary.is_favorite ? '★' : '☆'}
+                      </button>
+                    </div>
                   </div>
                 </button>
 
@@ -2525,6 +2594,7 @@ export default function Home() {
   const [viewportH, setViewportH] = useState<number>(() => (typeof window !== 'undefined' ? window.innerHeight : 800));
   const [editorLayer, setEditorLayer] = useState<typeof EDITOR_LAYERS[number]>('melody');
   const [variationIds, setVariationIds] = useState<(string | null)[]>([]);
+  const [variationPublic, setVariationPublic] = useState<boolean[]>([]);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const [showBpmDetect, setShowBpmDetect] = useState(false);
   const [isDetectingBpm, setIsDetectingBpm] = useState(false);
@@ -2938,6 +3008,7 @@ export default function Home() {
       setVariations(data.variations);
       setSelectedVariation(0);
       setVariationIds(data.variationIds ?? []);
+      setVariationPublic((data.variationIds ?? []).map(() => false));
       setActiveStyleTag(null);
       setCredits({
         used: data.credits.credits_used,
@@ -2965,6 +3036,7 @@ export default function Home() {
     setIsGenerating(true);
     setGeneratingStage('Analyzing prompt...');
     setVariationIds([]);
+    setVariationPublic([]);
     posthog.capture('generation_started', {
       genre: params.genre,
       bpm: params.bpm,
@@ -3154,6 +3226,7 @@ export default function Home() {
             }).select('id').single();
           const [r1, r2, r3] = await Promise.all([ins(gen1, p1), ins(gen2, p2), ins(gen3, p3)]);
           setVariationIds([r1.data?.id ?? null, r2.data?.id ?? null, r3.data?.id ?? null]);
+          setVariationPublic([false, false, false]);
 
           // Save last inspiration source (best-effort; won't break if column isn't migrated yet)
           const inspirationSource = lastInspirationSourceRef.current;
@@ -3638,6 +3711,22 @@ export default function Home() {
     }
   }, [inspireText, params.genre, params.bpm, params.key, params.scale, toast]);
 
+  const handleTogglePublic = useCallback(async (variationIndex: number, next: boolean) => {
+    const id = variationIds[variationIndex];
+    if (!id) return;
+    setVariationPublic(prev => { const arr = [...prev]; arr[variationIndex] = next; return arr; });
+    try {
+      await supabase.from('generations').update({ is_public: next }).eq('id', id).eq('user_id', effectiveUserId!);
+    } catch {
+      setVariationPublic(prev => { const arr = [...prev]; arr[variationIndex] = !next; return arr; });
+    }
+    if (next) {
+      toast.toast('Now visible in Explore', 'success');
+    } else {
+      toast.toast('Removed from Explore', 'info');
+    }
+  }, [variationIds, supabase, effectiveUserId, toast]);
+
   const handleShare = useCallback(() => {
     const id = variationIds[selectedVariation];
     if (!id) {
@@ -3654,6 +3743,7 @@ export default function Home() {
         // Mark as public (best-effort; copy still works even if DB update fails in dev)
         try {
           await supabase.from('generations').update({ is_public: true }).eq('id', id);
+          setVariationPublic(prev => { const next = [...prev]; next[selectedVariation] = true; return next; });
         } catch {
           // ignore
         }
@@ -6163,6 +6253,8 @@ export default function Home() {
                         selected={selectedVariation === i}
                         isPlaying={playingVariationIndex === i}
                         compareHighlight={compareMode && compareIndex === i}
+                        isPublic={variationPublic[i] ?? false}
+                        onTogglePublic={variationIds[i] ? e => { e.stopPropagation(); void handleTogglePublic(i, !(variationPublic[i] ?? false)); } : undefined}
                         onSelect={() => {
                           if (compareMode) {
                             // Lock to clicked variation and stop comparing.
