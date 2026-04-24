@@ -32,7 +32,7 @@ async function listFolder(path: string): Promise<string[]> {
     return [];
   }
   const files = (data ?? [])
-    .filter(f => f.name.endsWith('.wav') && f.metadata != null)
+    .filter(f => f.name.endsWith('.wav'))
     .map(f => f.name);
 
   if (files.length === 0) {
