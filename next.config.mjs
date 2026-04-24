@@ -1,4 +1,5 @@
 import { createRequire } from 'module';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const require = createRequire(import.meta.url);
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
@@ -60,4 +61,14 @@ const nextConfig = {
   },
 };
 
-export default withBundleAnalyzer(nextConfig);
+const sentryConfig = {
+  org: 'papaya',
+  project: 'pulp',
+  silent: true,
+  widenClientFileUpload: true,
+  hideSourceMaps: true,
+  disableLogger: true,
+  automaticVercelMonitors: false,
+};
+
+export default withSentryConfig(withBundleAnalyzer(nextConfig), sentryConfig);

@@ -8,6 +8,7 @@ import CrispChat from '@/components/CrispChat';
 import { NavigationProgress } from '@/components/NavigationProgress';
 import { SiteJsonLd } from '@/components/seo/SiteJsonLd';
 import { defaultDescription, ogImagePath, siteUrl } from '@/lib/seo';
+import { SentryErrorBoundary } from '@/components/SentryErrorBoundary';
 import './fonts.css';
 import './globals.css';
 
@@ -178,10 +179,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ServiceWorkerRegister />
           <CrispChat />
           <NavigationProgress />
-          <ToastProvider>
-            {children}
-            <InstallPromptBanner />
-          </ToastProvider>
+          <SentryErrorBoundary>
+            <ToastProvider>
+              {children}
+              <InstallPromptBanner />
+            </ToastProvider>
+          </SentryErrorBoundary>
           <LazyVercelMetrics />
         </body>
       </html>
