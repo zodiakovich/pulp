@@ -13,6 +13,7 @@ import {
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { playNotesWithMix as playNotes, renderNotesWithMixToWav, stopAllPlayback } from '@/lib/mix-engine';
 import { playAll, stopPlayAll, playTonePreview, stopTonePreview } from '@/lib/tone-lazy';
+import { getAfroHouseSampleOptions, setAfroHouseOverride, type AfroHouseSlot, type AfroHouseSampleOptions } from '@/lib/afro-house-samples';
 import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { track } from '@vercel/analytics';
 import { posthog } from '@/components/PostHogProvider';
@@ -547,16 +548,59 @@ function LayerCard({
   const [dragging, setDragging] = useState(false);
   const color = LAYER_COLORS[name] || DS.accent;
   const instrumentOptions = LAYER_INSTRUMENT_OPTIONS[name] ?? [];
+  const isAfroHouse = genre === 'afro_house' || genre === 'afro-house';
+
+  const [ahOptions, setAhOptions] = useState<AfroHouseSampleOptions | null>(null);
+  const [ahKick, setAhKick] = useState('');
+  const [ahSnare, setAhSnare] = useState('');
+  const [ahHat, setAhHat] = useState('');
+  const [ahBass, setAhBass] = useState('');
+  const [ahSynth, setAhSynth] = useState('');
+
+  useEffect(() => {
+    if (!isAfroHouse) return;
+    void getAfroHouseSampleOptions().then(setAhOptions);
+  }, [isAfroHouse]);
+
+  const previewLayer =
+    name === 'drums' ? 'drums' :
+    name === 'bass'  ? 'bass'  :
+    name === 'chords'? 'chords': 'melody';
+
+  const handleAfroSelect = (slot: AfroHouseSlot, value: string) => {
+    setAfroHouseOverride(slot, value || null);
+    if (slot === 'kick')      setAhKick(value);
+    else if (slot === 'snare')     setAhSnare(value);
+    else if (slot === 'closedHat') setAhHat(value);
+    else if (slot === 'bass')      setAhBass(value);
+    else if (slot === 'synth')     setAhSynth(value);
+    stopTonePreview();
+    setPlaying(true);
+    void playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false));
+  };
 
   const handlePlay = async () => {
     if (playing) { stopTonePreview(); setPlaying(false); return; }
     setPlaying(true);
-    const previewLayer =
-      name === 'drums' ? 'drums' :
-      name === 'bass' ? 'bass' :
-      name === 'chords' ? 'chords' :
-      'melody';
     await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false), instrument);
+  };
+
+  const selectStyle: React.CSSProperties = {
+    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+    fontSize: 11,
+    color: 'var(--text)',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 6,
+    padding: '2px 20px 2px 7px',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 6px center',
+    cursor: 'pointer',
+    outline: 'none',
+    maxWidth: 140,
   };
 
   return (
@@ -589,34 +633,55 @@ function LayerCard({
             <p className="text-xs mt-0.5" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>
               {notes.length} notes
             </p>
-            {instrumentOptions.length > 0 && onInstrumentChange && (
+            {/* Soundfont instrument selector (non-afro-house) */}
+            {instrumentOptions.length > 0 && onInstrumentChange && !isAfroHouse && (
               <select
                 value={instrument}
                 onChange={e => { onInstrumentChange(e.target.value); }}
                 onClick={e => e.stopPropagation()}
                 className="mt-1.5 block"
-                style={{
-                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-                  fontSize: 11,
-                  color: 'var(--text)',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 6,
-                  padding: '2px 20px 2px 7px',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 6px center',
-                  cursor: 'pointer',
-                  outline: 'none',
-                  maxWidth: 120,
-                }}
+                style={selectStyle}
               >
                 {instrumentOptions.map(o => (
                   <option key={o.value + o.label} value={o.value}>{o.label}</option>
                 ))}
               </select>
+            )}
+            {/* Afro-house sample selectors */}
+            {isAfroHouse && ahOptions && name !== 'drums' && (
+              <select
+                value={name === 'bass' ? ahBass : ahSynth}
+                onChange={e => handleAfroSelect(name === 'bass' ? 'bass' : 'synth', e.target.value)}
+                onClick={e => e.stopPropagation()}
+                className="mt-1.5 block"
+                style={selectStyle}
+              >
+                {(name === 'bass' ? ahOptions.bass : ahOptions.synth).map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
+            {isAfroHouse && ahOptions && name === 'drums' && (
+              <div className="mt-1.5 flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                {([
+                  { label: 'Kick',  slot: 'kick'      as AfroHouseSlot, opts: ahOptions.kicks,      val: ahKick  },
+                  { label: 'Snare', slot: 'snare'     as AfroHouseSlot, opts: ahOptions.snares,     val: ahSnare },
+                  { label: 'HH',    slot: 'closedHat' as AfroHouseSlot, opts: ahOptions.closedHats, val: ahHat   },
+                ] as const).map(({ label, slot, opts, val }) => (
+                  <div key={slot} className="flex items-center gap-1.5">
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', width: 32, flexShrink: 0 }}>{label}</span>
+                    <select
+                      value={val}
+                      onChange={e => handleAfroSelect(slot, e.target.value)}
+                      style={{ ...selectStyle, maxWidth: 110, fontSize: 10 }}
+                    >
+                      {opts.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
