@@ -981,36 +981,6 @@ function toMusicXml({
   );
 }
 
-// ─── SPLICE SEARCH TERMS ──────────────────────────────────────
-const SPLICE_INSTRUMENTS: Record<string, { melody: string; chords: string; bass: string; drums: string }> = {
-  deep_house:        { melody: 'pluck',       chords: 'chord pad',    bass: 'bass loop',  drums: 'kick'         },
-  melodic_house:     { melody: 'melody',      chords: 'chord pad',    bass: 'bass loop',  drums: 'kick'         },
-  tech_house:        { melody: 'pluck',       chords: 'chord stab',   bass: 'bass loop',  drums: 'kick'         },
-  minimal_tech:      { melody: 'lead',        chords: 'chord',        bass: 'bass',       drums: 'kick'         },
-  techno:            { melody: 'lead',        chords: 'chord',        bass: 'bass',       drums: 'kick loop'    },
-  melodic_techno:    { melody: 'lead',        chords: 'pad',          bass: 'bass',       drums: 'kick'         },
-  hard_techno:       { melody: 'lead',        chords: 'stab',         bass: 'bass',       drums: 'kick'         },
-  progressive_house: { melody: 'synth',       chords: 'chord pad',    bass: 'bass loop',  drums: 'kick'         },
-  afro_house:        { melody: 'melody',      chords: 'chord',        bass: 'bass loop',  drums: 'percussion'   },
-  trance:            { melody: 'lead',        chords: 'supersaw pad', bass: 'bass',       drums: 'kick'         },
-  house:             { melody: 'piano',       chords: 'chord stab',   bass: 'bass loop',  drums: 'kick'         },
-  drum_and_bass:     { melody: 'melody',      chords: 'chord',        bass: 'reese bass', drums: 'break'        },
-  hiphop:            { melody: 'melody',      chords: 'chord',        bass: '808',        drums: 'drum loop'    },
-  rnb:               { melody: 'melody',      chords: 'chord pad',    bass: 'bass',       drums: 'drum loop'    },
-  disco_nu_disco:    { melody: 'melody',      chords: 'chord',        bass: 'bass loop',  drums: 'disco drum'   },
-};
-
-function getSpliceTerms(genreKey: string, bpm: number): Record<'melody' | 'chords' | 'bass' | 'drums', string> {
-  const genreName = GENRES[genreKey]?.name ?? genreKey;
-  const inst = SPLICE_INSTRUMENTS[genreKey] ?? { melody: 'melody', chords: 'chord', bass: 'bass', drums: 'drums' };
-  return {
-    melody: `${genreName} ${inst.melody} ${bpm}`,
-    chords: `${genreName} ${inst.chords}`,
-    bass:   `${genreName} ${inst.bass} ${bpm}`,
-    drums:  `${genreName} ${inst.drums}`,
-  };
-}
-
 // ─── SHEET MUSIC (CANVAS) ──────────────────────────────────────
 function midiToStaffY(pitch: number, staffTopY: number, lineGap: number): number {
   // Treble-ish mapping using semitone steps relative to E4 as the bottom line reference.
@@ -1497,31 +1467,6 @@ function VariationCard({
           >
             + Extend 8 bars
           </button>
-          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.30)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Find on Splice
-            </p>
-            {(['melody', 'chords', 'bass', 'drums'] as const).map(layer => {
-              const term = getSpliceTerms(variationParams.genre, variationParams.bpm)[layer];
-              return (
-                <div key={layer} className="flex items-center gap-2 mb-1.5">
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: LAYER_COLORS[layer], width: 40, flexShrink: 0 }}>
-                    {layer.charAt(0).toUpperCase() + layer.slice(1, 3)}
-                  </span>
-                  <a
-                    href={`https://splice.com/sounds/search?q=${encodeURIComponent(term)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', textDecoration: 'none' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
-                  >
-                    {term} ↗
-                  </a>
-                </div>
-              );
-            })}
-          </div>
         </>
       )}
     </motion.div>
