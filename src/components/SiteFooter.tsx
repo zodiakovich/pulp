@@ -55,7 +55,7 @@ export function SiteFooter() {
     <footer className="mt-24 px-4 sm:px-8" style={{ background: 'var(--bg)' }}>
       <div className="mx-auto max-w-[1280px] py-20 sm:py-24" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="grid grid-cols-1 gap-12 sm:gap-14 md:grid-cols-2 lg:grid-cols-4">
-          {/* Column 1 */}
+          {/* Column 1 — brand + about */}
           <div className="min-w-0">
             <div
               className="text-2xl"
@@ -92,6 +92,65 @@ export function SiteFooter() {
                 a <span style={{ fontWeight: 700, opacity: 0.95 }}>papaya</span>
                 <span style={{ color: 'var(--accent)', opacity: 0.9 }}>●</span> tool
               </div>
+            </div>
+
+            {/* About pulp */}
+            <div className="mt-8 space-y-3">
+              <div
+                style={{
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: '0.02em',
+                  color: 'var(--text)',
+                }}
+              >
+                About pulp
+              </div>
+              <p
+                style={{
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                  fontSize: 13,
+                  lineHeight: 1.65,
+                  color: 'var(--text)',
+                  opacity: 0.45,
+                }}
+              >
+                pulp is an AI MIDI generator built by papaya, a one-person studio based in Madrid.
+                Built for producers who want to move fast and stay creative.
+              </p>
+              <p
+                style={{
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                  fontSize: 13,
+                  lineHeight: 1.65,
+                  color: 'var(--text)',
+                  opacity: 0.35,
+                }}
+              >
+                Part of the{' '}
+                <span style={{ fontWeight: 600, opacity: 1 }}>papaya</span>
+                <span style={{ color: '#00B894' }}>●</span>
+                {' '}ecosystem — tools for modern music production.
+              </p>
+              <a
+                href="https://bypapaya.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                  fontSize: 13,
+                  color: 'var(--text)',
+                  opacity: 0.5,
+                  textDecoration: 'none',
+                  transition: 'opacity 200ms',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+              >
+                More from papaya →
+              </a>
             </div>
           </div>
 
