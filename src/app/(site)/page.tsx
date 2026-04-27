@@ -28,6 +28,7 @@ import type { MidiUploadSuccessPayload } from '@/components/StudioMidiUploadModa
 import { EmptyState } from '@/components/EmptyState';
 import { ButtonLoadingDots } from '@/components/ButtonLoadingDots';
 import { SiteFooter } from '@/components/SiteFooter';
+import { CustomSelect } from '@/components/CustomSelect';
 
 const PianoRollEditor = dynamic(
   () => import('@/components/PianoRollEditor').then(m => ({ default: m.PianoRollEditor })),
@@ -585,23 +586,7 @@ function LayerCard({
     await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false), instrument);
   };
 
-  const selectStyle: React.CSSProperties = {
-    fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-    fontSize: 11,
-    color: 'var(--text)',
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 6,
-    padding: '2px 20px 2px 7px',
-    appearance: 'none',
-    WebkitAppearance: 'none',
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 6px center',
-    cursor: 'pointer',
-    outline: 'none',
-    maxWidth: 140,
-  };
+  const compactSelectStyle: React.CSSProperties = { maxWidth: 140, fontSize: 11 };
 
   return (
     <motion.div
@@ -635,31 +620,25 @@ function LayerCard({
             </p>
             {/* Soundfont instrument selector (non-afro-house) */}
             {instrumentOptions.length > 0 && onInstrumentChange && !isAfroHouse && (
-              <select
-                value={instrument}
-                onChange={e => { onInstrumentChange(e.target.value); }}
+              <CustomSelect
+                value={instrument ?? ''}
+                onChange={v => { onInstrumentChange(v); }}
+                options={instrumentOptions}
                 onClick={e => e.stopPropagation()}
-                className="mt-1.5 block"
-                style={selectStyle}
-              >
-                {instrumentOptions.map(o => (
-                  <option key={o.value + o.label} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                className="mt-1.5"
+                style={compactSelectStyle}
+              />
             )}
             {/* Afro-house sample selectors */}
             {isAfroHouse && ahOptions && name !== 'drums' && (
-              <select
+              <CustomSelect
                 value={name === 'bass' ? ahBass : ahSynth}
-                onChange={e => handleAfroSelect(name === 'bass' ? 'bass' : 'synth', e.target.value)}
+                onChange={v => handleAfroSelect(name === 'bass' ? 'bass' : 'synth', v)}
+                options={name === 'bass' ? ahOptions.bass : ahOptions.synth}
                 onClick={e => e.stopPropagation()}
-                className="mt-1.5 block"
-                style={selectStyle}
-              >
-                {(name === 'bass' ? ahOptions.bass : ahOptions.synth).map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                className="mt-1.5"
+                style={compactSelectStyle}
+              />
             )}
             {isAfroHouse && ahOptions && name === 'drums' && (
               <div className="mt-1.5 flex flex-col gap-1" onClick={e => e.stopPropagation()}>
@@ -670,15 +649,12 @@ function LayerCard({
                 ] as const).map(({ label, slot, opts, val }) => (
                   <div key={slot} className="flex items-center gap-1.5">
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', width: 32, flexShrink: 0 }}>{label}</span>
-                    <select
+                    <CustomSelect
                       value={val}
-                      onChange={e => handleAfroSelect(slot, e.target.value)}
-                      style={{ ...selectStyle, maxWidth: 110, fontSize: 10 }}
-                    >
-                      {opts.map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                      onChange={v => handleAfroSelect(slot, v)}
+                      options={opts}
+                      style={{ maxWidth: 110, fontSize: 10 }}
+                    />
                   </div>
                 ))}
               </div>
@@ -2829,7 +2805,6 @@ export default function Home() {
   }, [toast]);
   const generateBtnWrapRef = useRef<HTMLDivElement>(null);
   const styleTagsRef = useRef<HTMLDivElement>(null);
-  const genreSelectRef = useRef<HTMLSelectElement>(null);
   const layerCardsRef = useRef<HTMLDivElement>(null);
   const generatingStageTimeoutsRef = useRef<number[]>([]);
 
@@ -6033,39 +6008,33 @@ export default function Home() {
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wider"
                           style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Genre</label>
-                        <select
-                          ref={genreSelectRef}
+                        <CustomSelect
                           className="w-full"
                           value={params.genre}
-                          onChange={e => setParams(p => ({ ...p, genre: e.target.value }))}
-                        >
-                          {GENRE_LIST.map(g => <option key={g.key} value={g.key}>{g.name}</option>)}
-                        </select>
+                          onChange={v => setParams(p => ({ ...p, genre: v }))}
+                          options={GENRE_LIST.map(g => ({ label: g.name, value: g.key }))}
+                        />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wider"
                             style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Key</label>
-                          <select
+                          <CustomSelect
                             className="w-full"
                             value={params.key}
-                            onChange={e => setParams(p => ({ ...p, key: e.target.value }))}
-                          >
-                            {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
-                          </select>
+                            onChange={v => setParams(p => ({ ...p, key: v }))}
+                            options={KEYS.map(k => ({ label: k, value: k }))}
+                          />
                         </div>
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wider"
                             style={{ color: 'var(--text)', opacity: 0.6, fontFamily: 'JetBrains Mono, monospace' }}>Scale</label>
-                          <select
+                          <CustomSelect
                             className="w-full"
                             value={MANUAL_SCALE_OPTIONS.some(o => o.value === params.scale) ? params.scale : 'minor'}
-                            onChange={e => setParams(p => ({ ...p, scale: e.target.value }))}
-                          >
-                            {MANUAL_SCALE_OPTIONS.map(s => (
-                              <option key={s.value} value={s.value}>{s.label}</option>
-                            ))}
-                          </select>
+                            onChange={v => setParams(p => ({ ...p, scale: v }))}
+                            options={MANUAL_SCALE_OPTIONS}
+                          />
                         </div>
                       </div>
                       <div>
@@ -6214,9 +6183,12 @@ export default function Home() {
                       <div className="col-span-2 md:col-span-1">
                         <label className="block mb-2 text-xs uppercase tracking-wider"
                           style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>Bars</label>
-                        <select className="w-full" value={params.bars} onChange={e => setParams(p => ({ ...p, bars: parseInt(e.target.value) }))}>
-                          {[2, 4, 8].map(b => <option key={b} value={b}>{b} bars</option>)}
-                        </select>
+                        <CustomSelect
+                          className="w-full"
+                          value={String(params.bars)}
+                          onChange={v => setParams(p => ({ ...p, bars: parseInt(v) }))}
+                          options={[2, 4, 8].map(b => ({ label: `${b} bars`, value: String(b) }))}
+                        />
                       </div>
                       </div>
                     </div>
