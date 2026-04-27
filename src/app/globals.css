@@ -47,9 +47,9 @@ html:not(.light) {
   --grid-pattern-line: rgba(255, 255, 255, 0.025);
 
   --layer-viz-melody: #ff6d3f;
-  --layer-viz-chords: rgba(255, 255, 255, 0.55);
-  --layer-viz-bass: rgba(255, 255, 255, 0.40);
-  --layer-viz-drums: rgba(255, 255, 255, 0.28);
+  --layer-viz-chords: #ff6d3f;
+  --layer-viz-bass: #ff6d3f;
+  --layer-viz-drums: #ff6d3f;
   --layer-viz-imported: rgba(255, 255, 255, 0.55);
 
   --piano-roll-bg: #0a0a0b;
@@ -105,9 +105,9 @@ html.light {
   --grid-pattern-line: rgba(26, 26, 30, 0.05);
 
   --layer-viz-melody: #ff6d3f;
-  --layer-viz-chords: rgba(26, 26, 30, 0.52);
-  --layer-viz-bass: rgba(26, 26, 30, 0.40);
-  --layer-viz-drums: rgba(26, 26, 30, 0.30);
+  --layer-viz-chords: #ff6d3f;
+  --layer-viz-bass: #ff6d3f;
+  --layer-viz-drums: #ff6d3f;
   --layer-viz-imported: rgba(26, 26, 30, 0.52);
 
   --piano-roll-bg: #e8e9ea;

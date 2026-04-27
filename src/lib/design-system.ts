@@ -38,8 +38,8 @@ export function readCssColor(property: string, fallback: string): string {
 export function getLayerVizColorsForCanvas(): Record<'melody' | 'chords' | 'bass' | 'drums', string> {
   return {
     melody: readCssColor('--layer-viz-melody', '#ff6d3f'),
-    chords: readCssColor('--layer-viz-chords', 'rgba(255,255,255,0.55)'),
-    bass: readCssColor('--layer-viz-bass', 'rgba(255,255,255,0.40)'),
-    drums: readCssColor('--layer-viz-drums', 'rgba(255,255,255,0.28)'),
+    chords: readCssColor('--layer-viz-chords', '#ff6d3f'),
+    bass: readCssColor('--layer-viz-bass', '#ff6d3f'),
+    drums: readCssColor('--layer-viz-drums', '#ff6d3f'),
   };
 }
