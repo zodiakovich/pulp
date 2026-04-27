@@ -4815,6 +4815,55 @@ export default function Home() {
             </div>
           </motion.div>
         </div>
+
+        {/* ── HERO DEMO VIDEO ──
+            To swap in a real video: replace the inner <div> wrapper with:
+            <video src="YOUR_SRC" autoPlay muted loop playsInline style={videoStyle} />
+        */}
+        <div className="relative z-10 mx-auto mt-14 w-full px-4 sm:px-0" style={{ maxWidth: 800 }}>
+          <div
+            style={{
+              position: 'relative',
+              paddingBottom: '56.25%',
+              background: '#111118',
+              border: '1px solid #1A1A2E',
+              borderRadius: 12,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 16,
+              }}
+            >
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  background: 'rgba(255,109,63,0.12)',
+                  border: '1px solid rgba(255,109,63,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden>
+                  <path d="M8 5.5l10 5.5-10 5.5V5.5z" fill="#FF6D3F" />
+                </svg>
+              </div>
+              <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', letterSpacing: '0.06em' }}>
+                See pulp in action
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Works with any DAW strip */}
