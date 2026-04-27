@@ -5854,32 +5854,38 @@ export default function Home() {
 
             {/* Style tags */}
             <div ref={styleTagsRef} className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
-              {VIBES.map(vibe => (
-                <button
-                  key={vibe.label}
-                  onClick={() => handleStyleTag(vibe.tag)}
-                  className="flex items-center justify-center flex-shrink-0 px-4 py-2 rounded-xl transition-all"
-                  style={{
-                    border: activeStyleTag === vibe.tag
-                      ? `1px solid ${vibe.color}`
-                      : '1px solid var(--border)',
-                    background: activeStyleTag === vibe.tag
-                      ? `${vibe.color}18`
-                      : 'var(--surface)',
-                    minWidth: 80,
-                  }}
-                >
-                  <span style={{
-                    fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: 11,
-                    color: activeStyleTag === vibe.tag ? vibe.color : 'var(--foreground-muted)',
-                    letterSpacing: '0.04em',
-                    fontWeight: activeStyleTag === vibe.tag ? 600 : 400,
-                  }}>
-                    {activeStyleTag === vibe.tag ? '✓ ' : ''}{vibe.label}
-                  </span>
-                </button>
-              ))}
+              {VIBES.map(vibe => {
+                const isActive = activeStyleTag === vibe.tag;
+                return (
+                  <button
+                    key={vibe.label}
+                    onClick={() => handleStyleTag(vibe.tag)}
+                    className="flex items-center justify-center flex-shrink-0 px-4 py-2 rounded-xl outline-none"
+                    style={{
+                      border: isActive ? `1px solid ${vibe.color}` : '1px solid var(--border)',
+                      background: isActive ? `${vibe.color}18` : 'var(--surface)',
+                      minWidth: 80,
+                      transition: 'border-color 150ms, background 150ms',
+                    }}
+                    onMouseEnter={e => {
+                      if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)';
+                    }}
+                    onMouseLeave={e => {
+                      if (!isActive) e.currentTarget.style.borderColor = 'var(--border)';
+                    }}
+                  >
+                    <span style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                      color: isActive ? vibe.color : 'var(--foreground-muted)',
+                      letterSpacing: '0.04em',
+                      fontWeight: isActive ? 600 : 400,
+                    }}>
+                      {isActive ? '✓ ' : ''}{vibe.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {variations.length === 0 && !isGenerating && (
