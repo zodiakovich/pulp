@@ -4792,6 +4792,27 @@ export default function Home() {
                 View demo
               </a>
             </div>
+            <div className="mt-5 flex items-center gap-3">
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                fontWeight: 400,
+                letterSpacing: '0.04em',
+                color: '#00B894',
+                background: 'rgba(0,184,148,0.08)',
+                border: '1px solid rgba(0,184,148,0.2)',
+                borderRadius: 20,
+                padding: '4px 10px',
+              }}>
+                <svg width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden>
+                  <path d="M1 4l3 3.5L10 1" stroke="#00B894" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                100% Royalty-Free — MIDI is yours
+              </span>
+            </div>
           </motion.div>
         </div>
       </section>

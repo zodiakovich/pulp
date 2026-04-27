@@ -180,7 +180,7 @@ function CheckoutCta({
 
 const FREE_FEATURES = ['MIDI export', '5 genres', 'Basic piano roll', 'Generation history'] as const;
 
-const PRO_EXTRA = ['All genres + artists', 'Full piano roll', 'Priority generation', 'Public gallery'] as const;
+const PRO_EXTRA = ['All genres + artists', 'Full piano roll', 'Priority generation', 'Public gallery', 'Commercial use included'] as const;
 
 const STUDIO_EXTRA = ['Upload MIDI & continue', 'Advanced mix engine'] as const;
 

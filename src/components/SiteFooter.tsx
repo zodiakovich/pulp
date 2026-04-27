@@ -113,7 +113,6 @@ export function SiteFooter() {
             links={[
               { label: 'Blog', href: '/blog' },
               { label: 'Documentation', href: '/docs' },
-              { label: 'API (coming soon)', href: '/api-docs', muted: true },
               { label: 'DAW Setup Guides', href: '/docs/daw-setup' },
               { label: 'FAQ', href: '/faq' },
             ]}
