@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NoteEvent } from '@/lib/music-engine';
 import { readCssColor } from '@/lib/design-system';
+import { generateMidiFormat0, downloadMidi } from '@/lib/midi-writer';
 
 export interface PianoRollEditorProps {
   notes: NoteEvent[];
@@ -17,6 +18,8 @@ export interface PianoRollEditorProps {
   chordOverlayNotes?: NoteEvent[];
   chordStripVisible?: boolean;
   onChordStripVisibleChange?: (visible: boolean) => void;
+  bpm?: number;
+  onExportChopAll?: (startBeat: number, endBeat: number) => void;
 }
 
 const MIDI_MIN = 36;
@@ -77,7 +80,7 @@ const SNAP_OPTIONS: { label: string; step: SnapStep }[] = [
   { label: '1/32', step: 0.125 },
 ];
 
-type Tool = 'draw' | 'select';
+type Tool = 'draw' | 'select' | 'chop';
 
 function noteKey(n: NoteEvent): string {
   return `${n.pitch}|${n.startTime}|${n.duration}|${n.velocity}`;
@@ -137,7 +140,8 @@ type DragState =
   | { mode: 'resize'; startX: number; snapshot: NoteEvent[]; index: number }
   | { mode: 'rubber'; x1: number; y1: number; x2: number; y2: number; moved: boolean }
   | { mode: 'vel'; snapshot: NoteEvent[]; index: number; indices: number[]; anchorVelocity: number }
-  | { mode: 'pendingAdd'; x: number; y: number; moved: boolean };
+  | { mode: 'pendingAdd'; x: number; y: number; moved: boolean }
+  | { mode: 'chop'; x1: number; x2: number };
 
 export function PianoRollEditor({
   notes,
@@ -152,6 +156,8 @@ export function PianoRollEditor({
   chordOverlayNotes,
   chordStripVisible: chordStripVisibleProp,
   onChordStripVisibleChange,
+  bpm = 120,
+  onExportChopAll,
 }: PianoRollEditorProps) {
   const totalBeats = bars * 4;
   const GRID_H = gridHeightPx ?? GRID_H_DEFAULT;
@@ -167,6 +173,7 @@ export function PianoRollEditor({
   const [velTooltip, setVelTooltip] = useState<{ x: number; y: number; v: number } | null>(null);
   const [chordStripInternal, setChordStripInternal] = useState(true);
   const [compactChords, setCompactChords] = useState(false);
+  const [chopSelection, setChopSelection] = useState<{ startBeat: number; endBeat: number } | null>(null);
 
   const chordControlled = chordStripVisibleProp !== undefined;
   const showChords = chordControlled ? chordStripVisibleProp : chordStripInternal;
@@ -344,6 +351,36 @@ export function PianoRollEditor({
       ctx.setLineDash([]);
     }
 
+    // Chop selection overlay
+    const chopDrag = dragRef.current.mode === 'chop' ? dragRef.current : null;
+    if (chopDrag) {
+      const b1 = Math.max(0, Math.floor((Math.min(chopDrag.x1, chopDrag.x2) / wPx) * totalBeats / 4)) * 4;
+      const b2 = Math.min(totalBeats, Math.ceil((Math.max(chopDrag.x1, chopDrag.x2) / wPx) * totalBeats / 4)) * 4;
+      const ox1 = (b1 / totalBeats) * w;
+      const ox2 = (b2 / totalBeats) * w;
+      ctx.fillStyle = 'rgba(255,109,63,0.20)';
+      ctx.fillRect(ox1, 0, ox2 - ox1, h);
+      ctx.strokeStyle = 'rgba(255,109,63,0.65)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(ox1, 0); ctx.lineTo(ox1, h);
+      ctx.moveTo(ox2, 0); ctx.lineTo(ox2, h);
+      ctx.stroke();
+    } else if (chopSelection) {
+      const ox1 = (chopSelection.startBeat / totalBeats) * w;
+      const ox2 = (chopSelection.endBeat / totalBeats) * w;
+      ctx.fillStyle = 'rgba(255,109,63,0.20)';
+      ctx.fillRect(ox1, 0, ox2 - ox1, h);
+      ctx.strokeStyle = 'rgba(255,109,63,0.65)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(ox1, 0); ctx.lineTo(ox1, h);
+      ctx.moveTo(ox2, 0); ctx.lineTo(ox2, h);
+      ctx.stroke();
+    }
+
     // Notes
     const resolvedColor = (() => {
       const m = String(color ?? '').match(/var\((--[^)]+)\)/);
@@ -422,7 +459,7 @@ export function PianoRollEditor({
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }, [notes, color, totalBeats, wPx, bars, snapStep, pxPerBeat, selectedKeys, isPlaying, playheadBeat, rowH]);
+  }, [notes, color, totalBeats, wPx, bars, snapStep, pxPerBeat, selectedKeys, isPlaying, playheadBeat, rowH, chopSelection]);
 
   const drawVelocity = useCallback(() => {
     const canvas = velCanvasRef.current;
@@ -602,6 +639,14 @@ export function PianoRollEditor({
       return;
     }
 
+    // In chop mode: start time-range drag
+    if (tool === 'chop') {
+      setChopSelection(null);
+      dragRef.current = { mode: 'chop', x1: x, x2: x };
+      drawGrid();
+      return;
+    }
+
     // In draw mode: create note. In select mode: rubber-band.
     if (!e.shiftKey) setSelectedKeys(new Set());
     if (tool === 'draw') {
@@ -616,6 +661,12 @@ export function PianoRollEditor({
     if (!pos) return;
     const { x, y } = pos;
     const d = dragRef.current;
+
+    if (d.mode === 'chop') {
+      d.x2 = x;
+      drawGrid();
+      return;
+    }
 
     if (d.mode === 'pendingAdd') {
       if (Math.abs(x - d.x) > 3 || Math.abs(y - d.y) > 3) {
@@ -661,6 +712,19 @@ export function PianoRollEditor({
 
   const finishGridInteraction = useCallback(() => {
     const d = dragRef.current;
+
+    if (d.mode === 'chop') {
+      const b1 = (Math.min(d.x1, d.x2) / wPx) * totalBeats;
+      const b2 = (Math.max(d.x1, d.x2) / wPx) * totalBeats;
+      const startBar = Math.max(0, Math.floor(b1 / 4));
+      const endBar = Math.min(bars, Math.ceil(b2 / 4));
+      if (endBar > startBar) {
+        setChopSelection({ startBeat: startBar * 4, endBeat: endBar * 4 });
+      }
+      dragRef.current = { mode: 'none' };
+      drawGrid();
+      return;
+    }
 
     if (d.mode === 'rubber') {
       const rx1 = Math.min(d.x1, d.x2);
@@ -709,7 +773,7 @@ export function PianoRollEditor({
     }
     dragRef.current = { mode: 'none' };
     drawGrid();
-  }, [commitHistory, drawGrid, hitTestNote, onNotesChange, playPreview, rowH, snapStep, totalBeats, wPx]);
+  }, [bars, commitHistory, drawGrid, hitTestNote, onNotesChange, playPreview, rowH, snapStep, totalBeats, wPx]);
 
   const onGridContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
@@ -853,6 +917,19 @@ export function PianoRollEditor({
     }
   };
 
+  const exportChopSingle = useCallback(() => {
+    if (!chopSelection) return;
+    const { startBeat, endBeat } = chopSelection;
+    const filtered = notes
+      .filter(n => n.startTime >= startBeat && n.startTime < endBeat)
+      .map(n => ({ ...n, startTime: n.startTime - startBeat }));
+    if (!filtered.length) return;
+    const startBar = Math.round(startBeat / 4) + 1;
+    const endBar = Math.round(endBeat / 4);
+    const midi = generateMidiFormat0(filtered, bpm, `${layerName}-chop`);
+    downloadMidi(midi, `${layerName}-bars${startBar}-${endBar}.mid`);
+  }, [chopSelection, notes, bpm, layerName]);
+
   const chordSegments = useMemo(() => {
     if (!showChords) return [];
     const all = chordOverlayNotes?.length ? chordOverlayNotes : notes;
@@ -929,8 +1006,11 @@ export function PianoRollEditor({
           <button type="button" style={tool === 'draw' ? activeBtn : inactiveBtn} onClick={() => setTool('draw')} title="Draw (pencil)">
             ✏ Draw
           </button>
-          <button type="button" style={{ ...(tool === 'select' ? activeBtn : inactiveBtn), borderLeft: '1px solid rgba(255,255,255,0.10)', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} onClick={() => setTool('select')} title="Select (cursor)">
+          <button type="button" style={{ ...(tool === 'select' ? activeBtn : inactiveBtn), borderLeft: '1px solid rgba(255,255,255,0.10)', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }} onClick={() => setTool('select')} title="Select (cursor)">
             ⬚ Select
+          </button>
+          <button type="button" style={{ ...(tool === 'chop' ? activeBtn : inactiveBtn), borderLeft: '1px solid rgba(255,255,255,0.10)', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} onClick={() => { setTool('chop'); setChopSelection(null); }} title="Chop — drag to select a bar range for export">
+            ✂ Chop
           </button>
         </div>
 
@@ -998,6 +1078,41 @@ export function PianoRollEditor({
           {notes.length} {notes.length === 1 ? 'note' : 'notes'}
         </span>
       </div>
+
+      {/* Chop export bar */}
+      {tool === 'chop' && chopSelection && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 border-b shrink-0 flex-wrap"
+          style={{ background: 'rgba(255,109,63,0.06)', borderColor: 'rgba(255,109,63,0.22)' }}
+        >
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#FF6D3F', whiteSpace: 'nowrap' }}>
+            ✂ Bars {Math.round(chopSelection.startBeat / 4) + 1}–{Math.round(chopSelection.endBeat / 4)} selected
+          </span>
+          <button
+            type="button"
+            style={{ ...activeBtn, height: 24, fontSize: 10 }}
+            onClick={exportChopSingle}
+          >
+            Export {layerName}
+          </button>
+          {onExportChopAll && (
+            <button
+              type="button"
+              style={{ ...inactiveBtn, height: 24, fontSize: 10 }}
+              onClick={() => onExportChopAll(chopSelection.startBeat, chopSelection.endBeat)}
+            >
+              Export All Layers
+            </button>
+          )}
+          <button
+            type="button"
+            style={{ ...inactiveBtn, height: 24, fontSize: 10, marginLeft: 'auto' }}
+            onClick={() => setChopSelection(null)}
+          >
+            ✕ Clear
+          </button>
+        </div>
+      )}
 
       {/* Main layout: piano + grid */}
       <div className="flex flex-1 min-h-0 min-w-0">

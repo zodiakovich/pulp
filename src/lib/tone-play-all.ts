@@ -1,4 +1,8 @@
 import type { NoteEvent } from '@/lib/music-engine';
+import type { AllLayerFX } from './fx-settings';
+import type { AllMixerState } from './mixer-settings';
+import { computeEffectiveGain } from './mixer-settings';
+import { buildFXChain } from './fx-chain';
 import { getAudioContext } from './audio-context';
 import { loadSampleSet, midiToDetune } from './sample-engine';
 import { getInstrument, playNote } from './soundfont-engine';
@@ -12,12 +16,26 @@ function midiToNote(midi: number): string {
 }
 
 const activeSources = new Set<AudioBufferSourceNode | OscillatorNode>();
+const activeChainOutputs = new Set<AudioNode>();
+const mixerFaders = new Map<string, GainNode>();
 
 export function stopPlayAll() {
   for (const src of activeSources) {
     try { src.stop(); } catch { /* ignore */ }
   }
   activeSources.clear();
+  for (const out of activeChainOutputs) {
+    try { out.disconnect(); } catch { /* ignore */ }
+  }
+  activeChainOutputs.clear();
+  mixerFaders.clear();
+}
+
+export function updateAllMixer(mixer: AllMixerState) {
+  for (const layer of ['melody', 'chords', 'bass', 'drums'] as const) {
+    const fader = mixerFaders.get(layer);
+    if (fader) fader.gain.value = computeEffectiveGain(layer, mixer);
+  }
 }
 
 function createNoiseBuffer(ctx: AudioContext, duration: number): AudioBuffer {
@@ -30,11 +48,32 @@ function createNoiseBuffer(ctx: AudioContext, duration: number): AudioBuffer {
   return buffer;
 }
 
+function layerDest(
+  ctx: AudioContext,
+  fx: AllLayerFX | undefined,
+  mixer: AllMixerState | undefined,
+  layer: keyof AllLayerFX,
+): AudioNode {
+  const fader = ctx.createGain();
+  fader.gain.value = mixer ? computeEffectiveGain(layer, mixer) : 0.75;
+  mixerFaders.set(layer, fader);
+  if (fx) {
+    const chain = buildFXChain(ctx, fx[layer]);
+    activeChainOutputs.add(chain.output);
+    fader.connect(chain.input);
+  } else {
+    fader.connect(ctx.destination);
+  }
+  return fader;
+}
+
 export async function playAll(
   tracks: { melody?: NoteEvent[]; chords?: NoteEvent[]; bass?: NoteEvent[]; drums?: NoteEvent[] },
   bpm: number,
   genre: string,
   onComplete?: () => void,
+  allFX?: AllLayerFX,
+  mixer?: AllMixerState,
 ) {
   stopPlayAll();
   const ctx = getAudioContext();
@@ -48,15 +87,15 @@ export async function playAll(
 
   const spb = 60 / Math.max(60, Math.min(200, bpm));
 
-  // Resolve slug — if non-null, load sample set; otherwise use soundfont
   const slug = resolveSampleSetSlug(genre);
   const sampleSet = slug ? await loadSampleSet(slug) : null;
 
   const now = ctx.currentTime + 0.05;
   let maxEnd = 0;
 
-  // ─── MELODY ────────────────────────────────────────────────────────────────
+  // ─── MELODY ──────────────────────────────────────────────────────────────────
   if (tracks.melody?.length) {
+    const dest = layerDest(ctx, allFX, mixer, 'melody');
     if (sampleSet) {
       for (const n of tracks.melody) {
         const t      = now + n.startTime * spb;
@@ -69,7 +108,7 @@ export async function playAll(
         src.detune.value   = detune;
         gain.gain.value    = vel;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         src.stop(t + d);
         activeSources.add(src);
@@ -88,8 +127,9 @@ export async function playAll(
     }
   }
 
-  // ─── CHORDS ────────────────────────────────────────────────────────────────
+  // ─── CHORDS ──────────────────────────────────────────────────────────────────
   if (tracks.chords?.length) {
+    const dest = layerDest(ctx, allFX, mixer, 'chords');
     if (sampleSet) {
       for (const n of tracks.chords) {
         const t      = now + n.startTime * spb;
@@ -102,7 +142,7 @@ export async function playAll(
         src.detune.value   = detune;
         gain.gain.value    = vel;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         src.stop(t + d);
         activeSources.add(src);
@@ -121,8 +161,9 @@ export async function playAll(
     }
   }
 
-  // ─── BASS ──────────────────────────────────────────────────────────────────
+  // ─── BASS ────────────────────────────────────────────────────────────────────
   if (tracks.bass?.length) {
+    const dest = layerDest(ctx, allFX, mixer, 'bass');
     if (sampleSet) {
       for (const n of tracks.bass) {
         const t      = now + n.startTime * spb;
@@ -135,7 +176,7 @@ export async function playAll(
         src.detune.value   = detune;
         gain.gain.value    = vel;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         src.stop(t + d);
         activeSources.add(src);
@@ -154,8 +195,9 @@ export async function playAll(
     }
   }
 
-  // ─── DRUMS ─────────────────────────────────────────────────────────────────
+  // ─── DRUMS ───────────────────────────────────────────────────────────────────
   if (tracks.drums?.length) {
+    const dest = layerDest(ctx, allFX, mixer, 'drums');
     if (sampleSet) {
       for (const n of tracks.drums) {
         const t = now + n.startTime * spb;
@@ -177,14 +219,13 @@ export async function playAll(
         src.buffer      = buf;
         gain.gain.value = v;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         activeSources.add(src);
         src.onended = () => activeSources.delete(src);
         maxEnd = Math.max(maxEnd, n.startTime * spb + 0.5);
       }
     } else {
-      // Synthesized drums — Web Audio API only
       for (const n of tracks.drums) {
         const t       = now + n.startTime * spb;
         const isKick  = n.pitch === 36 || n.pitch === 35;
@@ -199,7 +240,7 @@ export async function playAll(
           gain.gain.setValueAtTime(0.7, t);
           gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(dest);
           osc.start(t);
           osc.stop(t + 0.3);
           activeSources.add(osc);
@@ -212,7 +253,7 @@ export async function playAll(
           gain.gain.setValueAtTime(0.4, t);
           gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
           src.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(dest);
           src.start(t);
           activeSources.add(src);
           src.onended = () => activeSources.delete(src);
@@ -221,14 +262,14 @@ export async function playAll(
           const src    = ctx.createBufferSource();
           const filter = ctx.createBiquadFilter();
           const gain   = ctx.createGain();
-          filter.type          = 'highpass';
+          filter.type            = 'highpass';
           filter.frequency.value = 8000;
           src.buffer = noiseBuffer;
           gain.gain.setValueAtTime(0.3, t);
           gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
           src.connect(filter);
           filter.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(dest);
           src.start(t);
           activeSources.add(src);
           src.onended = () => activeSources.delete(src);
@@ -243,5 +284,4 @@ export async function playAll(
   }
 }
 
-// Keep midiToNote exported for any consumers that relied on it
 export { midiToNote };

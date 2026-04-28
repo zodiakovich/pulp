@@ -3,6 +3,8 @@
  * Does not import music-engine.ts, midi-writer.ts, or audio-engine.ts.
  */
 import type { NoteEvent } from '@/lib/music-engine';
+import type { AllLayerFX, LayerFXSettings } from './fx-settings';
+import type { AllMixerState } from './mixer-settings';
 
 type PlayAllMod = typeof import('./tone-play-all');
 type PreviewMod = typeof import('./tone-preview');
@@ -24,14 +26,20 @@ export function stopPlayAll() {
   playAllMod?.stopPlayAll();
 }
 
+export function updateAllMixer(mixer: AllMixerState) {
+  playAllMod?.updateAllMixer(mixer);
+}
+
 export async function playAll(
   tracks: { melody?: NoteEvent[]; chords?: NoteEvent[]; bass?: NoteEvent[]; drums?: NoteEvent[] },
   bpm: number,
   genre: string,
   onComplete?: () => void,
+  allFX?: AllLayerFX,
+  mixer?: AllMixerState,
 ) {
   const m = await ensurePlayAll();
-  return m.playAll(tracks, bpm, genre, onComplete);
+  return m.playAll(tracks, bpm, genre, onComplete, allFX, mixer);
 }
 
 export function stopTonePreview() {
@@ -47,7 +55,9 @@ export async function playTonePreview(
   genre: string,
   onComplete?: () => void,
   instrument?: string,
+  fx?: LayerFXSettings,
+  volume?: number,
 ) {
   const m = await ensurePreview();
-  return m.playTonePreview(notes, bpm, layer, genre, onComplete, instrument);
+  return m.playTonePreview(notes, bpm, layer, genre, onComplete, instrument, fx, volume);
 }

@@ -1,4 +1,6 @@
 import type { NoteEvent } from '@/lib/music-engine';
+import type { LayerFXSettings } from './fx-settings';
+import { buildFXChain } from './fx-chain';
 import { getAudioContext } from './audio-context';
 import { loadSampleSet, midiToDetune } from './sample-engine';
 import { getInstrument, playNote } from './soundfont-engine';
@@ -13,12 +15,17 @@ function midiToNoteName(midi: number): string {
 }
 
 const activeSources = new Set<AudioBufferSourceNode | OscillatorNode>();
+const activeChainOutputs = new Set<AudioNode>();
 
 export function stopTonePreview() {
   for (const src of activeSources) {
     try { src.stop(); } catch { /* ignore */ }
   }
   activeSources.clear();
+  for (const out of activeChainOutputs) {
+    try { out.disconnect(); } catch { /* ignore */ }
+  }
+  activeChainOutputs.clear();
 }
 
 export type TonePreviewLayer = 'melody' | 'chords' | 'bass' | 'drums';
@@ -40,6 +47,8 @@ export async function playTonePreview(
   genre: string,
   onComplete?: () => void,
   instrument?: string,
+  fx?: LayerFXSettings,
+  volume = 1,
 ) {
   stopTonePreview();
   const ctx = getAudioContext();
@@ -50,14 +59,19 @@ export async function playTonePreview(
   }
 
   const secondsPerBeat = 60 / Math.max(60, Math.min(200, bpm));
-
-  // Resolve slug — if non-null, load sample set; otherwise use soundfont
   const slug = resolveSampleSetSlug(genre);
   const sampleSet = slug ? await loadSampleSet(slug) : null;
-
   const now = ctx.currentTime + 0.05;
 
-  // ─── MELODY ────────────────────────────────────────────────────────────────
+  // Build a single FX chain for this preview call (sample-based path only)
+  let dest: AudioNode = ctx.destination;
+  if (fx && sampleSet) {
+    const chain = buildFXChain(ctx, fx);
+    activeChainOutputs.add(chain.output);
+    dest = chain.input;
+  }
+
+  // ─── MELODY ──────────────────────────────────────────────────────────────────
   if (layer === 'melody') {
     let maxEnd = 0;
     if (sampleSet) {
@@ -70,9 +84,9 @@ export async function playTonePreview(
         const gain   = ctx.createGain();
         src.buffer         = sampleSet.lead;
         src.detune.value   = detune;
-        gain.gain.value    = vel;
+        gain.gain.value    = vel * volume;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         src.stop(t + d);
         activeSources.add(src);
@@ -85,17 +99,15 @@ export async function playTonePreview(
         const t   = now + note.startTime * secondsPerBeat;
         const d   = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
         const vel = note.velocity / 127;
-        playNote(inst, Math.max(24, Math.min(108, note.pitch)), t, d, vel);
+        playNote(inst, Math.max(24, Math.min(108, note.pitch)), t, d, vel * volume);
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     }
-    if (onComplete) {
-      window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
-    }
+    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
     return;
   }
 
-  // ─── CHORDS ────────────────────────────────────────────────────────────────
+  // ─── CHORDS ──────────────────────────────────────────────────────────────────
   if (layer === 'chords') {
     let maxEnd = 0;
     if (sampleSet) {
@@ -108,9 +120,9 @@ export async function playTonePreview(
         const gain   = ctx.createGain();
         src.buffer         = sampleSet.pad;
         src.detune.value   = detune;
-        gain.gain.value    = vel;
+        gain.gain.value    = vel * volume;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         src.stop(t + d);
         activeSources.add(src);
@@ -123,17 +135,15 @@ export async function playTonePreview(
         const t   = now + note.startTime * secondsPerBeat;
         const d   = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
         const vel = note.velocity / 127;
-        playNote(inst, Math.max(24, Math.min(108, note.pitch)), t, d, vel);
+        playNote(inst, Math.max(24, Math.min(108, note.pitch)), t, d, vel * volume);
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     }
-    if (onComplete) {
-      window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
-    }
+    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
     return;
   }
 
-  // ─── BASS ──────────────────────────────────────────────────────────────────
+  // ─── BASS ────────────────────────────────────────────────────────────────────
   if (layer === 'bass') {
     let maxEnd = 0;
     if (sampleSet) {
@@ -146,9 +156,9 @@ export async function playTonePreview(
         const gain   = ctx.createGain();
         src.buffer         = sampleSet.bass;
         src.detune.value   = detune;
-        gain.gain.value    = vel;
+        gain.gain.value    = vel * volume;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         src.stop(t + d);
         activeSources.add(src);
@@ -161,23 +171,21 @@ export async function playTonePreview(
         const t   = now + note.startTime * secondsPerBeat;
         const d   = Math.max(0.1, note.duration * secondsPerBeat * 0.9);
         const vel = note.velocity / 127;
-        playNote(inst, Math.max(24, Math.min(108, note.pitch)), t, d, vel);
+        playNote(inst, Math.max(24, Math.min(108, note.pitch)), t, d, vel * volume);
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     }
-    if (onComplete) {
-      window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
-    }
+    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
     return;
   }
 
-  // ─── DRUMS ─────────────────────────────────────────────────────────────────
+  // ─── DRUMS ───────────────────────────────────────────────────────────────────
   if (layer === 'drums') {
     let maxEnd = 0;
     if (sampleSet) {
       for (const note of notes) {
         const t        = now + note.startTime * secondsPerBeat;
-        const v        = Math.max(0.05, Math.min(1, note.velocity / 127));
+        const v        = Math.max(0.05, Math.min(1, note.velocity / 127)) * volume;
         const isKick   = note.pitch === 36 || note.pitch === 35;
         const isSnare  = note.pitch === 38 || note.pitch === 40;
         const isOpen   = note.pitch === 46;
@@ -195,19 +203,16 @@ export async function playTonePreview(
         src.buffer      = buf;
         gain.gain.value = v;
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         activeSources.add(src);
         src.onended = () => activeSources.delete(src);
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + 0.5);
       }
-      if (onComplete) {
-        window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 1) * 1000);
-      }
+      if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 1) * 1000);
       return;
     }
 
-    // Synthesized drums — Web Audio API only
     for (const note of notes) {
       const t       = now + note.startTime * secondsPerBeat;
       const isKick  = note.pitch === 36 || note.pitch === 35;
@@ -222,7 +227,7 @@ export async function playTonePreview(
         gain.gain.setValueAtTime(0.7, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         osc.start(t);
         osc.stop(t + 0.3);
         activeSources.add(osc);
@@ -235,7 +240,7 @@ export async function playTonePreview(
         gain.gain.setValueAtTime(0.4, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
         src.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         activeSources.add(src);
         src.onended = () => activeSources.delete(src);
@@ -251,18 +256,15 @@ export async function playTonePreview(
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
         src.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         src.start(t);
         activeSources.add(src);
         src.onended = () => activeSources.delete(src);
       }
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + 0.5);
     }
-    if (onComplete) {
-      window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 1) * 1000);
-    }
+    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 1) * 1000);
   }
 }
 
-// Keep midiToNoteName exported for any consumers that relied on it
 export { midiToNoteName };
