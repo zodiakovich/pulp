@@ -1,15 +1,14 @@
 'use client';
 
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/EmptyState';
 import { ScrollReveal } from '@/components/ScrollReveal';
+import { CustomSelect } from '@/components/CustomSelect';
 import { supabase } from '@/lib/supabase';
 import { playAll, stopPlayAll } from '@/lib/tone-lazy';
 import type { GenerationResult } from '@/lib/music-engine';
-
-const EXPLORE_GENRES = ['All', 'Tech House', 'Afro House', 'Melodic Techno', 'Deep House', 'Hard Techno', 'Melodic House', 'Techno', 'Trance', 'Drum & Bass'] as const;
 
 type GalleryItem = {
   id: string;
@@ -18,10 +17,13 @@ type GalleryItem = {
   genreLabel: string;
   bpm: number;
   style_tag: string | null;
+  tags: string[] | null;
   created_at: string;
   timeAgo: string;
   isExample: boolean;
 };
+
+// ─── ICONS ────────────────────────────────────────────────────────
 
 function MusicEmptyIcon() {
   return (
@@ -32,8 +34,6 @@ function MusicEmptyIcon() {
     </svg>
   );
 }
-
-// ─── PLAY BUTTON ICONS ────────────────────────────────────────────
 
 function PlayIcon() {
   return (
@@ -61,6 +61,22 @@ function SpinnerIcon() {
   );
 }
 
+function FilterIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path d="M1 2.5h12M3 7h8M5 11.5h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+      <path d="M2 2l6 6M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ─── EXPLORE CARD ─────────────────────────────────────────────────
 
 function ExploreCard({
@@ -83,7 +99,6 @@ function ExploreCard({
   const durationRef = useRef<number>(16);
   const router = useRouter();
 
-  // Clean up when this card stops being the active one
   useEffect(() => {
     if (!isPlaying) {
       if (intervalRef.current) {
@@ -111,7 +126,6 @@ function ExploreCard({
       return;
     }
 
-    // Signal parent to stop any currently playing card and mark this one active
     onRequestPlay(item.id);
     setLoading(true);
     setProgress(0);
@@ -130,8 +144,6 @@ function ExploreCard({
       }
 
       const layers = data.layers as GenerationResult;
-
-      // Estimate total duration from the note data
       const allNotes = [
         ...(layers.melody ?? []),
         ...(layers.chords ?? []),
@@ -146,7 +158,6 @@ function ExploreCard({
       startTimeRef.current = Date.now();
       setLoading(false);
 
-      // Tick progress
       intervalRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTimeRef.current) / 1000;
         setProgress(Math.min(elapsed / durationRef.current, 1));
@@ -193,7 +204,6 @@ function ExploreCard({
         onMouseEnter={e => { if (!isPlaying) e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)'; }}
         onMouseLeave={e => { if (!isPlaying) e.currentTarget.style.borderColor = 'var(--border)'; }}
       >
-        {/* Card body — clicking navigates to the generation detail page */}
         <Link
           href={href}
           className="block p-6"
@@ -250,6 +260,20 @@ function ExploreCard({
                     {item.style_tag}
                   </span>
                 )}
+                {item.tags && item.tags.slice(0, 3).map(tag => (
+                  <span
+                    key={tag}
+                    className="px-2 py-1 rounded-md text-xs"
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      color: '#8A8A9A',
+                      background: '#1A1A2E',
+                      border: '1px solid #1A1A2E',
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
               </div>
 
               <div className="mt-4">
@@ -285,7 +309,6 @@ function ExploreCard({
           </div>
         </Link>
 
-        {/* Play / pause button — bottom-left, does not navigate */}
         <button
           type="button"
           onClick={handlePlayClick}
@@ -313,7 +336,6 @@ function ExploreCard({
           {loading ? <SpinnerIcon /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
         </button>
 
-        {/* Progress bar — 2px at the very bottom of the card */}
         <div
           style={{
             position: 'absolute',
@@ -339,26 +361,161 @@ function ExploreCard({
   );
 }
 
+// ─── HELPERS ──────────────────────────────────────────────────────
+
+function formatTimeAgo(createdAt: string): string {
+  const ms = Date.now() - new Date(createdAt).getTime();
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+// ─── ACTIVE FILTER PILL ───────────────────────────────────────────
+
+function FilterPill({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      className="inline-flex items-center gap-1.5 flex-shrink-0"
+      style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: 11,
+        color: 'var(--accent)',
+        background: 'rgba(255,109,63,0.1)',
+        border: '1px solid rgba(255,109,63,0.3)',
+        borderRadius: 20,
+        padding: '3px 8px',
+        cursor: 'pointer',
+        outline: 'none',
+        transition: 'background 150ms',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,109,63,0.18)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,109,63,0.1)')}
+    >
+      {label}
+      <XIcon />
+    </button>
+  );
+}
+
 // ─── EXPLORE GALLERY ──────────────────────────────────────────────
 
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+];
+
 export function ExploreGallery({
-  items,
+  items: initialItems,
   genres,
 }: {
   items: GalleryItem[];
   genres: Array<{ key: string; name: string }>;
 }) {
-  const [selectedGenre, setSelectedGenre] = useState<(typeof EXPLORE_GENRES)[number]>('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [items, setItems] = useState<GalleryItem[]>(initialItems);
+  const [loading, setLoading] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const filteredGenerations = useMemo(() => {
-    return items.filter(g => {
-      const matchesGenre = selectedGenre === 'All' || (g.genreLabel ?? '').toLowerCase().includes(selectedGenre.toLowerCase());
-      const matchesSearch = !searchQuery || (g.prompt ?? '').toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesGenre && matchesSearch;
-    });
-  }, [items, selectedGenre, searchQuery]);
+  // Filter state
+  const [search, setSearch] = useState('');
+  const [genre, setGenre] = useState('');
+  const [bpmMin, setBpmMin] = useState('');
+  const [bpmMax, setBpmMax] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
+  const [tagFilter, setTagFilter] = useState('');
+
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSearchRef = useRef(search);
+
+  const genreOptions = [
+    { value: '', label: 'All genres' },
+    ...genres.map(g => ({ value: g.key, label: g.name })),
+  ];
+
+  // ─── FETCH ──────────────────────────────────────────────────────
+
+  const fetchItems = useCallback(async (opts: {
+    search: string;
+    genre: string;
+    bpmMin: string;
+    bpmMax: string;
+    sortBy: string;
+    tagFilter: string;
+  }) => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('generations')
+        .select('id, prompt, genre, bpm, style_tag, tags, created_at')
+        .eq('is_public', true)
+        .order('created_at', { ascending: opts.sortBy === 'oldest' })
+        .limit(100);
+
+      if (opts.search.trim()) {
+        query = query.ilike('prompt', `%${opts.search.trim()}%`);
+      }
+      if (opts.genre) {
+        query = query.eq('genre', opts.genre);
+      }
+      if (opts.bpmMin !== '' && !isNaN(Number(opts.bpmMin))) {
+        query = query.gte('bpm', Number(opts.bpmMin));
+      }
+      if (opts.bpmMax !== '' && !isNaN(Number(opts.bpmMax))) {
+        query = query.lte('bpm', Number(opts.bpmMax));
+      }
+      if (opts.tagFilter) {
+        query = query.contains('tags', [opts.tagFilter]);
+      }
+
+      const { data } = await query;
+      const rows = data ?? [];
+      setItems(rows.map(row => ({
+        id: row.id as string,
+        prompt: (row.prompt as string | null) ?? null,
+        genreKey: (row.genre as string) ?? '—',
+        genreLabel: genres.find(g => g.key === row.genre)?.name ?? ((row.genre as string) ?? '—'),
+        bpm: (row.bpm as number) ?? 0,
+        style_tag: (row.style_tag as string | null) ?? null,
+        tags: (row.tags as string[] | null) ?? null,
+        created_at: row.created_at as string,
+        timeAgo: formatTimeAgo(row.created_at as string),
+        isExample: false,
+      })));
+    } finally {
+      setLoading(false);
+    }
+  }, [genres]);
+
+  // Trigger fetch whenever non-search filters change immediately
+  useEffect(() => {
+    fetchItems({ search: pendingSearchRef.current, genre, bpmMin, bpmMax, sortBy, tagFilter });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genre, bpmMin, bpmMax, sortBy, tagFilter]);
+
+  // Debounce search separately
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    pendingSearchRef.current = value;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchItems({ search: value, genre, bpmMin, bpmMax, sortBy, tagFilter });
+    }, 320);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
+  // ─── PLAYBACK ───────────────────────────────────────────────────
 
   const handleRequestPlay = useCallback((id: string) => {
     if (playingId && playingId !== id) stopPlayAll();
@@ -369,76 +526,240 @@ export function ExploreGallery({
     setPlayingId(prev => (prev === id ? null : prev));
   }, []);
 
-  const isFiltered = searchQuery.length > 0 || selectedGenre !== 'All';
-  const emptyTitle = isFiltered ? 'No patterns match your filter' : 'Nothing here yet';
-  const emptySubtitle = isFiltered ? 'Try a different genre or search term' : 'Be the first to share a generation';
+  // ─── FILTER PILLS ───────────────────────────────────────────────
+
+  const activePills: { label: string; clear: () => void }[] = [];
+  if (search.trim()) activePills.push({ label: `"${search.trim()}"`, clear: () => handleSearchChange('') });
+  if (genre) activePills.push({ label: genres.find(g => g.key === genre)?.name ?? genre, clear: () => setGenre('') });
+  if (bpmMin) activePills.push({ label: `BPM ≥ ${bpmMin}`, clear: () => setBpmMin('') });
+  if (bpmMax) activePills.push({ label: `BPM ≤ ${bpmMax}`, clear: () => setBpmMax('') });
+  if (tagFilter) activePills.push({ label: tagFilter, clear: () => setTagFilter('') });
+
+  const hasActiveFilters = activePills.length > 0;
+
+  // ─── INPUT STYLE ────────────────────────────────────────────────
+
+  const inputStyle: React.CSSProperties = {
+    fontFamily: 'JetBrains Mono, monospace',
+    fontSize: 12,
+    color: 'var(--text)',
+    background: '#111118',
+    border: '1px solid #1A1A2E',
+    borderRadius: 8,
+    padding: '6px 10px',
+    outline: 'none',
+    height: 36,
+    transition: 'border-color 150ms',
+  };
 
   return (
-    <div className="max-w-[1280px] mx-auto px-8">
-      {/* Filter bar */}
-      <div
-        className="mt-20 mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 16 }}
-      >
-        <div>
-          <h1
-            className="font-extrabold text-gradient"
-            style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 32, letterSpacing: '-0.02em', lineHeight: 1.15 }}
-          >
-            Explore
-          </h1>
-          <p style={{ color: 'var(--foreground-muted)', fontSize: 14, marginTop: 8 }}>
-            A public gallery of recent generations.
-          </p>
-        </div>
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-8">
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search prompts..."
-              className="input-field"
-              style={{ height: 40, fontSize: 13, maxWidth: 280 }}
-            />
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
-              {filteredGenerations.length} patterns
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="mt-20 mb-6">
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <h1
+              className="font-extrabold text-gradient"
+              style={{
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 700,
+                fontSize: 32,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.15,
+              }}
+            >
+              Explore
+            </h1>
+            <p style={{ color: 'var(--foreground-muted)', fontSize: 14, marginTop: 8 }}>
+              A public gallery of recent generations.
             </p>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-            {EXPLORE_GENRES.map(genre => (
-              <button
-                key={genre}
-                onClick={() => setSelectedGenre(genre)}
-                className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs transition-all"
+          {/* Mobile filter toggle */}
+          <button
+            type="button"
+            className="flex sm:hidden items-center gap-2"
+            onClick={() => setFiltersOpen(v => !v)}
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 12,
+              color: hasActiveFilters ? 'var(--accent)' : 'var(--muted)',
+              background: hasActiveFilters ? 'rgba(255,109,63,0.1)' : 'var(--surface)',
+              border: hasActiveFilters ? '1px solid rgba(255,109,63,0.3)' : '1px solid var(--border)',
+              borderRadius: 8,
+              padding: '6px 12px',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <FilterIcon />
+            Filters
+            {hasActiveFilters && (
+              <span
                 style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  border: selectedGenre === genre ? '1px solid rgba(255,109,63,0.45)' : '1px solid var(--border)',
-                  background: selectedGenre === genre ? 'rgba(255,109,63,0.1)' : 'transparent',
-                  color: selectedGenre === genre ? 'var(--accent)' : 'var(--foreground-muted)',
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  background: '#FF6D3F',
+                  color: '#fff',
+                  fontSize: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
                 }}
               >
-                {genre}
-              </button>
-            ))}
-          </div>
+                {activePills.length}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* ── Filter bar ──────────────────────────────────────────── */}
+        <div
+          className={[
+            'mt-5 flex-col gap-3 sm:flex sm:flex-row sm:items-center sm:flex-wrap',
+            filtersOpen ? 'flex' : 'hidden sm:flex',
+          ].join(' ')}
+        >
+          {/* Search */}
+          <input
+            type="text"
+            value={search}
+            onChange={e => handleSearchChange(e.target.value)}
+            placeholder="Search prompts..."
+            style={{ ...inputStyle, width: '100%', maxWidth: 280 }}
+            onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
+            onBlur={e => (e.currentTarget.style.borderColor = '#1A1A2E')}
+          />
+
+          {/* Genre */}
+          <CustomSelect
+            value={genre}
+            onChange={setGenre}
+            options={genreOptions}
+            style={{ minWidth: 148, fontSize: 12 }}
+          />
+
+          {/* BPM range */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={bpmMin}
+              onChange={e => setBpmMin(e.target.value)}
+              placeholder="BPM min"
+              min={60}
+              max={200}
+              style={{ ...inputStyle, width: 88 }}
+              onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
+              onBlur={e => (e.currentTarget.style.borderColor = '#1A1A2E')}
+            />
+            <span style={{ color: 'var(--muted)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>–</span>
+            <input
+              type="number"
+              value={bpmMax}
+              onChange={e => setBpmMax(e.target.value)}
+              placeholder="BPM max"
+              min={60}
+              max={200}
+              style={{ ...inputStyle, width: 88 }}
+              onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
+              onBlur={e => (e.currentTarget.style.borderColor = '#1A1A2E')}
+            />
+          </div>
+
+          {/* Sort */}
+          <CustomSelect
+            value={sortBy}
+            onChange={setSortBy}
+            options={SORT_OPTIONS}
+            style={{ minWidth: 140, fontSize: 12 }}
+          />
+
+          {/* Tags */}
+          <CustomSelect
+            value={tagFilter}
+            onChange={setTagFilter}
+            options={[
+              { value: '', label: 'All tags' },
+              { value: 'low energy', label: 'Low energy' },
+              { value: 'mid energy', label: 'Mid energy' },
+              { value: 'high energy', label: 'High energy' },
+              { value: 'dark', label: 'Dark' },
+              { value: 'euphoric', label: 'Euphoric' },
+              { value: 'chill', label: 'Chill' },
+              { value: 'groovy', label: 'Groovy' },
+              { value: 'minimal', label: 'Minimal' },
+              { value: 'moderate', label: 'Moderate' },
+              { value: 'complex', label: 'Complex' },
+            ]}
+            style={{ minWidth: 130, fontSize: 12 }}
+          />
+
+          {/* Result count */}
+          <span
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 11,
+              color: 'var(--muted)',
+              marginLeft: 'auto',
+              flexShrink: 0,
+            }}
+          >
+            {loading ? '…' : `${items.length} patterns`}
+          </span>
+        </div>
+
+        {/* ── Active filter pills ──────────────────────────────────── */}
+        {activePills.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {activePills.map(pill => (
+              <FilterPill key={pill.label} label={pill.label} onRemove={pill.clear} />
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                handleSearchChange('');
+                setGenre('');
+                setBpmMin('');
+                setBpmMax('');
+                setTagFilter('');
+              }}
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                color: 'var(--muted)',
+                background: 'transparent',
+                border: 'none',
+                padding: '3px 4px',
+                cursor: 'pointer',
+                outline: 'none',
+                transition: 'color 150ms',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+            >
+              Clear all
+            </button>
+          </div>
+        )}
+
+        <div className="mt-5" style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />
       </div>
 
-      {/* Grid */}
+      {/* ── Grid ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
-        {filteredGenerations.length === 0 && (
+        {!loading && items.length === 0 && (
           <EmptyState
             icon={<MusicEmptyIcon />}
-            title={emptyTitle}
-            subtitle={emptySubtitle}
-            actionLabel={isFiltered ? undefined : 'Start generating'}
-            actionHref={isFiltered ? undefined : '/'}
+            title={hasActiveFilters ? 'No patterns match your filters' : 'Nothing here yet'}
+            subtitle={hasActiveFilters ? 'Try adjusting the filters above' : 'Be the first to share a generation'}
+            actionLabel={hasActiveFilters ? undefined : 'Start generating'}
+            actionHref={hasActiveFilters ? undefined : '/'}
           />
         )}
-        {filteredGenerations.map((item, idx) => (
+        {items.map((item, idx) => (
           <ExploreCard
             key={item.id}
             item={item}

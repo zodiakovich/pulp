@@ -32,7 +32,7 @@ export default async function ExplorePage() {
     ? { data: [] as any[] }
     : await supabase
       .from('generations')
-      .select('id, prompt, genre, bpm, style_tag, created_at')
+      .select('id, prompt, genre, bpm, style_tag, tags, created_at')
       .eq('is_public', true)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -44,6 +44,7 @@ export default async function ExplorePage() {
     genreLabel: GENRES[(row.genre as string) ?? '']?.name ?? ((row.genre as string) ?? '—'),
     bpm: (row.bpm as number) ?? 0,
     style_tag: (row.style_tag as string | null) ?? null,
+    tags: (row.tags as string[] | null) ?? null,
     created_at: row.created_at as string,
     timeAgo: formatTimeAgo(row.created_at as string),
     isExample: false,

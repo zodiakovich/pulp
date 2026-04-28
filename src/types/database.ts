@@ -17,6 +17,8 @@ export interface GenerationRow {
   is_public: boolean;
   /** Whether the user has starred/favorited this generation. */
   is_favorite: boolean;
+  /** Auto-generated descriptive tags (energy, mood, complexity). */
+  tags: string[] | null;
   created_at: string;
 }
 
@@ -25,4 +27,5 @@ export type GenerationInsert = Omit<GenerationRow, 'id' | 'created_at' | 'is_pub
   is_public?: boolean;
   is_favorite?: boolean;
   inspiration_source?: string | null;
+  tags?: string[] | null;
 };

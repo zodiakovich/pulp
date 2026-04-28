@@ -12,7 +12,14 @@ import {
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { playNotesWithMix as playNotes, renderNotesWithMixToWav, stopAllPlayback } from '@/lib/mix-engine';
-import { playAll, stopPlayAll, playTonePreview, stopTonePreview } from '@/lib/tone-lazy';
+import { playAll, stopPlayAll, playTonePreview, stopTonePreview, updateAllMixer } from '@/lib/tone-lazy';
+import { applyHumanization } from '@/lib/humanize';
+import type { LayerFXSettings, AllLayerFX } from '@/lib/fx-settings';
+import { DEFAULT_FX } from '@/lib/fx-settings';
+import type { AllMixerState, MixerLayerState } from '@/lib/mixer-settings';
+import { makeDefaultMixer, computeEffectiveGain } from '@/lib/mixer-settings';
+import { generateAutoTags } from '@/lib/auto-tags';
+import { MatchSoundsPanel } from '@/components/MatchSoundsPanel';
 import { getAfroHouseSampleOptions, setAfroHouseOverride, type AfroHouseSlot, type AfroHouseSampleOptions } from '@/lib/afro-house-samples';
 import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { track } from '@vercel/analytics';
@@ -32,6 +39,10 @@ import { CustomSelect } from '@/components/CustomSelect';
 
 const PianoRollEditor = dynamic(
   () => import('@/components/PianoRollEditor').then(m => ({ default: m.PianoRollEditor })),
+  { ssr: false },
+);
+const StepSequencer = dynamic(
+  () => import('@/components/StepSequencer').then(m => ({ default: m.StepSequencer })),
   { ssr: false },
 );
 const OnboardingOverlay = dynamic(
@@ -529,6 +540,14 @@ const DEFAULT_LAYER_INSTRUMENTS: Record<string, string> = {
   bass:   'electric_bass_finger',
 };
 
+function reverseNotes(notes: NoteEvent[]): NoteEvent[] {
+  if (notes.length === 0) return notes;
+  const totalDuration = Math.max(...notes.map(n => n.startTime + n.duration));
+  return notes
+    .map(n => ({ ...n, startTime: totalDuration - (n.startTime + n.duration) }))
+    .sort((a, b) => a.startTime - b.startTime);
+}
+
 function makeDraggableMidi(notes: NoteEvent[], bpm: number, filename: string) {
   const midi = generateMidiFormat0(notes, bpm, filename);
   const ab = new ArrayBuffer(midi.byteLength);
@@ -540,12 +559,25 @@ function makeDraggableMidi(notes: NoteEvent[], bpm: number, filename: string) {
 // ─── LAYER CARD ───────────────────────────────────────────────
 function LayerCard({
   name, notes, bpm, genre, enabled, onDownload, onRegenerate, instrument, onInstrumentChange,
+  fxOpen, onFXToggle, onFXChange,
+  volume, muted, soloed, onVolumeChange, onMuteToggle, onSoloToggle,
+  reversed, onReverse,
 }: {
   name: string; notes: NoteEvent[]; bpm: number; genre: string;
   enabled: boolean; onDownload: () => void; onRegenerate: () => void;
   instrument?: string; onInstrumentChange?: (v: string) => void;
+  fxOpen?: boolean; onFXToggle?: () => void; onFXChange?: (fx: LayerFXSettings) => void;
+  volume?: number; muted?: boolean; soloed?: boolean;
+  onVolumeChange?: (v: number) => void; onMuteToggle?: () => void; onSoloToggle?: () => void;
+  reversed?: boolean; onReverse?: () => void;
 }) {
   const [playing, setPlaying] = useState(false);
+  const [fxSettings, setFxSettings] = useState<LayerFXSettings>({ ...DEFAULT_FX });
+  const updateFX = (patch: Partial<LayerFXSettings>) => {
+    const next = { ...fxSettings, ...patch };
+    setFxSettings(next);
+    onFXChange?.(next);
+  };
   const [dragging, setDragging] = useState(false);
   const color = LAYER_COLORS[name] || DS.accent;
   const instrumentOptions = LAYER_INSTRUMENT_OPTIONS[name] ?? [];
@@ -583,7 +615,7 @@ function LayerCard({
   const handlePlay = async () => {
     if (playing) { stopTonePreview(); setPlaying(false); return; }
     setPlaying(true);
-    await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false), instrument);
+    await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false), instrument, fxSettings, (volume ?? 75) / 100);
   };
 
   const compactSelectStyle: React.CSSProperties = { maxWidth: 140, fontSize: 11 };
@@ -695,8 +727,113 @@ function LayerCard({
           >
             ↓
           </button>
+          {/* FX toggle */}
+          <button
+            onClick={onFXToggle}
+            className="h-8 px-2 flex items-center justify-center rounded-lg text-xs transition-all"
+            style={{
+              border: fxOpen ? '1px solid rgba(255,109,63,0.5)' : '1px solid rgba(255,255,255,0.08)',
+              color: fxOpen ? '#FF6D3F' : 'var(--muted)',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              background: fxOpen ? 'rgba(255,109,63,0.08)' : 'transparent',
+              transition: 'border-color 150ms, color 150ms, background 150ms',
+            }}
+            onMouseEnter={e => { if (!fxOpen) { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.35)'; e.currentTarget.style.color = '#FF6D3F'; } }}
+            onMouseLeave={e => { if (!fxOpen) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--muted)'; } }}
+            title="Effects rack"
+          >
+            FX
+          </button>
+          {/* Reverse */}
+          {onReverse && (
+            <button
+              onClick={onReverse}
+              disabled={!enabled || notes.length === 0}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-all disabled:opacity-30"
+              style={{
+                border: reversed ? '1px solid rgba(255,109,63,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                color: reversed ? '#FF6D3F' : 'var(--muted)',
+                background: reversed ? 'rgba(255,109,63,0.08)' : 'transparent',
+                transition: 'border-color 150ms, color 150ms, background 150ms',
+              }}
+              onMouseEnter={e => { if (!reversed) { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.35)'; e.currentTarget.style.color = '#FF6D3F'; } }}
+              onMouseLeave={e => { if (!reversed) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--muted)'; } }}
+              title="Reverse notes"
+            >
+              ↔
+            </button>
+          )}
         </div>
       </div>
+      {/* Mixer row */}
+      {onVolumeChange && (
+        <div className="flex items-center gap-1.5 mt-3 mb-1" onClick={e => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={onMuteToggle}
+            title={muted ? 'Unmute' : 'Mute'}
+            style={{
+              height: 22,
+              padding: '0 7px',
+              borderRadius: 4,
+              border: muted ? '1px solid rgba(255,255,255,0.35)' : '1px solid rgba(255,255,255,0.12)',
+              color: muted ? 'rgba(255,255,255,0.80)' : 'rgba(255,255,255,0.38)',
+              background: muted ? 'rgba(255,255,255,0.10)' : 'transparent',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'border-color 120ms, color 120ms, background 120ms',
+            }}
+          >M</button>
+          <button
+            type="button"
+            onClick={onSoloToggle}
+            title={soloed ? 'Unsolo' : 'Solo'}
+            style={{
+              height: 22,
+              padding: '0 7px',
+              borderRadius: 4,
+              border: soloed ? '1px solid rgba(255,109,63,0.65)' : '1px solid rgba(255,255,255,0.12)',
+              color: soloed ? '#FF6D3F' : 'rgba(255,255,255,0.38)',
+              background: soloed ? 'rgba(255,109,63,0.12)' : 'transparent',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'border-color 120ms, color 120ms, background 120ms',
+            }}
+          >S</button>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={volume ?? 75}
+            onChange={e => onVolumeChange(Number(e.target.value))}
+            className="flex-1"
+            style={{
+              background: `linear-gradient(to right, #FF6D3F ${volume ?? 75}%, #1A1A2E ${volume ?? 75}%)`,
+              opacity: muted ? 0.35 : 1,
+              transition: 'opacity 120ms',
+            }}
+          />
+          <span
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 10,
+              color: muted ? 'rgba(255,255,255,0.25)' : '#FF6D3F',
+              width: 24,
+              textAlign: 'right',
+              flexShrink: 0,
+            }}
+          >{volume ?? 75}</span>
+        </div>
+      )}
       <PianoRoll notes={notes} color={color} />
       <p style={{
         fontFamily: 'JetBrains Mono, monospace',
@@ -708,6 +845,78 @@ function LayerCard({
       }}>
         drag into DAW
       </p>
+
+      {/* FX panel */}
+      {fxOpen && (
+        <div
+          className="mt-3"
+          style={{
+            background: '#111118',
+            border: '1px solid #1A1A2E',
+            borderRadius: 8,
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Reverb */}
+          <div className="flex items-center gap-3">
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', width: 42, flexShrink: 0 }}>
+              Reverb
+            </span>
+            <input
+              type="range" min={0} max={100} step={1}
+              value={fxSettings.reverb}
+              onChange={e => updateFX({ reverb: Number(e.target.value) })}
+              style={{
+                flex: 1,
+                background: `linear-gradient(to right, #FF6D3F ${fxSettings.reverb}%, #1A1A2E ${fxSettings.reverb}%)`,
+              }}
+            />
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--accent)', width: 24, textAlign: 'right', flexShrink: 0 }}>
+              {fxSettings.reverb}
+            </span>
+          </div>
+          {/* Delay */}
+          <div className="flex items-center gap-3">
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', width: 42, flexShrink: 0 }}>
+              Delay
+            </span>
+            <input
+              type="range" min={0} max={100} step={1}
+              value={fxSettings.delay}
+              onChange={e => updateFX({ delay: Number(e.target.value) })}
+              style={{
+                flex: 1,
+                background: `linear-gradient(to right, #FF6D3F ${fxSettings.delay}%, #1A1A2E ${fxSettings.delay}%)`,
+              }}
+            />
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--accent)', width: 24, textAlign: 'right', flexShrink: 0 }}>
+              {fxSettings.delay}
+            </span>
+          </div>
+          {/* Filter */}
+          <div className="flex items-center gap-3">
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', width: 42, flexShrink: 0 }}>
+              Filter
+            </span>
+            <input
+              type="range" min={200} max={20000} step={100}
+              value={fxSettings.filter}
+              onChange={e => updateFX({ filter: Number(e.target.value) })}
+              style={{
+                flex: 1,
+                background: `linear-gradient(to right, #FF6D3F ${((fxSettings.filter - 200) / 19800) * 100}%, #1A1A2E ${((fxSettings.filter - 200) / 19800) * 100}%)`,
+              }}
+            />
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--accent)', width: 32, textAlign: 'right', flexShrink: 0 }}>
+              {fxSettings.filter >= 1000 ? `${Math.round(fxSettings.filter / 1000)}k` : fxSettings.filter}
+            </span>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -1640,6 +1849,7 @@ function HistorySidebar({
     inspiration_source: string | null;
     is_favorite: boolean;
     is_public: boolean;
+    tags: string[] | null;
   }>>([]);
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -1665,7 +1875,7 @@ function HistorySidebar({
       try {
         let q = supabase
           .from('generations')
-          .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite, is_public')
+          .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite, is_public, tags')
           .eq('user_id', userId)
           .order('created_at', { ascending: false });
         if (tab === 'favorites') q = q.eq('is_favorite', true);
@@ -1694,7 +1904,7 @@ function HistorySidebar({
       const to = from + PAGE_SIZE - 1;
       let q = supabase
         .from('generations')
-        .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite')
+        .select('id, prompt, genre, bpm, layers, created_at, inspiration_source, is_favorite, tags')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
       if (tab === 'favorites') q = q.eq('is_favorite', true);
@@ -2056,6 +2266,26 @@ function HistorySidebar({
                       >
                         {formatTimeAgo(ts)}
                       </p>
+                      {/* Auto tags */}
+                      {primary.tags && primary.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {primary.tags.slice(0, 3).map(tag => (
+                            <span
+                              key={tag}
+                              style={{
+                                fontFamily: 'JetBrains Mono, monospace',
+                                fontSize: 9,
+                                color: '#8A8A9A',
+                                background: '#1A1A2E',
+                                border: '1px solid #1A1A2E',
+                                borderRadius: 4,
+                                padding: '1px 5px',
+                                lineHeight: 1.6,
+                              }}
+                            >{tag}</span>
+                          ))}
+                        </div>
+                      )}
                       {/* Variations pill */}
                       {group.length > 1 && (
                         <button
@@ -2552,6 +2782,55 @@ export default function Home() {
   const [playingAll, setPlayingAll] = useState(false);
   const playingAllRef = useRef(false);
   useEffect(() => { playingAllRef.current = playingAll; }, [playingAll]);
+  const [humanize, setHumanize] = useState(30);
+  const humanizeRef = useRef(30);
+  useEffect(() => { humanizeRef.current = humanize; }, [humanize]);
+  const layerFXRef = useRef<AllLayerFX>({
+    melody: { ...DEFAULT_FX },
+    chords: { ...DEFAULT_FX },
+    bass:   { ...DEFAULT_FX },
+    drums:  { ...DEFAULT_FX },
+  });
+  const [openFXLayer, setOpenFXLayer] = useState<string | null>(null);
+  const handleToggleFXPanel = useCallback((layer: string) => {
+    setOpenFXLayer(prev => (prev === layer ? null : layer));
+  }, []);
+  const handleLayerFXChange = useCallback((layer: string, fx: LayerFXSettings) => {
+    layerFXRef.current = { ...layerFXRef.current, [layer]: fx } as AllLayerFX;
+  }, []);
+
+  const mixerRef = useRef<AllMixerState>(makeDefaultMixer());
+  const [mixerUI, setMixerUI] = useState<AllMixerState>(makeDefaultMixer);
+  const handleMixerChange = useCallback((layer: keyof AllMixerState, patch: Partial<MixerLayerState>) => {
+    const next = { ...mixerRef.current, [layer]: { ...mixerRef.current[layer], ...patch } };
+    mixerRef.current = next;
+    setMixerUI(next);
+    updateAllMixer(next);
+  }, []);
+
+  const [matchSoundsPanelOpen, setMatchSoundsPanelOpen] = useState(false);
+  const [reversedLayers, setReversedLayers] = useState<Record<string, boolean>>({});
+  const [preReversalNotes, setPreReversalNotes] = useState<Record<string, NoteEvent[]>>({});
+  const handleReverseLayer = useCallback((layer: typeof LAYERS[number]) => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const currentNotes = sel.result[layer];
+    if (reversedLayers[layer]) {
+      const original = preReversalNotes[layer] ?? currentNotes;
+      setVariations(prev => prev.map((v, i) =>
+        i === selectedVariation ? { ...v, result: { ...v.result, [layer]: original } } : v
+      ));
+      setReversedLayers(prev => ({ ...prev, [layer]: false }));
+      setPreReversalNotes(prev => { const n = { ...prev }; delete n[layer]; return n; });
+    } else {
+      setPreReversalNotes(prev => ({ ...prev, [layer]: currentNotes }));
+      setVariations(prev => prev.map((v, i) =>
+        i === selectedVariation ? { ...v, result: { ...v.result, [layer]: reverseNotes(currentNotes) } } : v
+      ));
+      setReversedLayers(prev => ({ ...prev, [layer]: true }));
+    }
+  }, [variations, selectedVariation, reversedLayers, preReversalNotes]);
+
   const autoPlayPendingRef = useRef(false);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIndex, setCompareIndex] = useState(0);
@@ -2591,7 +2870,9 @@ export default function Home() {
   const [inspirationChips, setInspirationChips] = useState<string[]>([]);
   const lastInspirationSourceRef = useRef<string | null>(null);
   const [isExtending, setIsExtending] = useState(false);
+  const [isFindingSimilar, setIsFindingSimilar] = useState(false);
   const [editorView, setEditorView] = useState<'piano' | 'sheet'>('piano');
+  const [drumsEditorView, setDrumsEditorView] = useState<'piano' | 'step'>('step');
   const [pianoChordStripVisible, setPianoChordStripVisible] = useState(true);
   const [importedNotes, setImportedNotes] = useState<NoteEvent[]>([]);
   const [showAudioToMidiModal, setShowAudioToMidiModal] = useState(false);
@@ -2995,6 +3276,8 @@ export default function Home() {
       setVariationIds(data.variationIds ?? []);
       setVariationPublic((data.variationIds ?? []).map(() => false));
       setActiveStyleTag(null);
+      setReversedLayers({});
+      setPreReversalNotes({});
       setCredits({
         used: data.credits.credits_used,
         limit: data.credits.limit,
@@ -3186,6 +3469,8 @@ export default function Home() {
         { result: gen3, params: p3 },
       ]);
       setSelectedVariation(0);
+      setReversedLayers({});
+      setPreReversalNotes({});
 
       track('generation_created', {
         genre: finalParams.genre,
@@ -3208,6 +3493,7 @@ export default function Home() {
               bpm: p.bpm,
               style_tag: activeStyleTag,
               layers,
+              tags: generateAutoTags(p, layers),
             }).select('id').single();
           const [r1, r2, r3] = await Promise.all([ins(gen1, p1), ins(gen2, p2), ins(gen3, p3)]);
           setVariationIds([r1.data?.id ?? null, r2.data?.id ?? null, r3.data?.id ?? null]);
@@ -3336,21 +3622,26 @@ export default function Home() {
       return;
     }
     setPlayingAll(true);
-    const schedule = () => playAll(
-      {
+    const schedule = () => {
+      const raw = {
         melody: params.layers.melody ? sel.result.melody : undefined,
         chords: params.layers.chords ? sel.result.chords : undefined,
         bass: params.layers.bass ? sel.result.bass : undefined,
         drums: params.layers.drums ? sel.result.drums : undefined,
-      },
-      sel.params.bpm,
-      sel.params.genre,
-      () => {
-        // Loop until user stops.
-        if (!playingAllRef.current) return;
-        schedule();
-      },
-    );
+      };
+      return playAll(
+        applyHumanization(raw, humanizeRef.current, sel.params.bpm),
+        sel.params.bpm,
+        sel.params.genre,
+        () => {
+          // Loop until user stops.
+          if (!playingAllRef.current) return;
+          schedule();
+        },
+        layerFXRef.current,
+        mixerRef.current,
+      );
+    };
     void schedule();
   };
 
@@ -3488,6 +3779,8 @@ export default function Home() {
     setVariations(prev => prev.map((v, i) =>
       i === selectedVariation ? { ...v, result: { ...v.result, [layer]: newGen[layer] } } : v
     ));
+    setReversedLayers(prev => ({ ...prev, [layer]: false }));
+    setPreReversalNotes(prev => { const n = { ...prev }; delete n[layer]; return n; });
   }, [variations, selectedVariation]);
 
   const handleEditorNotesChange = useCallback((layer: typeof LAYERS[number], newNotes: NoteEvent[]) => {
@@ -3540,6 +3833,26 @@ export default function Home() {
     track('midi_downloaded', { genre: p.genre, layer });
     downloadMidi(midi, `pulp-${layer}-${genre.toLowerCase().replace(/\s/g, '-')}-${p.key}${p.scale}.mid`);
   };
+
+  const handleExportChopAll = useCallback((startBeat: number, endBeat: number) => {
+    const sel = variations[selectedVariation];
+    if (!sel) return;
+    const { result: r, params: p } = sel;
+    const chopTrack = (ns: NoteEvent[]) =>
+      ns.filter(n => n.startTime >= startBeat && n.startTime < endBeat)
+        .map(n => ({ ...n, startTime: n.startTime - startBeat }));
+    const tracks: { name: string; notes: NoteEvent[]; channel: number }[] = [];
+    const m = chopTrack(r.melody); if (m.length > 0) tracks.push({ name: 'Melody', notes: m, channel: 0 });
+    const ch = chopTrack(r.chords); if (ch.length > 0) tracks.push({ name: 'Chords', notes: ch, channel: 1 });
+    const b = chopTrack(r.bass);   if (b.length > 0) tracks.push({ name: 'Bass',   notes: b, channel: 2 });
+    const d = chopTrack(r.drums);  if (d.length > 0) tracks.push({ name: 'Drums',  notes: d, channel: 9 });
+    if (!tracks.length) return;
+    const startBar = Math.round(startBeat / 4) + 1;
+    const endBar = Math.round(endBeat / 4);
+    const midi = generateMidiFormat1(tracks, p.bpm);
+    const genre = GENRES[p.genre]?.name || 'track';
+    downloadMidi(midi, `pulp-${genre.toLowerCase().replace(/\s/g, '-')}-bars${startBar}-${endBar}.mid`);
+  }, [variations, selectedVariation]);
 
   const handleDownloadWav = async () => {
     const sel = variations[selectedVariation];
@@ -3643,6 +3956,8 @@ export default function Home() {
     setSelectedVariation(0);
     setPrompt(entry.prompt);
     setShowHistory(false);
+    setReversedLayers({});
+    setPreReversalNotes({});
     toolRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -3824,6 +4139,100 @@ export default function Home() {
       setIsExtending(false);
     }
   }, [variations, selectedVariation, isGenerating, isExtending, toast]);
+
+  const handleFindSimilar = useCallback(async () => {
+    const sel = variations[selectedVariation];
+    if (!sel || isFindingSimilar || isGenerating) return;
+
+    stopPlayAll();
+    stopAllPlayback();
+    setPlayingAll(false);
+    setIsFindingSimilar(true);
+
+    // Keep same genre/key/scale, apply slight BPM drift ±5
+    const bpmDrift = Math.round((Math.random() - 0.5) * 10);
+    const newBpm = Math.max(60, Math.min(200, sel.params.bpm + bpmDrift));
+    const similarParams: GenerationParams = { ...sel.params, bpm: newBpm };
+
+    const newIndex = variations.length;
+
+    try {
+      let newResult: GenerationResult;
+      let finalParams = similarParams;
+
+      if (e2eBypass) {
+        newResult = generateTrack(similarParams);
+      } else {
+        try {
+          const res = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bpm: similarParams.bpm,
+              genre: similarParams.genre,
+              key: similarParams.key,
+              bars: similarParams.bars,
+              prompt: prompt ?? '',
+            }),
+          });
+          if (res.status === 429) {
+            const d = (await res.json().catch(() => ({}))) as { error?: string };
+            if (d.error === 'Monthly limit reached') setShowUpgradeModal(true);
+            throw new Error('rate-limited');
+          }
+          if (!res.ok) throw new Error('generate failed');
+          const data = (await res.json()) as {
+            variations: { result: GenerationResult; params: GenerationParams }[];
+            credits?: { credits_used: number; limit: number; is_pro: boolean; plan_type?: PlanType };
+          };
+          if (data.credits) {
+            setCredits(prev => ({
+              used: data.credits!.credits_used,
+              limit: data.credits!.limit,
+              isPro: data.credits!.is_pro,
+              planType: data.credits!.plan_type ?? prev?.planType ?? (data.credits!.is_pro ? 'pro' : 'free'),
+            }));
+          }
+          newResult = data.variations[0]!.result;
+          finalParams = data.variations[0]!.params ?? similarParams;
+        } catch (e) {
+          if (e instanceof Error && e.message === 'rate-limited') throw e;
+          newResult = generateTrack(similarParams);
+        }
+      }
+
+      setVariations(prev => [...prev, { result: newResult, params: finalParams }]);
+      setVariationIds(prev => [...prev, null]);
+      setVariationPublic(prev => [...prev, false]);
+      setSelectedVariation(newIndex);
+
+      // Persist to Supabase in the background
+      if (!e2eBypass && effectiveIsSignedIn && effectiveUserId) {
+        void supabase.from('generations').insert({
+          user_id: effectiveUserId,
+          prompt: prompt ?? '',
+          genre: finalParams.genre,
+          bpm: finalParams.bpm,
+          style_tag: activeStyleTag,
+          layers: newResult,
+          tags: generateAutoTags(finalParams, newResult),
+        }).select('id').single().then(r => {
+          if (r.data?.id) {
+            setVariationIds(prev => {
+              const next = [...prev];
+              next[newIndex] = r.data!.id ?? null;
+              return next;
+            });
+          }
+        });
+      }
+    } catch {
+      toast.toast('Could not generate similar pattern', 'danger');
+    } finally {
+      setIsFindingSimilar(false);
+    }
+  }, [variations, selectedVariation, isFindingSimilar, isGenerating, e2eBypass, prompt,
+      effectiveIsSignedIn, effectiveUserId, activeStyleTag, supabase, toast]);
 
   const handleCompletePattern = useCallback(() => {
     const seed = selectedLayerNotes;
@@ -6562,6 +6971,25 @@ export default function Home() {
                   <SpotlightButton onClick={() => void handleGenerate()} className="btn-secondary btn-sm" disabled={isGenerating}>
                     ↻  Regenerate
                   </SpotlightButton>
+                  <SpotlightButton
+                    onClick={() => void handleFindSimilar()}
+                    className="btn-secondary btn-sm tip"
+                    data-tip="Same genre, key & vibe — fresh patterns"
+                    disabled={isFindingSimilar || isGenerating}
+                  >
+                    {isFindingSimilar
+                      ? <ButtonLoadingDots label="Finding" />
+                      : (
+                        <span className="flex items-center gap-1.5">
+                          <svg width="13" height="10" viewBox="0 0 13 10" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+                            <circle cx="4.5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.3" />
+                            <circle cx="8.5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.3" />
+                          </svg>
+                          Find Similar
+                        </span>
+                      )
+                    }
+                  </SpotlightButton>
                   {variationIds[selectedVariation] && (
                     <SpotlightButton onClick={() => setShowEmbedModal(true)} className="btn-secondary btn-sm">
                       Embed
@@ -6572,6 +7000,66 @@ export default function Home() {
             </AnimatePresence>
 
             {/* Audio → MIDI is now a Studio modal next to Upload MIDI */}
+
+            {/* Humanize control */}
+            <AnimatePresence>
+              {result && !isGenerating && (
+                <motion.div
+                  className="mb-5 flex items-center gap-3"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: EASE_UI }}
+                >
+                  {/* Waveform icon */}
+                  <svg width="15" height="12" viewBox="0 0 15 12" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+                    <path d="M1 6h1.5M13.5 6H15M3.5 6V3.5M5 6V1.5M6.5 6V4M8 6V2M9.5 6V4.5M11 6V3.5M12.5 6V5"
+                      stroke="#FF6D3F" strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                  <label
+                    htmlFor="humanize-slider"
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                      color: 'var(--text)',
+                      letterSpacing: '0.04em',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      cursor: 'default',
+                    }}
+                  >
+                    Humanize{' '}
+                    <span style={{ color: 'var(--accent)', minWidth: 24, display: 'inline-block' }}>
+                      {humanize}
+                    </span>
+                  </label>
+                  <input
+                    id="humanize-slider"
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={humanize}
+                    onChange={e => setHumanize(Number(e.target.value))}
+                    style={{
+                      width: 160,
+                      flexShrink: 0,
+                      background: `linear-gradient(to right, #FF6D3F ${humanize}%, var(--border) ${humanize}%)`,
+                    }}
+                  />
+                  {humanize === 0 && (
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                      quantized
+                    </span>
+                  )}
+                  {humanize >= 80 && (
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
+                      max feel
+                    </span>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Chord progression (prominent) */}
             <AnimatePresence>
@@ -6638,9 +7126,57 @@ export default function Home() {
                         onDownload={() => handleDownloadLayer(layer, result[layer])}
                         instrument={layerInstruments[layer]}
                         onInstrumentChange={v => setLayerInstruments(prev => ({ ...prev, [layer]: v }))}
+                        fxOpen={openFXLayer === layer}
+                        onFXToggle={() => handleToggleFXPanel(layer)}
+                        onFXChange={fx => handleLayerFXChange(layer, fx)}
+                        volume={mixerUI[layer as keyof AllMixerState].volume}
+                        muted={mixerUI[layer as keyof AllMixerState].muted}
+                        soloed={mixerUI[layer as keyof AllMixerState].soloed}
+                        onVolumeChange={v => handleMixerChange(layer as keyof AllMixerState, { volume: v })}
+                        onMuteToggle={() => handleMixerChange(layer as keyof AllMixerState, { muted: !mixerUI[layer as keyof AllMixerState].muted })}
+                        onSoloToggle={() => handleMixerChange(layer as keyof AllMixerState, { soloed: !mixerUI[layer as keyof AllMixerState].soloed })}
+                        reversed={reversedLayers[layer] ?? false}
+                        onReverse={() => handleReverseLayer(layer as typeof LAYERS[number])}
                       />
                     )
                   )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Match Sounds button */}
+            <AnimatePresence>
+              {result && !isGenerating && (
+                <motion.div
+                  className="mt-4"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.3 }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setMatchSoundsPanelOpen(true)}
+                    className="inline-flex items-center gap-2 text-sm transition-all"
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      padding: '8px 16px',
+                      borderRadius: 10,
+                      border: '1px solid rgba(255,109,63,0.35)',
+                      background: 'rgba(255,109,63,0.08)',
+                      color: '#FF6D3F',
+                      cursor: 'pointer',
+                      letterSpacing: '0.02em',
+                      transition: 'border-color 150ms, background 150ms',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.6)'; e.currentTarget.style.background = 'rgba(255,109,63,0.14)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.35)'; e.currentTarget.style.background = 'rgba(255,109,63,0.08)'; }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+                      <path d="M6.5 1v2M6.5 10v2M1 6.5h2M10 6.5h2M2.93 2.93l1.41 1.41M8.66 8.66l1.41 1.41M2.93 10.07l1.41-1.41M8.66 4.34l1.41-1.41" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                    </svg>
+                    Match Sounds
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -6733,6 +7269,46 @@ export default function Home() {
                           >
                             Sheet Music
                           </button>
+                          {editorLayer === 'drums' && editorView === 'piano' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setDrumsEditorView('piano')}
+                                className="rounded-md transition-all"
+                                style={{
+                                  padding: '8px 12px',
+                                  fontFamily: 'JetBrains Mono, monospace',
+                                  fontSize: 11,
+                                  lineHeight: 1,
+                                  whiteSpace: 'nowrap',
+                                  flexShrink: 0,
+                                  color: drumsEditorView === 'piano' ? 'var(--accent)' : 'var(--muted)',
+                                  background: drumsEditorView === 'piano' ? 'rgba(255,109,63,0.14)' : 'transparent',
+                                  border: drumsEditorView === 'piano' ? '1px solid rgba(255,109,63,0.45)' : '1px solid transparent',
+                                }}
+                              >
+                                Piano Roll
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDrumsEditorView('step')}
+                                className="rounded-md transition-all"
+                                style={{
+                                  padding: '8px 12px',
+                                  fontFamily: 'JetBrains Mono, monospace',
+                                  fontSize: 11,
+                                  lineHeight: 1,
+                                  whiteSpace: 'nowrap',
+                                  flexShrink: 0,
+                                  color: drumsEditorView === 'step' ? 'var(--accent)' : 'var(--muted)',
+                                  background: drumsEditorView === 'step' ? 'rgba(255,109,63,0.14)' : 'transparent',
+                                  border: drumsEditorView === 'step' ? '1px solid rgba(255,109,63,0.45)' : '1px solid transparent',
+                                }}
+                              >
+                                Step Seq
+                              </button>
+                            </>
+                          )}
                         </div>
 
                         <div className="h-6 w-px flex-shrink-0" style={{ background: 'var(--divider)' }} aria-hidden />
@@ -6845,7 +7421,18 @@ export default function Home() {
                   </div>
 
                   {/* Canvas */}
-                  {editorView === 'piano' ? (
+                  {editorView === 'piano' && editorLayer === 'drums' && drumsEditorView === 'step' ? (
+                    <div ref={onboardingPianoRef} style={{ padding: 12 }}>
+                      <StepSequencer
+                        key={`step-${selectedVariation}`}
+                        notes={result?.drums ?? []}
+                        bars={variations[selectedVariation]?.params.bars ?? params.bars}
+                        isPlaying={playingVariationIndex === selectedVariation}
+                        playheadBeat={editorPlayheadBeat}
+                        onNotesChange={newNotes => handleEditorNotesChange('drums', newNotes)}
+                      />
+                    </div>
+                  ) : editorView === 'piano' ? (
                     <div ref={onboardingPianoRef}>
                       <PianoRollEditor
                         key={`${selectedVariation}-${editorLayer}`}
@@ -6866,6 +7453,8 @@ export default function Home() {
                         ]}
                         chordStripVisible={pianoChordStripVisible}
                         onChordStripVisibleChange={setPianoChordStripVisible}
+                        bpm={variations[selectedVariation]?.params.bpm ?? params.bpm}
+                        onExportChopAll={handleExportChopAll}
                         onNotesChange={newNotes => {
                           if (editorLayer === 'imported') setImportedNotes(newNotes);
                           else handleEditorNotesChange(editorLayer, newNotes);
@@ -6953,6 +7542,8 @@ export default function Home() {
                               ]}
                               chordStripVisible={pianoChordStripVisible}
                               onChordStripVisibleChange={setPianoChordStripVisible}
+                              bpm={variations[selectedVariation]?.params.bpm ?? params.bpm}
+                              onExportChopAll={handleExportChopAll}
                               onNotesChange={newNotes => {
                                 if (editorLayer === 'imported') setImportedNotes(newNotes);
                                 else handleEditorNotesChange(editorLayer, newNotes);
@@ -7160,6 +7751,13 @@ export default function Home() {
       </>
       )}
       </main>
+
+      {matchSoundsPanelOpen && (
+        <MatchSoundsPanel
+          genre={params.genre}
+          onClose={() => setMatchSoundsPanelOpen(false)}
+        />
+      )}
     </>
   );
 }
