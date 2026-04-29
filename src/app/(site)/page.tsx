@@ -96,6 +96,8 @@ const scrollSection = {
   transition: { duration: 0.4, ease: EASE_UI },
 } as const;
 
+const CLERK_BOOT_TIMEOUT_MS = 12000;
+
 
 const QUICK_START_TEMPLATES: {
   name: string;
@@ -258,6 +260,77 @@ function MiniPianoRollThumb({ layers }: { layers: GenerationResult }) {
 }
 
 // ─── ONBOARDING TOOLTIP ───────────────────────────────────────
+function ClerkConnectionFallback({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: 'var(--bg)' }}>
+      <div
+        className="w-full max-w-[520px]"
+        style={{
+          border: '1px solid var(--border)',
+          background: 'color-mix(in srgb, var(--surface) 92%, transparent)',
+          borderRadius: 18,
+          padding: 28,
+          boxShadow: '0 24px 80px rgba(0,0,0,0.35)',
+        }}
+      >
+        <div
+          aria-hidden
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 999,
+            border: '2px solid rgba(255,109,63,0.16)',
+            borderTopColor: 'var(--accent)',
+            animation: 'spin 0.8s linear infinite',
+            marginBottom: 18,
+          }}
+        />
+        <div
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 11,
+            letterSpacing: '0.12em',
+            color: 'var(--text-micro)',
+            marginBottom: 10,
+          }}
+        >
+          CONNECTING
+        </div>
+        <h1
+          style={{
+            fontFamily: 'Syne, sans-serif',
+            fontWeight: 800,
+            fontSize: 28,
+            lineHeight: 1.1,
+            letterSpacing: '-0.03em',
+            color: 'var(--text)',
+            margin: 0,
+          }}
+        >
+          We&apos;re having trouble reaching Clerk.
+        </h1>
+        <p
+          style={{
+            marginTop: 12,
+            marginBottom: 20,
+            fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+            fontSize: 15,
+            lineHeight: 1.65,
+            color: 'var(--muted)',
+            maxWidth: 440,
+          }}
+        >
+          The app is waiting on authentication to come online. If the custom domain is still resolving, reload the page or try again in a moment.
+        </p>
+        <button type="button" className="btn-primary" onClick={onRetry} style={{ height: 44, padding: '0 18px' }}>
+          Retry
+        </button>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 function OnboardingTooltip({
   title,
   body,
@@ -2879,8 +2952,18 @@ export default function Home() {
   const [promptCardsDismissed, setPromptCardsDismissed] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [clerkBootTimedOut, setClerkBootTimedOut] = useState(false);
 
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    if (e2eBypass) return;
+    if (isLoaded) {
+      setClerkBootTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setClerkBootTimedOut(true), CLERK_BOOT_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [e2eBypass, isLoaded]);
 
   const result = variations[selectedVariation]?.result ?? null;
 
@@ -4667,6 +4750,9 @@ export default function Home() {
 
   // ── RENDER ────────────────────────────────────────────────
   if (mounted && !e2eBypass && !isLoaded) {
+    if (clerkBootTimedOut) {
+      return <ClerkConnectionFallback onRetry={() => window.location.reload()} />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
         <div
