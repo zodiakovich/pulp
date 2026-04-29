@@ -1610,27 +1610,36 @@ function VariationCard({
   onExtend?: (e: React.MouseEvent) => void;
   onTogglePublic?: (e: React.MouseEvent) => void;
 }) {
+  const totalNotes = vResult.melody.length + vResult.chords.length + vResult.bass.length + vResult.drums.length;
+  const activeLayers = LAYERS.filter(layer => vResult[layer].length > 0).length;
+  const chordProgression = deriveChordProgression(vResult.chords, variationParams.bars);
+
   return (
     <motion.div
       variants={fadeUp}
-      className="glass-elevated card-tilt-hover"
+      className="variation-card glass-elevated card-tilt-hover"
       onClick={onSelect}
       animate={compareHighlight ? { borderColor: ['rgba(255,109,63,0.35)', 'rgba(255,109,63,0.85)', 'rgba(255,109,63,0.35)'] } : false}
       transition={compareHighlight ? { duration: 1.1, repeat: Infinity, ease: EASE_UI } : { duration: 0.3, ease: EASE_UI }}
       style={{
         border: compareHighlight ? '2px solid rgba(255,109,63,0.55)' : (selected ? `1.5px solid ${DS.accent}` : '1px solid var(--border)'),
-        borderRadius: 12,
-        padding: 16,
         cursor: 'pointer',
-        background: selected ? 'rgba(255,109,63,0.04)' : 'var(--surface)',
+        background: selected ? 'var(--surface-strong)' : 'var(--surface)',
         transition: 'border-color 300ms cubic-bezier(0.23, 1, 0.32, 1), background 300ms cubic-bezier(0.23, 1, 0.32, 1)',
         flex: 1,
       }}
     >
-      <div className="flex items-center justify-between mb-3">
-        <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em', color: selected ? DS.accent : 'var(--text)' }}>
-          {label}
-        </span>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em', color: selected ? DS.accent : 'var(--text)' }}>
+            {label}
+          </span>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className="variation-stat">{activeLayers}/4 layers</span>
+            <span className="variation-stat">{totalNotes} events</span>
+            {selected && <span className="variation-stat variation-stat--active">active</span>}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {onTogglePublic && (
             <button
@@ -1656,8 +1665,8 @@ function VariationCard({
         </div>
       </div>
       <PianoRoll notes={vResult.melody} color={DS.accent} height={56} />
-      <div className="flex gap-1.5 flex-wrap mt-3 mb-1">
-        {deriveChordProgression(vResult.chords, variationParams.bars).map((name, i, arr) => (
+      <div className="variation-chords flex gap-1.5 flex-wrap mt-3 mb-1">
+        {chordProgression.map((name, i, arr) => (
           <span key={i} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
             {name}
             {i < arr.length - 1 && <span style={{ color: 'rgba(255,255,255,0.30)' }}>→</span>}
@@ -7213,11 +7222,12 @@ export default function Home() {
               {result && !isGenerating && (
                 <motion.div
                   ref={onboardingExportRef}
-                  className="flex gap-2 mb-5 flex-wrap items-center"
+                  className="result-action-bar flex gap-2 mb-5 flex-wrap items-center"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.25, ease: EASE_UI }}
+                  style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
                 >
                   <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
                     {playingAll ? '■  Stop' : '▶  Play All'}
