@@ -55,9 +55,9 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
       }
       setCancelledAt(data.cancel_at ?? currentPeriodEnd ?? null);
       setShowModal(false);
-      toast('Subscription cancelled. You keep access until the end of the billing period.', 'info');
+      toast('Plan cancellation scheduled. You keep access until the end of the billing period.', 'info');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to cancel subscription', 'danger');
+      toast(err instanceof Error ? err.message : 'Failed to cancel plan', 'danger');
     } finally {
       setLoading(false);
     }
@@ -81,8 +81,20 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
               textTransform: 'uppercase',
             }}
           >
-            Account
+            Billing
           </p>
+          <h2
+            style={{
+              fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+              fontWeight: 700,
+              fontSize: 20,
+              letterSpacing: '-0.02em',
+              color: 'var(--text)',
+              lineHeight: 1.2,
+            }}
+          >
+            Plan and account access
+          </h2>
           <div className="flex items-center gap-3 flex-wrap">
             <span
               className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
@@ -102,14 +114,14 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
                 </span>
               ) : (
                 <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
-                  Next billing date: <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>
+                  Renews on <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>
                 </span>
               )
             ) : isPro ? (
-              <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage subscription in your billing portal.</span>
+              <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage invoices, payment method, and cancellation in Stripe.</span>
             ) : (
               <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
-                Running low on credits? Upgrade from the credits card above.
+                Free plan includes 20 generations per month. Upgrade when pulp becomes part of your workflow.
               </span>
             )}
           </div>
@@ -124,7 +136,7 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
                 onClick={handlePortal}
                 disabled={portalLoading}
               >
-                {portalLoading ? 'Loading…' : 'Manage subscription'}
+                {portalLoading ? 'Loading...' : 'Manage billing'}
               </button>
               {!cancelledAt && (
                 <button
@@ -133,7 +145,7 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
                   style={{ color: 'var(--muted)', borderColor: 'var(--border)' }}
                   onClick={() => setShowModal(true)}
                 >
-                  Cancel subscription
+                  Cancel plan
                 </button>
               )}
             </>
@@ -187,7 +199,7 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
                 marginBottom: 12,
               }}
             >
-              Cancel your subscription?
+              Cancel your plan?
             </h2>
             <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.6 }}>
               {endDate
@@ -212,7 +224,7 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
                 onClick={handleCancel}
                 disabled={loading}
               >
-                {loading ? 'Cancelling…' : 'Cancel subscription'}
+                {loading ? 'Cancelling...' : 'Cancel plan'}
               </button>
             </div>
           </div>

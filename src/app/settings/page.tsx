@@ -445,38 +445,75 @@ function BillingSection() {
   const planColor = credits?.is_pro ? '#00B894' : 'var(--muted)';
   const used = credits?.credits_used ?? 0;
   const limit = credits?.limit ?? 20;
+  const remaining = Math.max(0, limit - used);
   const pct = limit > 0 ? Math.min(1, used / limit) : 0;
   const barColor = pct < 0.5 ? '#00B894' : pct < 0.8 ? '#FF6D3F' : '#E94560';
+  const planSummary = credits?.is_pro
+    ? credits.plan_type === 'studio'
+      ? 'High-volume writing, upload, and conversion workflows.'
+      : 'More generations and export options for regular production work.'
+    : 'Start free with enough generations to test real song ideas.';
 
   return (
     <div className="space-y-3">
       {/* Plan overview */}
       <SectionCard>
-        <SectionLabel>Current plan</SectionLabel>
-        <div className="flex items-center gap-3 mb-5">
-          <span
-            style={{
-              fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 11,
-              padding: '4px 12px',
-              borderRadius: 20,
-              border: `1px solid ${planColor}33`,
-              color: planColor,
-              background: credits?.is_pro ? 'rgba(0,184,148,0.1)' : 'transparent',
-            }}
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <SectionLabel>Current plan</SectionLabel>
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 11,
+                  padding: '5px 12px',
+                  borderRadius: 999,
+                  border: `1px solid ${planColor}33`,
+                  color: planColor,
+                  background: credits?.is_pro ? 'rgba(0,184,148,0.1)' : 'transparent',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                {credits ? planLabel : 'Loading'}
+              </span>
+              <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)' }}>
+                {planSummary}
+              </span>
+            </div>
+          </div>
+          <a
+            href="/pricing"
+            className="btn-secondary btn-sm"
+            style={{ textDecoration: 'none', alignSelf: 'flex-start' }}
           >
-            {credits ? planLabel : '—'}
-          </span>
+            Compare plans
+          </a>
         </div>
 
-        {/* Usage bar */}
-        <div className="mb-5">
+        <div className="my-6">
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Used', value: credits ? String(used) : '-' },
+              { label: 'Remaining', value: credits ? String(remaining) : '-' },
+              { label: 'Limit', value: credits ? String(limit) : '-' },
+            ].map(item => (
+              <div key={item.label} className="rounded-xl px-4 py-3" style={{ border: '1px solid var(--border)', background: 'var(--surface-strong)' }}>
+                <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  {item.label}
+                </p>
+                <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, color: 'var(--foreground)', letterSpacing: '0.02em' }}>
+                  {item.value}
+                </p>
+              </div>
+            ))}
+          </div>
           <div className="flex items-center justify-between mb-2">
             <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--foreground)' }}>
-              Generations this month
+              Monthly generation allowance
             </span>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--muted)' }}>
-              {credits ? `${used} / ${limit}` : '—'}
+              {credits ? `${Math.round(pct * 100)}% used` : '-'}
             </span>
           </div>
           <div style={{ height: 6, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
@@ -495,7 +532,6 @@ function BillingSection() {
           </p>
         </div>
 
-        {/* Actions */}
         <div className="flex gap-3 flex-wrap">
           {credits?.is_pro ? (
             <>
@@ -505,7 +541,7 @@ function BillingSection() {
                 onClick={handlePortal}
                 disabled={loadingPortal}
               >
-                {loadingPortal ? 'Loading…' : 'Manage subscription'}
+                {loadingPortal ? 'Loading...' : 'Manage billing'}
               </button>
               <button
                 type="button"
@@ -515,6 +551,15 @@ function BillingSection() {
               >
                 View billing history
               </button>
+              {credits.plan_type !== 'studio' && (
+                <a
+                  href="/pricing"
+                  className="btn-secondary btn-sm"
+                  style={{ textDecoration: 'none' }}
+                >
+                  Upgrade to Studio
+                </a>
+              )}
             </>
           ) : (
             <a
@@ -1156,4 +1201,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
 
