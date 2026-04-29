@@ -27,7 +27,6 @@ export function WhatsNew() {
     if (!latest) return;
     const alreadySeen = localStorage.getItem(seenKey(latest.version)) === '1';
     setHasSeen(alreadySeen);
-    if (!alreadySeen) setOpen(true);
   }, [latest?.version]);
 
   useEffect(() => {
@@ -186,7 +185,7 @@ export function WhatsNew() {
                   flexShrink: 0,
                 }}
               >
-                ×
+                x
               </button>
             </div>
 
@@ -209,7 +208,7 @@ export function WhatsNew() {
                       marginTop: 2,
                     }}
                   >
-                    ✦
+                    +
                   </span>
                   <span
                     style={{
@@ -231,7 +230,7 @@ export function WhatsNew() {
                 onClick={handleStartCreating}
                 className="btn-primary"
               >
-                Start creating →
+                Start creating
               </button>
             </div>
           </div>

@@ -183,7 +183,7 @@ export function Navbar({
         transition: 'box-shadow 300ms ease',
       }}
     >
-      <div className="max-w-[1280px] mx-auto px-8 h-14 flex items-center justify-between gap-4">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 md:px-8 h-14 flex items-center justify-between gap-3 sm:gap-4">
         <Link
           href="/"
           className="font-extrabold text-xl flex items-center gap-2"
@@ -212,25 +212,15 @@ export function Navbar({
           {isLoaded && isSignedIn ? loggedInLinks : loggedOutLinks}
         </div>
 
-        <button
-          type="button"
-          className="md:hidden flex flex-col gap-1.5 p-2 rounded-lg transition-all"
-          onClick={() => setMobileMenuOpen(v => !v)}
-          aria-label="Toggle menu"
-          style={{ color: 'rgba(255,255,255,0.5)' }}
-        >
-          <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(5px) rotate(45deg)' : 'none' }} />
-          <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, opacity: mobileMenuOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
-          <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(-5px) rotate(-45deg)' : 'none' }} />
-        </button>
-
-        <div className="flex items-center gap-3 relative z-[55]" style={{ marginLeft: 'auto', flexShrink: 0 }}>
-          <WhatsNew />
+        <div className="flex items-center gap-2 sm:gap-3 relative z-[55]" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+          <div className="hidden sm:block">
+            <WhatsNew />
+          </div>
           <button
             type="button"
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            className="h-9 w-9 rounded-lg flex items-center justify-center transition-opacity hover:opacity-90"
+            className="hidden min-[380px]:flex h-9 w-9 rounded-lg items-center justify-center transition-opacity hover:opacity-90"
             style={{ color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)' }}
             onClick={() => {
               const html = document.documentElement;
@@ -255,23 +245,40 @@ export function Navbar({
               onClick={() => router.push(credits?.is_pro ? '/profile' : '/pricing')}
             />
             {pathname === '/' ? (
-              <button type="button" className="btn-primary btn-sm" onClick={() => scrollToGenerator()}>
-                Generate
-              </button>
+              <div className="hidden sm:block">
+                <button type="button" className="btn-primary btn-sm" onClick={() => scrollToGenerator()}>
+                  Generate
+                </button>
+              </div>
             ) : (
-              <Link href="/#generator" className="btn-primary btn-sm" style={{ textDecoration: 'none' }}>
-                Generate
-              </Link>
+              <div className="hidden sm:block">
+                <Link href="/#generator" className="btn-primary btn-sm" style={{ textDecoration: 'none' }}>
+                  Generate
+                </Link>
+              </div>
             )}
             <UserButtonDeferred />
           </SignedIn>
           <SignedOut>
-            <SignInButtonDeferred mode="modal">
-              <button type="button" className="btn-primary btn-sm">
-                Start generating
-              </button>
-            </SignInButtonDeferred>
+            <div className="hidden sm:block">
+              <SignInButtonDeferred mode="modal">
+                <button type="button" className="btn-primary btn-sm">
+                  Start generating
+                </button>
+              </SignInButtonDeferred>
+            </div>
           </SignedOut>
+          <button
+            type="button"
+            className="md:hidden flex flex-col gap-1.5 p-2 rounded-lg transition-all"
+            onClick={() => setMobileMenuOpen(v => !v)}
+            aria-label="Toggle menu"
+            style={{ color: 'rgba(255,255,255,0.5)' }}
+          >
+            <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(5px) rotate(45deg)' : 'none' }} />
+            <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, opacity: mobileMenuOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
+            <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(-5px) rotate(-45deg)' : 'none' }} />
+          </button>
         </div>
       </div>
 
@@ -280,6 +287,17 @@ export function Navbar({
           className="md:hidden px-6 pb-4 flex flex-col gap-1"
           style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(10,10,11,0.97)' }}
         >
+          <SignedOut>
+            <SignInButtonDeferred mode="modal">
+              <button
+                type="button"
+                className="btn-primary btn-sm mt-3 mb-2 w-full"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Start generating
+              </button>
+            </SignInButtonDeferred>
+          </SignedOut>
           {isLoaded && isSignedIn ? (
             <>
               <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>

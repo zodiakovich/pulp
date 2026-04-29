@@ -5230,10 +5230,10 @@ export default function Home() {
                 fontWeight: 400,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.5)',
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,109,63,0.2)',
-                boxShadow: '0 0 12px rgba(255,109,63,0.12)',
+                color: 'rgba(28,28,36,0.72)',
+                background: 'rgba(255,109,63,0.08)',
+                border: '1px solid rgba(255,109,63,0.22)',
+                boxShadow: '0 0 12px rgba(255,109,63,0.08)',
                 borderRadius: 20,
                 padding: '4px 12px',
                 marginBottom: 16,
@@ -5258,7 +5258,7 @@ export default function Home() {
               className="mt-6 max-w-[620px] text-[16px] leading-snug sm:text-[18px] text-left"
               style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400, color: 'var(--muted)', lineHeight: 1.6 }}
             >
-              Describe a genre, artist, or mood. pulp builds the full arrangement — melody, chords, bass, and drums — so you never start from a blank project again.
+              Describe a genre, reference, or mood. pulp gives you melody, chords, bass, and drums in one shot, then lets you preview, edit, and drag everything straight into your session.
             </p>
             <div className="mt-10 flex flex-col items-stretch justify-start gap-4 sm:mt-12 sm:flex-row sm:items-center sm:justify-start">
               {effectiveIsSignedIn ? (
@@ -8051,3 +8051,4 @@ export default function Home() {
     </>
   );
 }
+

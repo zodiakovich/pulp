@@ -209,7 +209,7 @@ function ExploreCard({
         <Link
           href={href}
           className="block p-6"
-          style={{ textDecoration: 'none', paddingBottom: 56 }}
+          style={{ textDecoration: 'none', paddingBottom: 56, position: 'relative', zIndex: 1 }}
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -329,7 +329,8 @@ function ExploreCard({
             justifyContent: 'center',
             cursor: 'pointer',
             outline: 'none',
-            zIndex: 2,
+            zIndex: 3,
+            pointerEvents: 'auto',
             transition: 'background 150ms',
           }}
           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,109,63,0.28)')}
