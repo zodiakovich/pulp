@@ -52,14 +52,14 @@ export default function PricingPage() {
               letterSpacing: '-0.02em',
             }}
           >
-            Start on the home page.
+            Not sure yet? Start with the generator.
           </p>
           <Link
             href="/"
             className="inline-flex min-h-[56px] items-center justify-center rounded-xl px-8 py-4 text-base font-semibold transition-all"
             style={{ background: 'var(--accent)', color: 'var(--bg)', textDecoration: 'none', fontFamily: 'DM Sans, sans-serif' }}
           >
-            Start generating
+            Open generator
           </Link>
         </div>
       </section>

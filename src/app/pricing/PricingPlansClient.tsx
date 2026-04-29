@@ -178,22 +178,24 @@ function CheckoutCta({
   );
 }
 
-const FREE_FEATURES = ['MIDI export', '5 genres', 'Basic piano roll', 'Generation history'] as const;
+const FREE_FEATURES = ['20 monthly generations', 'Multi-track MIDI export', '5 core genres', 'Generation history'] as const;
 
-const PRO_EXTRA = ['All genres + artists', 'Full piano roll', 'Priority generation', 'Public gallery', 'Commercial use included'] as const;
+const PRO_EXTRA = ['150 monthly generations', 'All visible genres', 'Find Similar variations', 'Public/private sharing', 'WAV and Ableton export'] as const;
 
-const STUDIO_EXTRA = ['Upload MIDI & continue', 'Advanced mix engine'] as const;
+const STUDIO_EXTRA = ['600 monthly generations', 'Upload MIDI & continue', 'Audio to MIDI workspace', 'Advanced mix controls'] as const;
 
 const COMPARE_ROWS: { label: string; free: boolean; pro: boolean; studio: boolean }[] = [
   { label: 'MIDI export', free: true, pro: true, studio: true },
   { label: 'Monthly generations', free: true, pro: true, studio: true },
-  { label: 'Genre library (5 → all)', free: true, pro: true, studio: true },
-  { label: 'Piano roll depth', free: true, pro: true, studio: true },
+  { label: 'Genre library', free: true, pro: true, studio: true },
+  { label: 'Piano roll editor', free: true, pro: true, studio: true },
   { label: 'Generation history', free: true, pro: true, studio: true },
-  { label: 'Priority generation', free: false, pro: true, studio: true },
-  { label: 'Public gallery', free: false, pro: true, studio: true },
+  { label: 'Find Similar variations', free: false, pro: true, studio: true },
+  { label: 'Public/private sharing', free: false, pro: true, studio: true },
+  { label: 'WAV and Ableton export', free: false, pro: true, studio: true },
   { label: 'Upload MIDI & continue', free: false, pro: false, studio: true },
-  { label: 'Advanced mix engine', free: false, pro: false, studio: true },
+  { label: 'Audio to MIDI workspace', free: false, pro: false, studio: true },
+  { label: 'Advanced mix controls', free: false, pro: false, studio: true },
 ];
 
 export function PricingPlansClient() {
@@ -201,7 +203,7 @@ export function PricingPlansClient() {
 
   return (
     <div style={{ background: BG, color: 'var(--text)' }}>
-      <section className="px-4 sm:px-8 pt-32 pb-16 text-center">
+      <section className="px-4 sm:px-8 pt-32 pb-14 text-center">
         <p
           className="mb-4 text-xs uppercase tracking-[0.14em]"
           style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}
@@ -219,13 +221,13 @@ export function PricingPlansClient() {
             color: 'var(--text)',
           }}
         >
-          Plans and limits
+          Choose the right output tier.
         </h1>
         <p
           className="mx-auto max-w-[520px] mb-12 text-base leading-relaxed"
           style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)' }}
         >
-          Choose a monthly generation limit. You can change plans at any time.
+          Start free, then upgrade when pulp becomes part of your writing workflow. Every paid plan uses Stripe billing and can be managed from your account.
         </p>
 
         <div
@@ -297,18 +299,38 @@ export function PricingPlansClient() {
             )}
           </button>
         </div>
+        <div className="mx-auto mt-8 grid max-w-[760px] grid-cols-1 gap-2 sm:grid-cols-3">
+          {['Standard MIDI exports', 'Cancel anytime', 'Built for any DAW'].map(item => (
+            <div
+              key={item}
+              className="rounded-lg px-4 py-3 text-xs"
+              style={{
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--muted)',
+                fontFamily: 'JetBrains Mono, monospace',
+                letterSpacing: '0.02em',
+              }}
+            >
+              {item}
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="px-4 sm:px-8 pb-24">
-        <div className="mx-auto max-w-[1200px] grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+        <div className="mx-auto grid max-w-[1160px] grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
           {/* Free */}
-          <div className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover">
-            <div className="mb-10">
+          <div className="flex flex-col rounded-xl p-8 glass-elevated card-tilt-hover">
+            <div className="mb-8">
               <p
-                className="mb-6 text-xs uppercase tracking-[0.12em]"
+                className="mb-3 text-xs uppercase tracking-[0.12em]"
                 style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}
               >
                 Free
+              </p>
+              <p className="mb-6 text-sm leading-relaxed" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)' }}>
+                Test ideas and export sketches without committing to a subscription.
               </p>
               <div className="flex flex-wrap items-end gap-2 mb-2">
                 <span
@@ -331,7 +353,7 @@ export function PricingPlansClient() {
                 20 generations / month
               </p>
             </div>
-            <ul className="mb-10 flex flex-col gap-5 flex-1">
+            <ul className="mb-8 flex flex-1 flex-col gap-4">
               {FREE_FEATURES.map(f => (
                 <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400 }}>
                   <span className="h-5 w-5 flex-shrink-0 rounded-full" style={{ background: ACCENT }} aria-hidden />
@@ -356,23 +378,26 @@ export function PricingPlansClient() {
 
           {/* Pro — accent border only, same background as others */}
           <div
-            className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover"
+            className="flex flex-col rounded-xl p-8 glass-elevated card-tilt-hover"
             style={{ border: `1px solid ${ACCENT}` }}
           >
-            <div className="mb-10">
+            <div className="mb-8">
               <p
-                className="mb-6 text-xs uppercase tracking-[0.12em]"
+                className="mb-3 text-xs uppercase tracking-[0.12em]"
                 style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}
               >
                 Pro
               </p>
+              <p className="mb-6 text-sm leading-relaxed" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)' }}>
+                For producers using pulp as a regular starting point for sessions.
+              </p>
               <PaidPlanPriceBlock baseMonthly={PRO_MONTHLY} billing={billing} />
               <p className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}>
                 150 generations / month
-                {billing === 'annual' ? ' · billed annually' : ''}
+                {billing === 'annual' ? ' - billed annually' : ''}
               </p>
             </div>
-            <ul className="mb-10 flex flex-col gap-5 flex-1">
+            <ul className="mb-8 flex flex-1 flex-col gap-4">
               {[...FREE_FEATURES, ...PRO_EXTRA].map(f => (
                 <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400 }}>
                   <span className="h-5 w-5 flex-shrink-0 rounded-full" style={{ background: ACCENT }} aria-hidden />
@@ -380,25 +405,28 @@ export function PricingPlansClient() {
                 </li>
               ))}
             </ul>
-            <CheckoutCta plan="pro" billing={billing} label="Subscribe" />
+            <CheckoutCta plan="pro" billing={billing} label="Upgrade to Pro" />
           </div>
 
           {/* Studio */}
-          <div className="flex flex-col rounded-2xl p-10 glass-elevated card-tilt-hover">
-            <div className="mb-10">
+          <div className="flex flex-col rounded-xl p-8 glass-elevated card-tilt-hover">
+            <div className="mb-8">
               <p
-                className="mb-6 text-xs uppercase tracking-[0.12em]"
+                className="mb-3 text-xs uppercase tracking-[0.12em]"
                 style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}
               >
                 Studio
               </p>
+              <p className="mb-6 text-sm leading-relaxed" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)' }}>
+                For heavier writing, editing, and conversion workflows.
+              </p>
               <PaidPlanPriceBlock baseMonthly={STUDIO_MONTHLY} billing={billing} />
               <p className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}>
                 600 generations / month
-                {billing === 'annual' ? ' · billed annually' : ''}
+                {billing === 'annual' ? ' - billed annually' : ''}
               </p>
             </div>
-            <ul className="mb-10 flex flex-col gap-5 flex-1">
+            <ul className="mb-8 flex flex-1 flex-col gap-4">
               {[...FREE_FEATURES, ...PRO_EXTRA, ...STUDIO_EXTRA].map(f => (
                 <li key={f} className="flex items-center gap-4 text-sm leading-snug" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400 }}>
                   <span className="h-5 w-5 flex-shrink-0 rounded-full" style={{ background: ACCENT }} aria-hidden />
@@ -406,7 +434,7 @@ export function PricingPlansClient() {
                 </li>
               ))}
             </ul>
-            <CheckoutCta plan="studio" billing={billing} label="Subscribe" />
+            <CheckoutCta plan="studio" billing={billing} label="Upgrade to Studio" />
           </div>
         </div>
       </section>
@@ -454,11 +482,11 @@ export function PricingPlansClient() {
                         <span className="text-sm font-medium" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
                           20
                         </span>
-                      ) : row.label === 'Genre library (5 → all)' ? (
+                      ) : row.label === 'Genre library' ? (
                         <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
                           5 genres
                         </span>
-                      ) : row.label === 'Piano roll depth' ? (
+                      ) : row.label === 'Piano roll editor' ? (
                         <span className="text-sm" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400, color: 'var(--text)' }}>
                           Basic
                         </span>
@@ -473,11 +501,11 @@ export function PricingPlansClient() {
                         <span className="text-sm font-medium" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
                           150
                         </span>
-                      ) : row.label === 'Genre library (5 → all)' ? (
+                      ) : row.label === 'Genre library' ? (
                         <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
                           All + artists
                         </span>
-                      ) : row.label === 'Piano roll depth' ? (
+                      ) : row.label === 'Piano roll editor' ? (
                         <span className="text-sm" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400, color: 'var(--text)' }}>
                           Full
                         </span>
@@ -492,11 +520,11 @@ export function PricingPlansClient() {
                         <span className="text-sm font-medium" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
                           600
                         </span>
-                      ) : row.label === 'Genre library (5 → all)' ? (
+                      ) : row.label === 'Genre library' ? (
                         <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
                           All + artists
                         </span>
-                      ) : row.label === 'Piano roll depth' ? (
+                      ) : row.label === 'Piano roll editor' ? (
                         <span className="text-sm" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400, color: 'var(--text)' }}>
                           Full
                         </span>

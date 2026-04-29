@@ -4,20 +4,20 @@ import { useState } from 'react';
 
 const FAQS = [
   {
-    q: 'Can I use generated MIDI commercially?',
-    a: 'Pro and Studio include a commercial license. See the License page for details.',
+    q: 'Who owns the MIDI I export?',
+    a: 'You can export standard MIDI files and use them in your own projects. For release and commercial terms, check the License page before publishing.',
   },
   {
     q: 'What DAWs does it work with?',
-    a: 'Any DAW that imports standard .mid files.',
+    a: 'Any DAW that imports standard .mid files, including Ableton Live, FL Studio, Logic Pro, Cubase, Reaper, and Studio One.',
   },
   {
     q: 'Can I cancel anytime?',
-    a: 'Yes — cancel from your profile; Pro stays active until the period ends.',
+    a: 'Yes. Cancel from your account; paid access stays active until the end of the billing period.',
   },
   {
     q: 'Do unused generations roll over?',
-    a: 'No — allowances reset each calendar month (10 / 150 / 600 generations per plan).',
+    a: 'No. Allowances reset each calendar month: 20 for Free, 150 for Pro, and 600 for Studio.',
   },
   {
     q: 'How does billing work?',
