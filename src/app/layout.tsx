@@ -11,6 +11,7 @@ import { defaultDescription, ogImagePath, siteUrl } from '@/lib/seo';
 import { SentryErrorBoundary } from '@/components/SentryErrorBoundary';
 import { PostHogProvider } from '@/components/PostHogProvider';
 import { PostHogIdentify } from '@/components/PostHogIdentify';
+import { StopAudioOnRouteChange } from '@/components/StopAudioOnRouteChange';
 import './fonts.css';
 import './globals.css';
 
@@ -179,6 +180,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body className="min-h-screen font-body antialiased" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
           <PostHogProvider />
           <PostHogIdentify />
+          <StopAudioOnRouteChange />
           <SiteJsonLd />
           <ServiceWorkerRegister />
           <CrispChat />

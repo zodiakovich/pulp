@@ -18,8 +18,15 @@ function midiToNote(midi: number): string {
 const activeSources = new Set<AudioBufferSourceNode | OscillatorNode>();
 const activeChainOutputs = new Set<AudioNode>();
 const mixerFaders = new Map<string, GainNode>();
+let playbackToken = 0;
+let completionTimeout: number | ReturnType<typeof setTimeout> | null = null;
 
 export function stopPlayAll() {
+  playbackToken += 1;
+  if (completionTimeout !== null) {
+    window.clearTimeout(completionTimeout);
+    completionTimeout = null;
+  }
   for (const src of activeSources) {
     try { src.stop(); } catch { /* ignore */ }
   }
@@ -76,6 +83,7 @@ export async function playAll(
   mixer?: AllMixerState,
 ) {
   stopPlayAll();
+  const runToken = playbackToken;
   const ctx = getAudioContext();
 
   const hasNotes =
@@ -280,7 +288,12 @@ export async function playAll(
   }
 
   if (onComplete) {
-    window.setTimeout(() => { stopPlayAll(); onComplete(); }, (maxEnd + 2) * 1000);
+    completionTimeout = window.setTimeout(() => {
+      if (playbackToken !== runToken) return;
+      completionTimeout = null;
+      stopPlayAll();
+      onComplete();
+    }, (maxEnd + 2) * 1000);
   }
 }
 

@@ -9,3 +9,12 @@ export function getAudioContext(): AudioContext {
   }
   return ctx;
 }
+
+export async function closeAudioContext(): Promise<void> {
+  if (!ctx) return;
+  const current = ctx;
+  ctx = null;
+  if (current.state !== 'closed') {
+    await current.close().catch(() => {});
+  }
+}

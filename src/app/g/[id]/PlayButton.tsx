@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { playAll, stopPlayAll } from '@/lib/tone-lazy';
+import { useEffect, useState } from 'react';
+import { playAll } from '@/lib/tone-lazy';
+import { stopAllAppAudio, subscribeToAudioStop } from '@/lib/audio-control';
 import type { GenerationResult } from '@/lib/music-engine';
 
 export function PlayButton({
@@ -15,13 +16,16 @@ export function PlayButton({
 }) {
   const [playing, setPlaying] = useState(false);
 
+  useEffect(() => subscribeToAudioStop(() => setPlaying(false)), []);
+
   const onToggle = () => {
     if (playing) {
-      stopPlayAll();
+      stopAllAppAudio();
       setPlaying(false);
       return;
     }
 
+    stopAllAppAudio();
     setPlaying(true);
     void playAll(
       {
@@ -46,4 +50,3 @@ export function PlayButton({
     </button>
   );
 }
-

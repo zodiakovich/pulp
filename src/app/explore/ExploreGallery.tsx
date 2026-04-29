@@ -7,7 +7,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { ScrollReveal } from '@/components/ScrollReveal';
 import { CustomSelect } from '@/components/CustomSelect';
 import { supabase } from '@/lib/supabase';
-import { playAll, stopPlayAll } from '@/lib/tone-lazy';
+import { playAll } from '@/lib/tone-lazy';
+import { stopAllAppAudio, subscribeToAudioStop } from '@/lib/audio-control';
 import type { GenerationResult } from '@/lib/music-engine';
 
 type GalleryItem = {
@@ -121,11 +122,12 @@ function ExploreCard({
     e.stopPropagation();
 
     if (isPlaying) {
-      stopPlayAll();
+      stopAllAppAudio();
       onPlaybackEnd(item.id);
       return;
     }
 
+    stopAllAppAudio();
     onRequestPlay(item.id);
     setLoading(true);
     setProgress(0);
@@ -515,10 +517,12 @@ export function ExploreGallery({
     };
   }, []);
 
+  useEffect(() => subscribeToAudioStop(() => setPlayingId(null)), []);
+
   // ─── PLAYBACK ───────────────────────────────────────────────────
 
   const handleRequestPlay = useCallback((id: string) => {
-    if (playingId && playingId !== id) stopPlayAll();
+    if (playingId && playingId !== id) stopAllAppAudio();
     setPlayingId(id);
   }, [playingId]);
 

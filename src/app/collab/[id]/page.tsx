@@ -8,7 +8,8 @@ import { useAuth, useUser } from '@clerk/nextjs';
 import { useSupabaseWithClerk } from '@/lib/supabase-clerk-browser';
 import { GENRES, STYLE_TAGS, generateTrack, getDefaultParams, type GenerationParams, type GenerationResult, type NoteEvent } from '@/lib/music-engine';
 import { Navbar } from '@/components/Navbar';
-import { playNotesWithMix as playNotes, stopAllPlayback } from '@/lib/mix-engine';
+import { playNotesWithMix as playNotes } from '@/lib/mix-engine';
+import { stopAllAppAudio } from '@/lib/audio-control';
 import { useToast } from '@/components/toast/useToast';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LAYER_VIZ_COLORS } from '@/lib/design-system';
@@ -345,7 +346,7 @@ export default function CollabSessionPage() {
   const handlePlayToggle = () => {
     if (!result) return;
     // Simple toggle: stop then play
-    stopAllPlayback();
+    stopAllAppAudio();
     playNotes({
       melody: result.melody,
       chords: result.chords,

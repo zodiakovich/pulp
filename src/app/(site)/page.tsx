@@ -11,8 +11,9 @@ import {
   type GenerationParams, type GenerationResult, type NoteEvent,
 } from '@/lib/music-engine';
 import { generateMidiFormat0, generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
-import { playNotesWithMix as playNotes, renderNotesWithMixToWav, stopAllPlayback } from '@/lib/mix-engine';
-import { playAll, stopPlayAll, playTonePreview, stopTonePreview, updateAllMixer } from '@/lib/tone-lazy';
+import { playNotesWithMix as playNotes, renderNotesWithMixToWav } from '@/lib/mix-engine';
+import { playAll, playTonePreview, updateAllMixer } from '@/lib/tone-lazy';
+import { stopAllAppAudio, subscribeToAudioStop } from '@/lib/audio-control';
 import { applyHumanization } from '@/lib/humanize';
 import type { LayerFXSettings, AllLayerFX } from '@/lib/fx-settings';
 import { DEFAULT_FX } from '@/lib/fx-settings';
@@ -668,6 +669,8 @@ function LayerCard({
     void getAfroHouseSampleOptions().then(setAhOptions);
   }, [isAfroHouse]);
 
+  useEffect(() => subscribeToAudioStop(() => setPlaying(false)), []);
+
   const previewLayer =
     name === 'drums' ? 'drums' :
     name === 'bass'  ? 'bass'  :
@@ -680,13 +683,14 @@ function LayerCard({
     else if (slot === 'closedHat') setAhHat(value);
     else if (slot === 'bass')      setAhBass(value);
     else if (slot === 'synth')     setAhSynth(value);
-    stopTonePreview();
+    stopAllAppAudio();
     setPlaying(true);
     void playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false));
   };
 
   const handlePlay = async () => {
-    if (playing) { stopTonePreview(); setPlaying(false); return; }
+    if (playing) { stopAllAppAudio(); setPlaying(false); return; }
+    stopAllAppAudio();
     setPlaying(true);
     await playTonePreview(notes, bpm, previewLayer, genre, () => setPlaying(false), instrument, fxSettings, (volume ?? 75) / 100);
   };
@@ -3103,6 +3107,14 @@ export default function Home() {
   const sheetCanvasRef = useRef<HTMLCanvasElement>(null);
   const compareTimerRef = useRef<number | null>(null);
 
+  useEffect(() => subscribeToAudioStop(() => {
+    if (compareTimerRef.current !== null) window.clearTimeout(compareTimerRef.current);
+    compareTimerRef.current = null;
+    setCompareMode(false);
+    setPlayingAll(false);
+    setPlayingVariationIndex(null);
+  }), []);
+
   useEffect(() => {
     if (variations.length > 0) setTemplatesOpen(false);
   }, [variations.length]);
@@ -3349,8 +3361,7 @@ export default function Home() {
 
   const handleMidiUploadSuccess = useCallback(
     (data: MidiUploadSuccessPayload) => {
-      stopPlayAll();
-      stopAllPlayback();
+      stopAllAppAudio();
       setPlayingAll(false);
       setParams(data.params);
       setPrompt(data.prompt);
@@ -3378,8 +3389,7 @@ export default function Home() {
 
   const handleGenerate = useCallback(async (overrideParams?: Partial<GenerationParams>, overridePrompt?: string) => {
     setPromptCardsDismissed(true);
-    stopPlayAll();
-    stopAllPlayback();
+    stopAllAppAudio();
     setPlayingAll(false);
 
     setGenerationError(null);
@@ -3700,10 +3710,11 @@ export default function Home() {
     if (!sel) return;
     if (compareMode) return;
     if (playingAll) {
-      stopPlayAll();
+      stopAllAppAudio();
       setPlayingAll(false);
       return;
     }
+    stopAllAppAudio();
     setPlayingAll(true);
     const schedule = () => {
       const raw = {
@@ -3741,8 +3752,7 @@ export default function Home() {
     compareTimerRef.current = null;
     setCompareMode(false);
     if (opts?.stopAudio) {
-      stopPlayAll();
-      stopAllPlayback();
+      stopAllAppAudio();
       setPlayingVariationIndex(null);
     }
   }, []);
@@ -3750,8 +3760,7 @@ export default function Home() {
   const startVariationPlayback = useCallback((i: number) => {
     const v = variations[i];
     if (!v) return;
-    stopPlayAll();
-    stopAllPlayback();
+    stopAllAppAudio();
     setPlayingAll(false);
     setPlayingVariationIndex(i);
 
@@ -3799,8 +3808,7 @@ export default function Home() {
 
   const startCompare = useCallback(() => {
     if (variations.length === 0) return;
-    stopPlayAll();
-    stopAllPlayback();
+    stopAllAppAudio();
     setPlayingAll(false);
     setCompareMode(true);
     setCompareIndex(0);
@@ -4227,8 +4235,7 @@ export default function Home() {
     const sel = variations[selectedVariation];
     if (!sel || isFindingSimilar || isGenerating) return;
 
-    stopPlayAll();
-    stopAllPlayback();
+    stopAllAppAudio();
     setPlayingAll(false);
     setIsFindingSimilar(true);
 
@@ -4579,8 +4586,7 @@ export default function Home() {
           return;
         }
         stopCompare({ stopAudio: true });
-        stopPlayAll();
-        stopAllPlayback();
+        stopAllAppAudio();
         setPlayingVariationIndex(null);
         setPlayingAll(false);
         closeAllModals();
@@ -4628,8 +4634,7 @@ export default function Home() {
           return;
         }
         if (playingVariationIndex === selectedVariation) {
-          stopPlayAll();
-          stopAllPlayback();
+          stopAllAppAudio();
           setPlayingVariationIndex(null);
         } else {
           startVariationPlayback(selectedVariation);
@@ -4698,8 +4703,7 @@ export default function Home() {
         const idx = Number(key) - 1;
         if (!variations[idx]) return;
         stopCompare({ stopAudio: true });
-        stopPlayAll();
-        stopAllPlayback();
+        stopAllAppAudio();
         setPlayingVariationIndex(null);
         setPlayingAll(false);
         setSelectedVariation(idx);
@@ -5215,7 +5219,7 @@ export default function Home() {
                   animation: 'pulseOrange 2s ease-in-out infinite',
                 }}
               />
-              Your AI co-producer
+              Built for modern producers
             </p>
             <span
               style={{
@@ -5235,7 +5239,7 @@ export default function Home() {
                 marginBottom: 16,
               }}
             >
-              Now in Beta
+              Multi-track MIDI, ready for your DAW
             </span>
             <h1
               className="font-extrabold leading-[1.05] tracking-tight text-left"
@@ -5248,7 +5252,7 @@ export default function Home() {
                 lineHeight: 1.12,
               }}
             >
-              Generate MIDI from text
+              Go from prompt to playable idea in under a minute.
             </h1>
             <p
               className="mt-6 max-w-[620px] text-[16px] leading-snug sm:text-[18px] text-left"
@@ -5263,7 +5267,7 @@ export default function Home() {
                   className="btn-primary btn-hero"
                   style={{ textDecoration: 'none' }}
                 >
-                  Beat the blank project
+                  Start a new idea
                 </Link>
               ) : (
                 <SignInButtonDeferred mode="modal">
@@ -5271,7 +5275,7 @@ export default function Home() {
                     type="button"
                     className="btn-primary btn-hero w-full sm:w-auto"
                   >
-                    Beat the blank project
+                    Start a new idea
                   </button>
                 </SignInButtonDeferred>
               )}
@@ -5284,7 +5288,7 @@ export default function Home() {
                   textDecoration: 'none',
                 }}
               >
-                View demo
+                See workflow
               </a>
             </div>
             <div className="mt-5 flex items-center gap-3">
@@ -5319,43 +5323,231 @@ export default function Home() {
           <div
             style={{
               position: 'relative',
-              paddingBottom: '56.25%',
-              background: '#111118',
+              minHeight: 420,
+              background: 'linear-gradient(180deg, rgba(17,17,24,0.98) 0%, rgba(10,10,11,1) 100%)',
               border: '1px solid #1A1A2E',
               borderRadius: 12,
               overflow: 'hidden',
+              boxShadow: '0 30px 80px rgba(0,0,0,0.35)',
             }}
           >
             <div
               style={{
-                position: 'absolute',
-                inset: 0,
+                padding: 20,
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 16,
+                gap: 18,
               }}
             >
               <div
                 style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: '50%',
-                  background: 'rgba(255,109,63,0.12)',
-                  border: '1px solid rgba(255,109,63,0.3)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)',
                 }}
               >
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden>
-                  <path d="M8 5.5l10 5.5-10 5.5V5.5z" fill="#FF6D3F" />
-                </svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: '#FF6D3F',
+                      boxShadow: '0 0 12px rgba(255,109,63,0.45)',
+                    }}
+                  />
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(255,255,255,0.76)' }}>
+                    Prompt: afro house groove, warm bass, festival chords
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: '#00B894',
+                    background: 'rgba(0,184,148,0.08)',
+                    border: '1px solid rgba(0,184,148,0.2)',
+                    borderRadius: 999,
+                    padding: '5px 9px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Ready to export
+                </span>
               </div>
-              <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', letterSpacing: '0.06em' }}>
-                See pulp in action
-              </p>
+              <div className="grid gap-4 md:grid-cols-[1.35fr_0.85fr]">
+                <div
+                  style={{
+                    borderRadius: 10,
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(255,255,255,0.025)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '72px 1fr',
+                      minHeight: 274,
+                    }}
+                  >
+                    <div
+                      style={{
+                        borderRight: '1px solid rgba(255,255,255,0.06)',
+                        background: 'rgba(255,255,255,0.02)',
+                        padding: '14px 10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                      }}
+                    >
+                      {['Chords', 'Bass', 'Melody', 'Drums'].map((layer, index) => (
+                        <div
+                          key={layer}
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: index === 2 ? 'var(--text)' : 'rgba(255,255,255,0.55)',
+                            background: index === 2 ? 'rgba(255,109,63,0.12)' : 'transparent',
+                            border: index === 2 ? '1px solid rgba(255,109,63,0.25)' : '1px solid transparent',
+                            borderRadius: 8,
+                            padding: '8px 10px',
+                          }}
+                        >
+                          {layer}
+                        </div>
+                      ))}
+                    </div>
+                    <div
+                      style={{
+                        position: 'relative',
+                        padding: 16,
+                        backgroundImage:
+                          'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
+                        backgroundSize: '40px 32px',
+                      }}
+                    >
+                      {[
+                        { top: 42, left: 36, width: 92 },
+                        { top: 74, left: 144, width: 70 },
+                        { top: 106, left: 238, width: 86 },
+                        { top: 138, left: 116, width: 110 },
+                        { top: 170, left: 308, width: 74 },
+                        { top: 202, left: 196, width: 96 },
+                      ].map((note, index) => (
+                        <div
+                          key={`${note.left}-${note.top}-${index}`}
+                          style={{
+                            position: 'absolute',
+                            top: note.top,
+                            left: note.left,
+                            width: note.width,
+                            height: 18,
+                            borderRadius: 6,
+                            background: index % 2 === 0 ? 'rgba(255,109,63,0.92)' : 'rgba(255,109,63,0.65)',
+                            boxShadow: '0 0 18px rgba(255,109,63,0.18)',
+                          }}
+                        />
+                      ))}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 18,
+                          bottom: 16,
+                          left: '56%',
+                          width: 2,
+                          borderRadius: 2,
+                          background: 'rgba(255,255,255,0.5)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gap: 14 }}>
+                  <div
+                    style={{
+                      borderRadius: 10,
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      background: 'rgba(255,255,255,0.025)',
+                      padding: 16,
+                    }}
+                  >
+                    <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                      MIX VIEW
+                    </p>
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      {[
+                        ['Chords', '0.0 dB'],
+                        ['Bass', '-1.5 dB'],
+                        ['Melody', '-0.8 dB'],
+                        ['Drums', '+1.2 dB'],
+                      ].map(([label, value]) => (
+                        <div key={label} style={{ display: 'grid', gridTemplateColumns: '56px 1fr auto', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.62)' }}>{label}</span>
+                          <div style={{ height: 7, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                width: label === 'Drums' ? '82%' : label === 'Melody' ? '68%' : label === 'Bass' ? '72%' : '76%',
+                                height: '100%',
+                                background: 'linear-gradient(90deg, rgba(255,109,63,0.42) 0%, rgba(255,109,63,0.95) 100%)',
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.62)' }}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      borderRadius: 10,
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      background: 'rgba(255,255,255,0.025)',
+                      padding: 16,
+                    }}
+                  >
+                    <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                      EXPORTS
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['MIDI', 'WAV', 'Ableton Live Set', 'MusicXML'].map((format) => (
+                        <span
+                          key={format}
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: 'rgba(255,255,255,0.8)',
+                            borderRadius: 999,
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: 'rgba(255,255,255,0.03)',
+                            padding: '6px 10px',
+                          }}
+                        >
+                          {format}
+                        </span>
+                      ))}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 14,
+                        borderRadius: 10,
+                        border: '1px solid rgba(255,109,63,0.2)',
+                        background: 'rgba(255,109,63,0.08)',
+                        padding: '12px 14px',
+                      }}
+                    >
+                      <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>
+                        Built for sketching faster, then taking full control inside Ableton, FL Studio, Logic Pro, or wherever you finish records.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -5364,6 +5556,20 @@ export default function Home() {
       {/* Works with any DAW strip */}
       <motion.section ref={dawStripRef} className="relative px-4 sm:px-8 py-20" {...scrollSection}>
         <div aria-hidden className="noise-overlay" />
+        <div className="mx-auto max-w-[1200px] text-center">
+          <p
+            className="mb-4 text-[11px] uppercase tracking-[0.12em]"
+            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}
+          >
+            Fits the workflow you already have
+          </p>
+          <p
+            className="mx-auto mb-8 max-w-[720px] text-[15px] leading-relaxed"
+            style={{ fontFamily: 'DM Sans, system-ui, sans-serif', color: 'var(--muted)' }}
+          >
+            Start ideas in pulp, then keep arranging, sound-designing, and finishing inside your main DAW without changing your process.
+          </p>
+        </div>
         <motion.div
           className="mx-auto max-w-[1200px] mobile-scroll-row"
           style={{
@@ -5398,7 +5604,7 @@ export default function Home() {
         <div ref={featuresGridRef} className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
           {[
             {
-              title: 'Artist hints',
+              title: 'Reference-aware prompting',
               body: 'Drop an artist name and pulp maps their signature sound — tempo, key, chord style, and groove — into your MIDI.',
               icon: (
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
@@ -5408,8 +5614,8 @@ export default function Home() {
               ),
             },
             {
-              title: 'Piano roll',
-              body: 'Edit every note before you commit. Adjust timing, velocity, and pitch directly in the browser.',
+              title: 'Browser-side control',
+              body: 'Preview, edit, humanize, flip, slice, and rebalance each layer before anything touches your DAW.',
               icon: (
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
                   <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
@@ -5418,8 +5624,8 @@ export default function Home() {
               ),
             },
             {
-              title: 'MIDI export',
-              body: 'Drag stems straight into your DAW timeline. Works with Ableton, Logic, FL Studio, and every other major DAW.',
+              title: 'Export like a real session',
+              body: 'Take MIDI, WAV, Ableton Live Set, and more straight into the tools you already use to finish tracks.',
               icon: (
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0 text-[var(--accent)]">
                   <path d="M12 4v12M8 12l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -6842,8 +7048,7 @@ export default function Home() {
                             startVariationPlayback(i);
                             return;
                           }
-                          stopPlayAll();
-                          stopAllPlayback();
+                          stopAllAppAudio();
                           setPlayingVariationIndex(null);
                           setPlayingAll(false);
                           setSelectedVariation(i);
@@ -6852,8 +7057,7 @@ export default function Home() {
                           e.stopPropagation();
                           if (compareMode) stopCompare();
                           if (playingVariationIndex === i) {
-                            stopPlayAll();
-                            stopAllPlayback();
+                            stopAllAppAudio();
                             setPlayingVariationIndex(null);
                           } else {
                             startVariationPlayback(i);

@@ -9,9 +9,10 @@ import {
   type GenerationResult,
   type NoteEvent,
 } from '@/lib/music-engine';
-import { playNotes, stopAllPlayback } from '@/lib/audio-engine';
+import { playNotes } from '@/lib/audio-engine';
 import { generateMidiFormat1, downloadMidi } from '@/lib/midi-writer';
 import { ButtonLoadingDots } from '@/components/ButtonLoadingDots';
+import { stopAllAppAudio, subscribeToAudioStop } from '@/lib/audio-control';
 
 function normalizeGenreParam(raw: string | null): string | null {
   const v = (raw ?? '').trim();
@@ -63,6 +64,8 @@ export function EmbedClient({
     resultRef.current = result;
   }, [result]);
 
+  useEffect(() => subscribeToAudioStop(() => setPlaying(false)), []);
+
   useEffect(() => {
     const g = normalizeGenreParam(initialGenre);
     const bpm = initialBpm ? Math.max(60, Math.min(200, Math.round(Number(initialBpm)))) : null;
@@ -87,7 +90,7 @@ export function EmbedClient({
       onAfterGenerate?.({ genre: params.genre, bpm: params.bpm });
     } finally {
       setIsGenerating(false);
-      stopAllPlayback();
+      stopAllAppAudio();
       setPlaying(false);
     }
   };
@@ -95,10 +98,11 @@ export function EmbedClient({
   const handlePlayToggle = () => {
     if (!resultRef.current) return;
     if (playing) {
-      stopAllPlayback();
+      stopAllAppAudio();
       setPlaying(false);
       return;
     }
+    stopAllAppAudio();
     setPlaying(true);
     playNotes({
       melody: params.layers.melody ? resultRef.current.melody : undefined,

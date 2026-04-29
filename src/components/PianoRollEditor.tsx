@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NoteEvent } from '@/lib/music-engine';
 import { readCssColor } from '@/lib/design-system';
 import { generateMidiFormat0, downloadMidi } from '@/lib/midi-writer';
+import { stopAllAppAudio, subscribeToAudioStop } from '@/lib/audio-control';
 
 export interface PianoRollEditorProps {
   notes: NoteEvent[];
@@ -106,7 +107,26 @@ function clampVel(v: number): number {
 
 function usePreviewAudio() {
   const ctxRef = useRef<AudioContext | null>(null);
+  const activePreviewRef = useRef<Array<{ osc: OscillatorNode; gain: GainNode }>>([]);
+
+  const stopPreview = useCallback(() => {
+    for (const node of activePreviewRef.current) {
+      try { node.osc.stop(); } catch { /* already stopped */ }
+      node.osc.disconnect();
+      node.gain.disconnect();
+    }
+    activePreviewRef.current = [];
+    if (ctxRef.current && ctxRef.current.state !== 'closed') {
+      void ctxRef.current.close().catch(() => {});
+    }
+    ctxRef.current = null;
+  }, []);
+
+  useEffect(() => subscribeToAudioStop(stopPreview), [stopPreview]);
+  useEffect(() => () => stopPreview(), [stopPreview]);
+
   return useCallback((midi: number) => {
+    stopAllAppAudio();
     const Ctx =
       typeof window !== 'undefined' &&
       (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
@@ -125,9 +145,11 @@ function usePreviewAudio() {
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
     osc.connect(gain);
     gain.connect(ctx.destination);
+    activePreviewRef.current.push({ osc, gain });
     osc.start(t0);
     osc.stop(t0 + 0.28);
     osc.addEventListener('ended', () => {
+      activePreviewRef.current = activePreviewRef.current.filter((node) => node.osc !== osc);
       osc.disconnect();
       gain.disconnect();
     });

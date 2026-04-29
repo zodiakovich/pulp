@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { matchSounds, type MatchedSample, type MatchLayer } from '@/lib/match-sounds';
 import { setAfroHouseOverride } from '@/lib/afro-house-samples';
 import { getAudioContext } from '@/lib/audio-context';
+import { stopAllAppAudio, subscribeToAudioStop } from '@/lib/audio-control';
 
 const LAYER_TABS: { key: MatchLayer; label: string }[] = [
   { key: 'melody', label: 'Melody' },
@@ -72,8 +73,17 @@ export function MatchSoundsPanel({
 
   const isAfroHouse = genre === 'afro_house' || genre === 'afro-house';
 
+  const stopCurrent = useCallback(() => {
+    if (sourceRef.current) {
+      try { sourceRef.current.stop(); } catch { /* already ended */ }
+      sourceRef.current = null;
+    }
+    setPlayingUrl(null);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    stopCurrent();
     setLoading(true);
     setSamples([]);
     matchSounds(genre, activeLayer, 8).then(results => {
@@ -85,31 +95,23 @@ export function MatchSoundsPanel({
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [genre, activeLayer]);
+  }, [genre, activeLayer, stopCurrent]);
 
   // Stop on unmount
   useEffect(() => {
     return () => {
-      if (sourceRef.current) {
-        try { sourceRef.current.stop(); } catch { /* already ended */ }
-      }
+      stopCurrent();
     };
-  }, []);
+  }, [stopCurrent]);
 
-  const stopCurrent = useCallback(() => {
-    if (sourceRef.current) {
-      try { sourceRef.current.stop(); } catch { /* already ended */ }
-      sourceRef.current = null;
-    }
-    setPlayingUrl(null);
-  }, []);
+  useEffect(() => subscribeToAudioStop(stopCurrent), [stopCurrent]);
 
   const handlePreview = useCallback(async (sample: MatchedSample) => {
     if (playingUrl === sample.url) {
-      stopCurrent();
+      stopAllAppAudio();
       return;
     }
-    stopCurrent();
+    stopAllAppAudio();
     setPlayingUrl(sample.url);
 
     try {

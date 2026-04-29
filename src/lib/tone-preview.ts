@@ -16,8 +16,15 @@ function midiToNoteName(midi: number): string {
 
 const activeSources = new Set<AudioBufferSourceNode | OscillatorNode>();
 const activeChainOutputs = new Set<AudioNode>();
+let previewToken = 0;
+let completionTimeout: number | ReturnType<typeof setTimeout> | null = null;
 
 export function stopTonePreview() {
+  previewToken += 1;
+  if (completionTimeout !== null) {
+    window.clearTimeout(completionTimeout);
+    completionTimeout = null;
+  }
   for (const src of activeSources) {
     try { src.stop(); } catch { /* ignore */ }
   }
@@ -51,6 +58,7 @@ export async function playTonePreview(
   volume = 1,
 ) {
   stopTonePreview();
+  const runToken = previewToken;
   const ctx = getAudioContext();
 
   if (notes.length === 0) {
@@ -103,7 +111,14 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     }
-    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
+    if (onComplete) {
+      completionTimeout = window.setTimeout(() => {
+        if (previewToken !== runToken) return;
+        completionTimeout = null;
+        stopTonePreview();
+        onComplete();
+      }, (maxEnd + 2) * 1000);
+    }
     return;
   }
 
@@ -139,7 +154,14 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     }
-    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
+    if (onComplete) {
+      completionTimeout = window.setTimeout(() => {
+        if (previewToken !== runToken) return;
+        completionTimeout = null;
+        stopTonePreview();
+        onComplete();
+      }, (maxEnd + 2) * 1000);
+    }
     return;
   }
 
@@ -175,7 +197,14 @@ export async function playTonePreview(
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + d);
       }
     }
-    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 2) * 1000);
+    if (onComplete) {
+      completionTimeout = window.setTimeout(() => {
+        if (previewToken !== runToken) return;
+        completionTimeout = null;
+        stopTonePreview();
+        onComplete();
+      }, (maxEnd + 2) * 1000);
+    }
     return;
   }
 
@@ -209,7 +238,14 @@ export async function playTonePreview(
         src.onended = () => activeSources.delete(src);
         maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + 0.5);
       }
-      if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 1) * 1000);
+      if (onComplete) {
+        completionTimeout = window.setTimeout(() => {
+          if (previewToken !== runToken) return;
+          completionTimeout = null;
+          stopTonePreview();
+          onComplete();
+        }, (maxEnd + 1) * 1000);
+      }
       return;
     }
 
@@ -263,7 +299,14 @@ export async function playTonePreview(
       }
       maxEnd = Math.max(maxEnd, note.startTime * secondsPerBeat + 0.5);
     }
-    if (onComplete) window.setTimeout(() => { stopTonePreview(); onComplete(); }, (maxEnd + 1) * 1000);
+    if (onComplete) {
+      completionTimeout = window.setTimeout(() => {
+        if (previewToken !== runToken) return;
+        completionTimeout = null;
+        stopTonePreview();
+        onComplete();
+      }, (maxEnd + 1) * 1000);
+    }
   }
 }
 
