@@ -67,8 +67,12 @@ const sentryConfig = {
   silent: true,
   widenClientFileUpload: true,
   hideSourceMaps: true,
-  disableLogger: true,
-  automaticVercelMonitors: false,
+  webpack: {
+    automaticVercelMonitors: false,
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
 };
 
 export default withSentryConfig(withBundleAnalyzer(nextConfig), sentryConfig);
