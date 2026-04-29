@@ -78,6 +78,15 @@ function XIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <rect x="5" y="4" width="7" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M3 9H2.5A1.5 1.5 0 011 7.5v-5A1.5 1.5 0 012.5 1h5A1.5 1.5 0 019 2.5V3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ─── EXPLORE CARD ─────────────────────────────────────────────────
 
 function ExploreCard({
@@ -95,6 +104,7 @@ function ExploreCard({
 }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [copied, setCopied] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const durationRef = useRef<number>(16);
@@ -190,37 +200,51 @@ function ExploreCard({
   };
 
   const prompt = (item.prompt ?? '').trim();
-  const promptShort = prompt.length > 60 ? `${prompt.slice(0, 60).trimEnd()}...` : (prompt || '-');
+  const promptShort = prompt.length > 86 ? `${prompt.slice(0, 86).trimEnd()}...` : (prompt || 'Untitled generation');
   const href = `/g/${item.id}`;
+  const detailUrl = typeof window !== 'undefined' ? `${window.location.origin}${href}` : href;
+
+  const handleCopyLink = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(detailUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <ScrollReveal delay={Math.min(idx % 6, 5) * 60}>
-      <div
-        className="relative rounded-2xl h-full"
+      <article
+        className="relative h-full rounded-xl"
         style={{
-          background: 'var(--surface)',
+          background: 'color-mix(in srgb, var(--surface) 88%, var(--surface-strong))',
           border: isPlaying ? '1px solid #FF6D3F' : '1px solid var(--border)',
-          transition: 'border-color 180ms',
+          transition: 'border-color 180ms, transform 180ms',
           overflow: 'hidden',
+          boxShadow: '0 18px 48px rgba(0,0,0,0.10)',
         }}
         onMouseEnter={e => { if (!isPlaying) e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)'; }}
         onMouseLeave={e => { if (!isPlaying) e.currentTarget.style.borderColor = 'var(--border)'; }}
       >
         <Link
           href={href}
-          className="block p-6"
-          style={{ textDecoration: 'none', paddingBottom: 56, position: 'relative', zIndex: 1 }}
+          className="block p-5"
+          style={{ textDecoration: 'none', paddingBottom: 70, position: 'relative', zIndex: 1 }}
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p
-                className="text-sm font-semibold mb-2"
+                className="text-base font-semibold mb-3"
                 style={{
                   fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                   fontWeight: 700,
                   letterSpacing: '-0.02em',
                   color: 'var(--text)',
-                  lineHeight: 1.2,
+                  lineHeight: 1.28,
                 }}
                 title={prompt || undefined}
               >
@@ -277,30 +301,6 @@ function ExploreCard({
                   </span>
                 ))}
               </div>
-
-              <div className="mt-4">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 text-xs"
-                  style={{
-                    fontFamily: 'JetBrains Mono, monospace',
-                    color: 'var(--accent)',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                    cursor: prompt ? 'pointer' : 'not-allowed',
-                  }}
-                  onClick={e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!prompt) return;
-                    router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
-                  }}
-                  disabled={!prompt}
-                >
-                  Use this prompt
-                </button>
-              </div>
             </div>
             <span
               className="text-xs flex-shrink-0"
@@ -310,6 +310,48 @@ function ExploreCard({
             </span>
           </div>
         </Link>
+
+        <div
+          className="absolute bottom-4 right-4 flex items-center gap-2"
+          style={{ zIndex: 3 }}
+          onClick={e => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs"
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              color: prompt ? 'var(--accent)' : 'var(--muted)',
+              background: 'rgba(255,109,63,0.08)',
+              border: '1px solid rgba(255,109,63,0.22)',
+              cursor: prompt ? 'pointer' : 'not-allowed',
+            }}
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!prompt) return;
+              router.push(`/?prompt=${encodeURIComponent(prompt)}`);
+            }}
+            disabled={!prompt}
+          >
+            Use prompt
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{
+              color: copied ? '#00B894' : 'var(--muted)',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              cursor: 'pointer',
+            }}
+            aria-label="Copy pattern link"
+            title={copied ? 'Copied' : 'Copy link'}
+            onClick={handleCopyLink}
+          >
+            <CopyIcon />
+          </button>
+        </div>
 
         <button
           type="button"
@@ -359,7 +401,7 @@ function ExploreCard({
             }}
           />
         </div>
-      </div>
+      </article>
     </ScrollReveal>
   );
 }
@@ -536,8 +578,8 @@ export function ExploreGallery({
   const activePills: { label: string; clear: () => void }[] = [];
   if (search.trim()) activePills.push({ label: `"${search.trim()}"`, clear: () => handleSearchChange('') });
   if (genre) activePills.push({ label: genres.find(g => g.key === genre)?.name ?? genre, clear: () => setGenre('') });
-  if (bpmMin) activePills.push({ label: `BPM ≥ ${bpmMin}`, clear: () => setBpmMin('') });
-  if (bpmMax) activePills.push({ label: `BPM ≤ ${bpmMax}`, clear: () => setBpmMax('') });
+  if (bpmMin) activePills.push({ label: `BPM >= ${bpmMin}`, clear: () => setBpmMin('') });
+  if (bpmMax) activePills.push({ label: `BPM <= ${bpmMax}`, clear: () => setBpmMax('') });
   if (tagFilter) activePills.push({ label: tagFilter, clear: () => setTagFilter('') });
 
   const hasActiveFilters = activePills.length > 0;
@@ -548,8 +590,8 @@ export function ExploreGallery({
     fontFamily: 'JetBrains Mono, monospace',
     fontSize: 12,
     color: 'var(--text)',
-    background: '#111118',
-    border: '1px solid #1A1A2E',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 8,
     padding: '6px 10px',
     outline: 'none',
@@ -561,23 +603,34 @@ export function ExploreGallery({
     <div className="max-w-[1280px] mx-auto px-4 sm:px-8">
 
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mt-20 mb-6">
+      <div className="mt-24 mb-6">
         <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
+          <div className="max-w-[680px]">
+            <p
+              className="mb-3 text-xs uppercase"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                color: 'var(--muted)',
+                letterSpacing: '0.08em',
+              }}
+            >
+              Public patterns
+            </p>
             <h1
-              className="font-extrabold text-gradient"
+              className="font-extrabold"
               style={{
                 fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                 fontWeight: 700,
-                fontSize: 32,
-                letterSpacing: '-0.02em',
-                lineHeight: 1.15,
+                fontSize: 'clamp(2rem, 5vw, 3rem)',
+                letterSpacing: '-0.04em',
+                lineHeight: 1.05,
+                color: 'var(--text)',
               }}
             >
-              Explore
+              Browse MIDI ideas by sound, tempo, and prompt.
             </h1>
-            <p style={{ color: 'var(--foreground-muted)', fontSize: 14, marginTop: 8 }}>
-              A public gallery of recent generations.
+            <p style={{ color: 'var(--foreground-muted)', fontSize: 15, marginTop: 14, lineHeight: 1.65 }}>
+              Preview public generations, open the full pattern, or send a prompt back into the generator as a starting point.
             </p>
           </div>
 
@@ -624,9 +677,14 @@ export function ExploreGallery({
         {/* ── Filter bar ──────────────────────────────────────────── */}
         <div
           className={[
-            'mt-5 flex-col gap-3 sm:flex sm:flex-row sm:items-center sm:flex-wrap',
+            'mt-6 flex-col gap-3 rounded-xl p-3 sm:flex sm:flex-row sm:items-center sm:flex-wrap',
             filtersOpen ? 'flex' : 'hidden sm:flex',
           ].join(' ')}
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            boxShadow: '0 18px 48px rgba(0,0,0,0.10)',
+          }}
         >
           {/* Search */}
           <input
@@ -636,7 +694,7 @@ export function ExploreGallery({
             placeholder="Search prompts..."
             style={{ ...inputStyle, width: '100%', maxWidth: 280 }}
             onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
-            onBlur={e => (e.currentTarget.style.borderColor = '#1A1A2E')}
+            onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
           />
 
           {/* Genre */}
@@ -658,9 +716,9 @@ export function ExploreGallery({
               max={200}
               style={{ ...inputStyle, width: 88 }}
               onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
-              onBlur={e => (e.currentTarget.style.borderColor = '#1A1A2E')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
             />
-            <span style={{ color: 'var(--muted)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>–</span>
+            <span style={{ color: 'var(--muted)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>-</span>
             <input
               type="number"
               value={bpmMax}
@@ -670,7 +728,7 @@ export function ExploreGallery({
               max={200}
               style={{ ...inputStyle, width: 88 }}
               onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
-              onBlur={e => (e.currentTarget.style.borderColor = '#1A1A2E')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
             />
           </div>
 
@@ -712,7 +770,7 @@ export function ExploreGallery({
               flexShrink: 0,
             }}
           >
-            {loading ? '…' : `${items.length} patterns`}
+            {loading ? 'Loading' : `${items.length} patterns`}
           </span>
         </div>
 
@@ -750,19 +808,41 @@ export function ExploreGallery({
           </div>
         )}
 
-        <div className="mt-5" style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />
+        <div className="mt-5" style={{ height: 1, background: 'var(--border)' }} />
       </div>
 
       {/* ── Grid ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
+        {loading && items.length === 0 && (
+          Array.from({ length: 6 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="h-[220px] rounded-xl"
+              style={{
+                background: 'linear-gradient(90deg, var(--surface) 0%, var(--surface-strong) 50%, var(--surface) 100%)',
+                border: '1px solid var(--border)',
+                opacity: 0.65,
+              }}
+            />
+          ))
+        )}
         {!loading && items.length === 0 && (
-          <EmptyState
-            icon={<MusicEmptyIcon />}
-            title={hasActiveFilters ? 'No patterns match your filters' : 'Nothing here yet'}
-            subtitle={hasActiveFilters ? 'Try adjusting the filters above' : 'Be the first to share a generation'}
-            actionLabel={hasActiveFilters ? undefined : 'Start generating'}
-            actionHref={hasActiveFilters ? undefined : '/'}
-          />
+          <div className="col-span-full">
+            <EmptyState
+              icon={<MusicEmptyIcon />}
+              title={hasActiveFilters ? 'No patterns match these filters' : 'No public patterns yet'}
+              subtitle={hasActiveFilters ? 'Loosen the search, BPM, genre, or tag controls.' : 'Public generations will appear here once producers publish them.'}
+              actionLabel={hasActiveFilters ? 'Clear filters' : 'Open generator'}
+              actionHref={hasActiveFilters ? undefined : '/'}
+              onAction={hasActiveFilters ? () => {
+                handleSearchChange('');
+                setGenre('');
+                setBpmMin('');
+                setBpmMax('');
+                setTagFilter('');
+              } : undefined}
+            />
+          </div>
         )}
         {items.map((item, idx) => (
           <ExploreCard

@@ -8,7 +8,7 @@ import { pageMeta } from '@/lib/seo-metadata';
 export const metadata = pageMeta({
   title: 'Explore',
   description:
-    'Browse public MIDI generations from the pulp community—genre, BPM, and prompts—or open a pattern and learn from real examples.',
+    'Browse public MIDI generations in pulp by genre, BPM, prompt, and production tags. Preview patterns, open examples, or reuse prompts.',
   path: '/explore',
 });
 
