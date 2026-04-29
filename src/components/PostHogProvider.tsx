@@ -14,6 +14,10 @@ export function PostHogProvider() {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com',
       person_profiles: 'identified_only',
       capture_pageview: true,
+      advanced_disable_flags: true,
+      advanced_disable_feature_flags: true,
+      disable_surveys: true,
+      disable_web_experiments: true,
       session_recording: {
         maskAllInputs: false,
       },

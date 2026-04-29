@@ -88,9 +88,14 @@ const THEME_BOOT_SCRIPT = `
 })();
 `;
 
+const CLERK_JS_URL =
+  process.env.NEXT_PUBLIC_CLERK_JS_URL ||
+  'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider
+      clerkJSUrl={CLERK_JS_URL}
       appearance={{
         // Enable Google, Apple, and GitHub in Clerk Dashboard:
         // Dashboard → User & Authentication → Social Connections

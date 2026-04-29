@@ -9,6 +9,11 @@ const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 function createClerkAwareSupabase(getAccessToken: () => Promise<string | null>): SupabaseClient {
   return createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
     global: {
       fetch: async (input, init = {}) => {
         const headers = new Headers(init.headers);
