@@ -5935,7 +5935,54 @@ export default function Home() {
       {/* ── GENERATOR ── */}
       <motion.section className={`${generatorOnly ? 'mt-20' : 'mt-24'} px-4 sm:px-8 py-24`} style={{ background: 'var(--bg)' }} {...scrollSection}>
         <div className="mx-auto max-w-[1280px]">
-          <motion.div id="generator" ref={toolRef} className="relative mx-auto w-full max-w-[720px]">
+          <div className="mx-auto mb-8 flex w-full max-w-[1040px] flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-[640px]">
+              <p
+                className="mb-3 text-[11px] uppercase tracking-[0.14em]"
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}
+              >
+                Generator workspace
+              </p>
+              <h2
+                style={{
+                  fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                  fontWeight: 700,
+                  fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                  letterSpacing: '-0.03em',
+                  lineHeight: 1.05,
+                  color: 'var(--text)',
+                }}
+              >
+                Generate, audition, edit, and export without leaving the browser.
+              </h2>
+              <p
+                className="mt-4 max-w-[560px] text-[15px] leading-relaxed"
+                style={{ fontFamily: 'DM Sans, system-ui, sans-serif', color: 'var(--muted)' }}
+              >
+                Built to feel like a real music tool: prompt in, compare variations, shape layers, preview fast, and move into your DAW only when the idea is worth keeping.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {['Multi-track MIDI', 'Preview-first workflow', 'DAW-ready exports'].map((item) => (
+                <span
+                  key={item}
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: 'var(--text)',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 999,
+                    padding: '7px 12px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+          <motion.div id="generator" ref={toolRef} className="relative mx-auto w-full max-w-[1040px]">
             {genBar === 'loading' && (
               <div className="generator-progress-host rounded-t-xl overflow-hidden" aria-hidden>
                 <div className="generator-progress-bar">
@@ -5957,10 +6004,74 @@ export default function Home() {
                 </div>
               </div>
             )}
-            <div className="px-4 sm:px-0">
+            <div
+              style={{
+                background: 'var(--surface-strong)',
+                border: '1px solid var(--border)',
+                borderRadius: 24,
+                boxShadow: 'var(--shadow-glass-elevated)',
+                overflow: 'hidden',
+              }}
+            >
+            <div
+              className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+              style={{ borderColor: 'var(--border)', background: 'rgba(255,255,255,0.02)' }}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: 'var(--accent)',
+                    border: '1px solid rgba(255,109,63,0.24)',
+                    background: 'rgba(255,109,63,0.08)',
+                    borderRadius: 999,
+                    padding: '6px 10px',
+                  }}
+                >
+                  TEXT TO MIDI
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: 'var(--text-micro)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    borderRadius: 999,
+                    padding: '6px 10px',
+                  }}
+                >
+                  {GENRES[params.genre]?.name ?? 'Genre'} / {params.bpm} BPM / {params.key} {params.scale}
+                </span>
+              </div>
+              <p
+                style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 11,
+                  color: 'var(--muted)',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                Prompt, compare, layer, export
+              </p>
+            </div>
+            <div className="px-4 py-5 sm:px-5 sm:py-6">
 
             {/* Prompt — primary Generate below */}
-            <div ref={onboardingPromptRef} className="mb-4 hidden sm:block">
+            <div
+              ref={onboardingPromptRef}
+              className="mb-4 hidden sm:block rounded-2xl p-4"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--text-micro)' }}>
+                  PROMPT
+                </span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
+                  Describe genre, tempo, mood, or reference
+                </span>
+              </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: 'var(--accent)' }}>✦</span>
                 <input
@@ -6179,7 +6290,18 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="sm:hidden flex flex-col gap-2 mb-4">
+            <div
+              className="sm:hidden flex flex-col gap-2 mb-4 rounded-2xl p-4"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}
+            >
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--text-micro)' }}>
+                  PROMPT
+                </span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
+                  Text to MIDI
+                </span>
+              </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base select-none" style={{ color: 'var(--accent)' }}>✦</span>
                 <input
@@ -7849,36 +7971,18 @@ export default function Home() {
               )}
             </AnimatePresence>
             </div>
+            </div>
           </motion.div>
 
-          {/* Social proof */}
+          {/* Utility footer */}
           <div
-            className="text-center mt-12 space-y-2"
+            className="mx-auto mt-10 flex max-w-[1040px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
           >
-            {totalGenerations !== null && totalGenerations > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <span style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 13,
-                  color: 'var(--accent)',
-                  fontWeight: 500,
-                }}>
-                  {totalGenerations.toLocaleString()}
-                </span>
-                <span style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 13,
-                  color: 'rgba(255,255,255,0.50)',
-                }}>
-                  {' '}MIDI patterns generated
-                </span>
-              </div>
-            )}
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)', letterSpacing: '0.04em' }}>
-              20+ genre models · drag-to-DAW · melody, chords, bass &amp; drums · .mid and .wav export
+              20+ genre models / drag-to-DAW / melody, chords, bass and drums / MIDI and WAV export
             </p>
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.30)' }}>
-              Press G to generate · ? for shortcuts · ⌘K for commands
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--text-micro)' }}>
+              G generate / ? shortcuts / Cmd+K commands
             </p>
           </div>
         </div>
