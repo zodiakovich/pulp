@@ -7766,26 +7766,47 @@ export default function Home() {
                   transition={{ duration: 0.3, ease: EASE_UI }}
                   style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}
                 >
-                  {/* Header: label + layer tabs */}
+                  {/* Header: editor context + tools */}
                   <div
-                    className="flex items-center gap-3 px-4 py-3"
+                    className="px-4 py-3"
                     style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
                   >
-                    <span
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: 11,
-                        color: 'var(--text-micro)',
-                        letterSpacing: '0.06em',
-                        flexShrink: 0,
-                      }}
-                    >
-                      EDITOR
-                    </span>
+                    <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div
+                          className="mt-1 h-10 w-1.5 flex-shrink-0 rounded-full"
+                          style={{ background: LAYER_COLORS[editorLayer] ?? DS.accent, boxShadow: `0 0 18px ${(LAYER_COLORS[editorLayer] ?? DS.accent)}55` }}
+                        />
+                        <div className="min-w-0">
+                          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--accent)', letterSpacing: '0.08em', marginBottom: 4 }}>
+                            {editorView === 'sheet' ? 'SHEET VIEW' : editorLayer === 'drums' && drumsEditorView === 'step' ? 'STEP SEQUENCER' : 'PIANO ROLL'}
+                          </p>
+                          <h3 className="capitalize" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 18, fontWeight: 800, color: 'var(--text)', lineHeight: 1.15, margin: 0 }}>
+                            {editorLayer === 'imported' ? 'Imported MIDI' : `${editorLayer} editor`}
+                          </h3>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          `${selectedLayerNotes.length} notes`,
+                          `${selectedParams.bpm} BPM`,
+                          `${selectedParams.bars} bars`,
+                          `${selectedParams.key} ${selectedParams.scale}`,
+                        ].map(item => (
+                          <span
+                            key={item}
+                            className="rounded-lg px-2.5 py-1"
+                            style={{ border: '1px solid var(--border)', color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
 
-                    <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
-                      <div className="flex items-center gap-2 pr-1" style={{ whiteSpace: 'nowrap' }}>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="min-w-0 overflow-x-auto scrollbar-none">
+                        <div className="flex items-center gap-2 pr-1" style={{ whiteSpace: 'nowrap' }}>
                           <button
                             type="button"
                             onClick={() => setEditorView('piano')}
@@ -7824,6 +7845,7 @@ export default function Home() {
                           </button>
                           {editorLayer === 'drums' && editorView === 'piano' && (
                             <>
+                              <div className="h-6 w-px flex-shrink-0" style={{ background: 'var(--divider)' }} aria-hidden />
                               <button
                                 type="button"
                                 onClick={() => setDrumsEditorView('piano')}
@@ -7840,7 +7862,7 @@ export default function Home() {
                                   border: drumsEditorView === 'piano' ? '1px solid rgba(255,109,63,0.45)' : '1px solid transparent',
                                 }}
                               >
-                                Piano Roll
+                                Notes
                               </button>
                               <button
                                 type="button"
@@ -7862,92 +7884,92 @@ export default function Home() {
                               </button>
                             </>
                           )}
+
+                          <div className="h-6 w-px flex-shrink-0" style={{ background: 'var(--divider)' }} aria-hidden />
+
+                          {editorView === 'piano' && (
+                            <button
+                              type="button"
+                              className="rounded-md transition-all"
+                              style={{
+                                padding: '8px 12px',
+                                fontFamily: 'JetBrains Mono, monospace',
+                                fontSize: 11,
+                                lineHeight: 1,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                color: 'var(--text)',
+                                border: '1px solid var(--border)',
+                                background: 'transparent',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                              onClick={handleCompletePattern}
+                              title="Generate 8 bars continuing your pattern"
+                            >
+                              Complete Pattern
+                            </button>
+                          )}
+                          {editorView === 'sheet' && (
+                            <button
+                              type="button"
+                              className="rounded-md transition-all"
+                              style={{
+                                padding: '8px 12px',
+                                fontFamily: 'JetBrains Mono, monospace',
+                                fontSize: 11,
+                                lineHeight: 1,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                color: 'var(--text)',
+                                border: '1px solid var(--border)',
+                                background: 'transparent',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                              onClick={() => {
+                                const c = sheetCanvasRef.current;
+                                if (!c) return;
+                                const url = c.toDataURL('image/png');
+                                const w = window.open('', '_blank');
+                                if (!w) return;
+                                w.document.write(`<!doctype html><html><head><title>Print Sheet</title></head><body style="margin:0;background:#0A0A0B;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%;height:auto;" /></body></html>`);
+                                w.document.close();
+                                w.focus();
+                                w.print();
+                              }}
+                            >
+                              Print
+                            </button>
+                          )}
+                          {editorView === 'piano' && (
+                            <button
+                              type="button"
+                              className="rounded-md transition-all"
+                              style={{
+                                padding: '8px 12px',
+                                fontFamily: 'JetBrains Mono, monospace',
+                                fontSize: 11,
+                                lineHeight: 1,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                color: 'var(--text)',
+                                border: '1px solid var(--border)',
+                                background: 'transparent',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
+                              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                              onClick={() => setIsPianoFullscreen(true)}
+                              title="Fullscreen (F)"
+                            >
+                              Fullscreen
+                            </button>
+                          )}
                         </div>
+                      </div>
 
-                        <div className="h-6 w-px flex-shrink-0" style={{ background: 'var(--divider)' }} aria-hidden />
-
-                        {editorView === 'piano' && (
-                          <button
-                            type="button"
-                            className="rounded-md transition-all"
-                            style={{
-                              padding: '8px 12px',
-                              fontFamily: 'JetBrains Mono, monospace',
-                              fontSize: 11,
-                              lineHeight: 1,
-                              whiteSpace: 'nowrap',
-                              flexShrink: 0,
-                              color: 'var(--text)',
-                              border: '1px solid var(--border)',
-                              background: 'transparent',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                            onClick={handleCompletePattern}
-                            title="Generate 8 bars continuing your pattern"
-                          >
-                            Complete Pattern
-                          </button>
-                        )}
-                        {editorView === 'sheet' && (
-                          <button
-                            type="button"
-                            className="rounded-md transition-all"
-                            style={{
-                              padding: '8px 12px',
-                              fontFamily: 'JetBrains Mono, monospace',
-                              fontSize: 11,
-                              lineHeight: 1,
-                              whiteSpace: 'nowrap',
-                              flexShrink: 0,
-                              color: 'var(--text)',
-                              border: '1px solid var(--border)',
-                              background: 'transparent',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                            onClick={() => {
-                              const c = sheetCanvasRef.current;
-                              if (!c) return;
-                              const url = c.toDataURL('image/png');
-                              const w = window.open('', '_blank');
-                              if (!w) return;
-                              w.document.write(`<!doctype html><html><head><title>Print Sheet</title></head><body style="margin:0;background:#0A0A0B;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%;height:auto;" /></body></html>`);
-                              w.document.close();
-                              w.focus();
-                              w.print();
-                            }}
-                          >
-                            Print
-                          </button>
-                        )}
-                        {editorView === 'piano' && (
-                          <button
-                            type="button"
-                            className="rounded-md transition-all"
-                            style={{
-                              padding: '8px 12px',
-                              fontFamily: 'JetBrains Mono, monospace',
-                              fontSize: 11,
-                              lineHeight: 1,
-                              whiteSpace: 'nowrap',
-                              flexShrink: 0,
-                              color: 'var(--text)',
-                              border: '1px solid var(--border)',
-                              background: 'transparent',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.45)')}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                            onClick={() => setIsPianoFullscreen(true)}
-                            title="Fullscreen (F)"
-                          >
-                            ⤢
-                          </button>
-                        )}
-
-                        <div className="h-6 w-px flex-shrink-0" style={{ background: 'var(--divider)' }} aria-hidden />
-
-                        <div className="flex gap-2 flex-shrink-0">
+                      <div className="min-w-0 overflow-x-auto scrollbar-none">
+                        <div className="flex gap-2" style={{ whiteSpace: 'nowrap' }}>
                           {EDITOR_LAYERS.map(layer => (
                             <button
                               key={layer}
@@ -7960,7 +7982,7 @@ export default function Home() {
                                 lineHeight: 1,
                                 whiteSpace: 'nowrap',
                                 flexShrink: 0,
-                                color: editorLayer === layer ? LAYER_COLORS[layer] : 'var(--muted)',
+                                color: editorLayer === layer ? (LAYER_COLORS[layer] ?? DS.accent) : 'var(--muted)',
                                 background: editorLayer === layer ? 'var(--surface-weak)' : 'transparent',
                                 border: editorLayer === layer ? '1px solid var(--border)' : '1px solid transparent',
                               }}
@@ -7972,7 +7994,6 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-
                   {/* Canvas */}
                   {editorView === 'piano' && editorLayer === 'drums' && drumsEditorView === 'step' ? (
                     <div ref={onboardingPianoRef} style={{ padding: 12 }}>
@@ -8296,6 +8317,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
