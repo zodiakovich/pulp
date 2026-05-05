@@ -188,11 +188,12 @@ function totalDailyCost(row: FeatureCreditRow): number {
 }
 
 function totalMonthlyCost(row: FeatureCreditRow): number {
-  return cents(
+  const monthly = cents(
     Number(row.build_monthly_cost ?? 0) +
     Number(row.midi_monthly_cost ?? 0) +
     Number(row.audio_monthly_cost ?? 0),
   );
+  return Math.max(monthly, totalDailyCost(row));
 }
 
 function buildWindowResult(row: FeatureCreditRow, planType: PlanType): WindowCheckResult {
@@ -224,7 +225,7 @@ export async function incrementFeatureCost(userId: string, feature: FeatureType,
   const row = await resetExpiredWindows(await getOrCreateFeatureCreditRow(userId));
   const columns = FEATURE_COLUMNS[feature];
   const dailyCost = cents(Number(row[columns.dailyCost] ?? 0) + costUsd);
-  const monthlyCost = cents(Number(row[columns.monthlyCost] ?? 0) + costUsd);
+  const monthlyCost = Math.max(cents(Number(row[columns.monthlyCost] ?? 0) + costUsd), dailyCost);
 
   const { error } = await db
     .from('user_credits')
