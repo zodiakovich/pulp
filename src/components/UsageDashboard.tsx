@@ -3,27 +3,19 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-type FeatureType = 'build' | 'midi' | 'audio';
 type PlanType = 'free' | 'pro' | 'studio';
 
-type WindowCheckResult = {
-  allowed: boolean;
-  daily_used: number;
+type UsageResponse = {
+  daily_cost: number;
   daily_limit: number;
-  monthly_used: number;
+  monthly_cost: number;
   monthly_limit: number;
-  blocked_by: 'daily' | 'monthly' | null;
-};
-
-type UsageResponse = Record<FeatureType, WindowCheckResult> & {
+  daily_pct: number;
+  monthly_pct: number;
   plan_type: PlanType;
+  blocked_by: 'daily' | 'monthly' | null;
+  allowed: boolean;
 };
-
-const FEATURES: Array<{ key: FeatureType; name: string; color: string }> = [
-  { key: 'build', name: 'Build a Track', color: '#FF6D3F' },
-  { key: 'midi', name: 'MIDI Generator', color: '#00B894' },
-  { key: 'audio', name: 'Audio to MIDI', color: '#E94560' },
-];
 
 function barColor(percent: number) {
   if (percent >= 86) return '#E94560';
@@ -31,24 +23,32 @@ function barColor(percent: number) {
   return '#FF6D3F';
 }
 
-function UsageRow({
+function pctLabel(value: number) {
+  return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
+}
+
+function UsageBar({
   label,
-  used,
-  limit,
+  percent,
   blocked,
 }: {
-  label: 'Daily' | 'Monthly';
-  used: number;
-  limit: number;
+  label: 'Today' | 'This month';
+  percent: number;
   blocked: boolean;
 }) {
-  const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const color = barColor(percent);
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-3">
+    <div
+      style={{
+        border: '1px solid #1A1A2E',
+        background: '#111118',
+        borderRadius: 12,
+        padding: 20,
+      }}
+    >
+      <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
+          <span style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--foreground)' }}>
             {label}
           </span>
           {blocked && (
@@ -69,12 +69,25 @@ function UsageRow({
           )}
         </div>
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-          {used} / {limit}
+          {pctLabel(percent)}
         </span>
       </div>
-      <div style={{ height: 8, borderRadius: 999, background: `${color}22`, overflow: 'hidden' }}>
-        <div style={{ width: `${percent}%`, height: '100%', background: color, borderRadius: 999, transition: 'width 240ms ease' }} />
+
+      <div style={{ height: 10, borderRadius: 999, background: `${color}22`, overflow: 'hidden' }}>
+        <div
+          style={{
+            width: pctLabel(percent),
+            height: '100%',
+            background: color,
+            borderRadius: 999,
+            transition: 'width 240ms ease',
+          }}
+        />
       </div>
+
+      <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 13, color: '#8A8A9A', marginTop: 10 }}>
+        {pctLabel(percent)} of {label === 'Today' ? 'daily' : 'monthly'} limit used
+      </p>
     </div>
   );
 }
@@ -82,7 +95,7 @@ function UsageRow({
 function Skeleton() {
   return (
     <div className="space-y-3">
-      {[0, 1, 2].map((item) => (
+      {[0, 1].map((item) => (
         <div
           key={item}
           style={{
@@ -92,9 +105,8 @@ function Skeleton() {
             padding: 20,
           }}
         >
-          <div className="mb-5 h-5 w-40 animate-pulse rounded" style={{ background: 'rgba(255,255,255,0.08)' }} />
-          <div className="mb-4 h-8 animate-pulse rounded" style={{ background: 'rgba(255,255,255,0.06)' }} />
-          <div className="h-8 animate-pulse rounded" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <div className="mb-4 h-5 w-32 animate-pulse rounded" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          <div className="h-10 animate-pulse rounded" style={{ background: 'rgba(255,255,255,0.06)' }} />
         </div>
       ))}
     </div>
@@ -136,41 +148,8 @@ export function UsageDashboard() {
       </p>
 
       <div className="space-y-3">
-        {FEATURES.map((feature) => {
-          const data = usage[feature.key];
-          return (
-            <div
-              key={feature.key}
-              style={{
-                border: '1px solid #1A1A2E',
-                background: '#111118',
-                borderRadius: 12,
-                padding: 20,
-              }}
-            >
-              <div className="mb-5 flex items-center gap-3">
-                <div
-                  aria-hidden
-                  style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 4,
-                    background: feature.color,
-                    boxShadow: `0 0 18px ${feature.color}55`,
-                    flex: '0 0 auto',
-                  }}
-                />
-                <h3 style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--foreground)' }}>
-                  {feature.name}
-                </h3>
-              </div>
-              <div className="space-y-4">
-                <UsageRow label="Daily" used={data.daily_used} limit={data.daily_limit} blocked={data.blocked_by === 'daily'} />
-                <UsageRow label="Monthly" used={data.monthly_used} limit={data.monthly_limit} blocked={data.blocked_by === 'monthly'} />
-              </div>
-            </div>
-          );
-        })}
+        <UsageBar label="Today" percent={usage.daily_pct} blocked={usage.blocked_by === 'daily'} />
+        <UsageBar label="This month" percent={usage.monthly_pct} blocked={usage.blocked_by === 'monthly'} />
       </div>
 
       {usage.plan_type === 'free' && (

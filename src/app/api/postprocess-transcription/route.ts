@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { enforceRateLimit } from '@/lib/ratelimit';
 import { NOTE_NAMES, SCALE_INTERVALS, type NoteEvent } from '@/lib/music-engine';
 import { calculateAnthropicCostUsd, logAnthropicUsage, normalizeAnthropicUsage } from '@/lib/ai-usage';
-import { checkFeatureAllowed, incrementFeatureUsage } from '@/lib/feature-credits';
+import { checkFeatureAllowed, incrementFeatureCost } from '@/lib/feature-credits';
 
 export const runtime = 'nodejs';
 
@@ -150,10 +150,12 @@ export async function POST(req: NextRequest) {
           ? 'Daily transcription limit reached'
           : 'Monthly transcription limit reached',
         blocked_by: featureCheck.blocked_by,
-        daily_used: featureCheck.daily_used,
+        daily_cost: featureCheck.daily_cost,
         daily_limit: featureCheck.daily_limit,
-        monthly_used: featureCheck.monthly_used,
+        monthly_cost: featureCheck.monthly_cost,
         monthly_limit: featureCheck.monthly_limit,
+        daily_pct: featureCheck.daily_pct,
+        monthly_pct: featureCheck.monthly_pct,
       },
       { status: 429 },
     );
@@ -218,42 +220,44 @@ Return:
     const raw = extractJsonObject(text);
     if (!raw) {
       const notes = fallbackCleanup(sourceNotes, totalBeats);
-      await incrementFeatureUsage(userId, 'audio');
+      const costUsd = calculateAnthropicCostUsd(usage);
+      await incrementFeatureCost(userId, 'audio', costUsd);
       return NextResponse.json({
         notes,
         suggestions: ['Claude returned invalid JSON, so pulp applied deterministic quantize cleanup.'],
         model: MODEL,
         usage,
-        cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
+        cost_usd: Number(costUsd.toFixed(8)),
         cleanup_mode: 'fallback',
         feature_usage: {
-          daily_used: featureCheck.daily_used + 1,
+          daily_cost: featureCheck.daily_cost + costUsd,
           daily_limit: featureCheck.daily_limit,
-          monthly_used: featureCheck.monthly_used + 1,
+          monthly_cost: featureCheck.monthly_cost + costUsd,
           monthly_limit: featureCheck.monthly_limit,
-          blocked_by: null,
-          allowed: true,
+          daily_pct: Math.min(100, ((featureCheck.daily_cost + costUsd) / featureCheck.daily_limit) * 100),
+          monthly_pct: Math.min(100, ((featureCheck.monthly_cost + costUsd) / featureCheck.monthly_limit) * 100),
         },
       });
     }
     const parsedOut = OutSchema.safeParse(raw);
     if (!parsedOut.success) {
       const notes = fallbackCleanup(sourceNotes, totalBeats);
-      await incrementFeatureUsage(userId, 'audio');
+      const costUsd = calculateAnthropicCostUsd(usage);
+      await incrementFeatureCost(userId, 'audio', costUsd);
       return NextResponse.json({
         notes,
         suggestions: ['Claude cleanup schema failed, so pulp applied deterministic quantize cleanup.'],
         model: MODEL,
         usage,
-        cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
+        cost_usd: Number(costUsd.toFixed(8)),
         cleanup_mode: 'fallback',
         feature_usage: {
-          daily_used: featureCheck.daily_used + 1,
+          daily_cost: featureCheck.daily_cost + costUsd,
           daily_limit: featureCheck.daily_limit,
-          monthly_used: featureCheck.monthly_used + 1,
+          monthly_cost: featureCheck.monthly_cost + costUsd,
           monthly_limit: featureCheck.monthly_limit,
-          blocked_by: null,
-          allowed: true,
+          daily_pct: Math.min(100, ((featureCheck.daily_cost + costUsd) / featureCheck.daily_limit) * 100),
+          monthly_pct: Math.min(100, ((featureCheck.monthly_cost + costUsd) / featureCheck.monthly_limit) * 100),
         },
       });
     }
@@ -266,20 +270,21 @@ Return:
     if (notes.length === 0) {
       return NextResponse.json({ error: 'Claude returned no usable notes' }, { status: 502 });
     }
-    await incrementFeatureUsage(userId, 'audio');
+    const costUsd = calculateAnthropicCostUsd(usage);
+    await incrementFeatureCost(userId, 'audio', costUsd);
     return NextResponse.json({
       notes,
       suggestions: parsedOut.data.suggestions.slice(0, 5),
       model: MODEL,
       usage,
-      cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
+      cost_usd: Number(costUsd.toFixed(8)),
       feature_usage: {
-        daily_used: featureCheck.daily_used + 1,
+        daily_cost: featureCheck.daily_cost + costUsd,
         daily_limit: featureCheck.daily_limit,
-        monthly_used: featureCheck.monthly_used + 1,
+        monthly_cost: featureCheck.monthly_cost + costUsd,
         monthly_limit: featureCheck.monthly_limit,
-        blocked_by: null,
-        allowed: true,
+        daily_pct: Math.min(100, ((featureCheck.daily_cost + costUsd) / featureCheck.daily_limit) * 100),
+        monthly_pct: Math.min(100, ((featureCheck.monthly_cost + costUsd) / featureCheck.monthly_limit) * 100),
       },
     });
   } catch (error) {

@@ -12,8 +12,8 @@ import {
   incrementGuest,
 } from '@/lib/credits';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { logAnthropicUsage } from '@/lib/ai-usage';
-import { checkFeatureAllowed, incrementFeatureUsage, type WindowCheckResult } from '@/lib/feature-credits';
+import { calculateAnthropicCostUsd, logAnthropicUsage } from '@/lib/ai-usage';
+import { checkFeatureAllowed, incrementFeatureCost, type WindowCheckResult } from '@/lib/feature-credits';
 import {
   generateTrack,
   getDefaultParams,
@@ -92,6 +92,7 @@ Examples:
 - "aggressive trap banger" → density: dense, energy: high, melody_octave: -1, mood_tags: ["aggressive","trap","dark"]`;
 
 type Extracted = z.infer<typeof EXTRACTED_SCHEMA>;
+type ExtractedWithCost = { extracted: Extracted | null; costUsd: number };
 
 function applyExtractedToParams(params: GenerationParams, ex: Extracted, barsBeforeDensity: number): void {
   params.bpm = Math.round(Math.min(200, Math.max(60, params.bpm + ex.bpm_modifier)));
@@ -114,9 +115,9 @@ function applyExtractedToParams(params: GenerationParams, ex: Extracted, barsBef
   }
 }
 
-async function extractWithAnthropic(userPrompt: string, userId?: string | null): Promise<Extracted | null> {
+async function extractWithAnthropic(userPrompt: string, userId?: string | null): Promise<ExtractedWithCost> {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!key) return null;
+  if (!key) return { extracted: null, costUsd: 0 };
 
   const client = new Anthropic({ apiKey: key });
   const message = await client.messages.create({
@@ -132,6 +133,7 @@ async function extractWithAnthropic(userPrompt: string, userId?: string | null):
     usage: message.usage,
     metadata: { promptLength: userPrompt.length },
   });
+  const costUsd = calculateAnthropicCostUsd(message.usage);
 
   const block = message.content[0];
   const text = block?.type === 'text' ? block.text : '';
@@ -140,11 +142,11 @@ async function extractWithAnthropic(userPrompt: string, userId?: string | null):
   try {
     raw = JSON.parse(cleaned) as unknown;
   } catch {
-    return null;
+    return { extracted: null, costUsd };
   }
   const parsed = EXTRACTED_SCHEMA.safeParse(raw);
-  if (!parsed.success) return null;
-  return parsed.data;
+  if (!parsed.success) return { extracted: null, costUsd };
+  return { extracted: parsed.data, costUsd };
 }
 
 export async function POST(req: NextRequest) {
@@ -197,10 +199,12 @@ export async function POST(req: NextRequest) {
               ? 'Daily build limit reached'
               : 'Monthly build limit reached',
             blocked_by: featureCheck.blocked_by,
-            daily_used: featureCheck.daily_used,
+            daily_cost: featureCheck.daily_cost,
             daily_limit: featureCheck.daily_limit,
-            monthly_used: featureCheck.monthly_used,
+            monthly_cost: featureCheck.monthly_cost,
             monthly_limit: featureCheck.monthly_limit,
+            daily_pct: featureCheck.daily_pct,
+            monthly_pct: featureCheck.monthly_pct,
           },
           { status: 429 },
         );
@@ -238,6 +242,7 @@ export async function POST(req: NextRequest) {
   let swing: boolean | undefined;
   let melody_octave: number | undefined;
   let notes_override: string | null | undefined;
+  let buildCost = 0;
 
   if (prompt.trim()) {
     const hints = parsePrompt(prompt);
@@ -248,7 +253,8 @@ export async function POST(req: NextRequest) {
     params.genre = genre;
 
     try {
-      const ex = await extractWithAnthropic(prompt, userId);
+      const { extracted: ex, costUsd } = await extractWithAnthropic(prompt, userId);
+      buildCost = costUsd;
       if (ex) {
         const barsBase = params.bars;
         applyExtractedToParams(params, ex, barsBase);
@@ -283,7 +289,7 @@ export async function POST(req: NextRequest) {
   try {
     if (userId) {
       await incrementCredits(userId);
-      await incrementFeatureUsage(userId, 'build');
+      await incrementFeatureCost(userId, 'build', buildCost);
       const fin = await checkCreditsAllowed(userId);
       creditsPayload = {
         credits_used: fin.credits_used,
@@ -368,12 +374,12 @@ export async function POST(req: NextRequest) {
     credits: creditsPayload,
     ...(featureCheck && {
       feature_usage: {
-        daily_used: featureCheck.daily_used + 1,
+        daily_cost: featureCheck.daily_cost + buildCost,
         daily_limit: featureCheck.daily_limit,
-        monthly_used: featureCheck.monthly_used + 1,
+        monthly_cost: featureCheck.monthly_cost + buildCost,
         monthly_limit: featureCheck.monthly_limit,
-        blocked_by: null,
-        allowed: true,
+        daily_pct: Math.min(100, ((featureCheck.daily_cost + buildCost) / featureCheck.daily_limit) * 100),
+        monthly_pct: Math.min(100, ((featureCheck.monthly_cost + buildCost) / featureCheck.monthly_limit) * 100),
       },
     }),
     ...(mood_tags !== undefined && { mood_tags }),
