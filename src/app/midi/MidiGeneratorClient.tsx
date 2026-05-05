@@ -1,0 +1,280 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { Download, FileAudio, Loader2, Music2, Sparkles } from 'lucide-react';
+import { SignedIn, SignedOut } from '@clerk/nextjs';
+import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
+import { PianoRollEditor } from '@/components/PianoRollEditor';
+import { downloadMidi, generateMidiFormat0 } from '@/lib/midi-writer';
+import type { NoteEvent } from '@/lib/music-engine';
+import { stopAllAppAudio } from '@/lib/audio-control';
+
+const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+const SCALES = ['minor', 'major', 'dorian', 'mixolydian', 'phrygian', 'lydian', 'harmonic_minor', 'melodic_minor', 'pentatonic_minor', 'pentatonic_major', 'blues'] as const;
+const TRACK_TYPES = ['melody', 'arp', 'bass', 'counter-melody', 'pad', 'drums', 'chords', 'lead', 'pluck'] as const;
+
+type MidiSingleResponse = {
+  id: string | null;
+  prompt: string;
+  params: {
+    key: string;
+    scale: string;
+    bpm: number;
+    bars: number;
+    trackType: string;
+  };
+  notes: NoteEvent[];
+  model: string;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens: number;
+    cache_read_input_tokens: number;
+  };
+  cost_usd: number;
+};
+
+function fieldStyle(): React.CSSProperties {
+  return {
+    width: '100%',
+    border: '1px solid var(--border)',
+    background: 'var(--surface)',
+    color: 'var(--text)',
+    borderRadius: 8,
+    padding: '12px 12px',
+    outline: 'none',
+    fontFamily: 'DM Sans, system-ui, sans-serif',
+  };
+}
+
+function labelStyle(): React.CSSProperties {
+  return {
+    display: 'block',
+    marginBottom: 8,
+    color: 'var(--muted)',
+    fontSize: 12,
+    fontFamily: 'JetBrains Mono, monospace',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+  };
+}
+
+function makeMidi(notes: NoteEvent[], bpm: number, trackType: string) {
+  return generateMidiFormat0(notes, bpm, `pulp-${trackType}`);
+}
+
+function midiFileName(trackType: string, bpm: number) {
+  return `pulp-${trackType}-${bpm}bpm.mid`.replace(/[^a-z0-9.-]+/gi, '-').toLowerCase();
+}
+
+export function MidiGeneratorClient() {
+  const [prompt, setPrompt] = useState('warm afro house counter-melody with short syncopated notes');
+  const [key, setKey] = useState<(typeof KEYS)[number]>('C');
+  const [scale, setScale] = useState<(typeof SCALES)[number]>('minor');
+  const [bpm, setBpm] = useState(124);
+  const [bars, setBars] = useState(4);
+  const [trackType, setTrackType] = useState<(typeof TRACK_TYPES)[number]>('melody');
+  const [notes, setNotes] = useState<NoteEvent[]>([]);
+  const [result, setResult] = useState<MidiSingleResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canExport = notes.length > 0;
+  const totalTokens = useMemo(() => {
+    if (!result) return 0;
+    return result.usage.input_tokens + result.usage.output_tokens;
+  }, [result]);
+
+  async function generate() {
+    stopAllAppAudio();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/generate-midi-single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, key, scale, bpm, bars, trackType }),
+      });
+      const data = await res.json() as MidiSingleResponse | { error?: string };
+      if (!res.ok) {
+        throw new Error('error' in data && data.error ? data.error : 'Generation failed');
+      }
+      const generation = data as MidiSingleResponse;
+      setResult(generation);
+      setNotes(generation.notes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function download() {
+    if (!canExport) return;
+    stopAllAppAudio();
+    downloadMidi(makeMidi(notes, bpm, trackType), midiFileName(trackType, bpm));
+  }
+
+  function onDragStart(event: React.DragEvent<HTMLButtonElement>) {
+    if (!canExport) return;
+    stopAllAppAudio();
+    const filename = midiFileName(trackType, bpm);
+    const bytes = makeMidi(notes, bpm, trackType);
+    const file = new File([bytes.buffer as ArrayBuffer], filename, { type: 'audio/midi' });
+    const url = URL.createObjectURL(file);
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData('DownloadURL', `audio/midi:${filename}:${url}`);
+    event.dataTransfer.setData('text/plain', filename);
+    try {
+      event.dataTransfer.items.add(file);
+    } catch {
+      // Some browsers only support DownloadURL for dragging files out.
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  return (
+    <main className="px-4 sm:px-6 md:px-8 py-10 sm:py-14">
+      <div className="mx-auto max-w-[1280px]">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
+              Single-track MIDI
+            </p>
+            <h1 style={{ color: 'var(--text)', fontFamily: 'Syne, system-ui, sans-serif', fontWeight: 800, fontSize: 'clamp(2.25rem, 6vw, 5rem)', lineHeight: 0.95, letterSpacing: 0 }}>
+              Prompt any part.
+            </h1>
+          </div>
+          <p className="max-w-[520px]" style={{ color: 'var(--muted)', fontSize: 16, lineHeight: 1.7 }}>
+            Generate melody, arp, bass, pads, drums, chords, or counter-melody as one clean editable MIDI clip.
+          </p>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[420px_minmax(0,1fr)]">
+          <section style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 8, padding: 18 }}>
+            <label style={labelStyle()} htmlFor="midi-prompt">Prompt</label>
+            <textarea
+              id="midi-prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={7}
+              placeholder="short rolling bass line for dark UK garage, bouncy and offbeat"
+              style={{ ...fieldStyle(), resize: 'vertical', minHeight: 150 }}
+            />
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div>
+                <label style={labelStyle()} htmlFor="midi-key">Key</label>
+                <select id="midi-key" value={key} onChange={(e) => setKey(e.target.value as typeof key)} style={fieldStyle()}>
+                  {KEYS.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle()} htmlFor="midi-scale">Scale</label>
+                <select id="midi-scale" value={scale} onChange={(e) => setScale(e.target.value as typeof scale)} style={fieldStyle()}>
+                  {SCALES.map((item) => <option key={item} value={item}>{item.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle()} htmlFor="midi-bpm">BPM</label>
+                <input id="midi-bpm" type="number" min={60} max={220} value={bpm} onChange={(e) => setBpm(Number(e.target.value))} style={fieldStyle()} />
+              </div>
+              <div>
+                <label style={labelStyle()} htmlFor="midi-bars">Bars</label>
+                <input id="midi-bars" type="number" min={1} max={16} value={bars} onChange={(e) => setBars(Number(e.target.value))} style={fieldStyle()} />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label style={labelStyle()} htmlFor="midi-track-type">Track type</label>
+              <select id="midi-track-type" value={trackType} onChange={(e) => setTrackType(e.target.value as typeof trackType)} style={fieldStyle()}>
+                {TRACK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </div>
+
+            <SignedIn>
+              <button type="button" className="btn-primary mt-5 w-full" onClick={generate} disabled={loading || prompt.trim().length < 3}>
+                {loading ? <Loader2 size={17} className="animate-spin" aria-hidden /> : <Sparkles size={17} aria-hidden />}
+                {loading ? 'Generating MIDI...' : 'Generate MIDI'}
+              </button>
+            </SignedIn>
+            <SignedOut>
+              <SignInButtonDeferred mode="modal">
+                <button type="button" className="btn-primary mt-5 w-full">
+                  <Sparkles size={17} aria-hidden />
+                  Sign in to generate
+                </button>
+              </SignInButtonDeferred>
+            </SignedOut>
+
+            {error && (
+              <p className="mt-4" style={{ color: '#E94560', fontSize: 14 }}>
+                {error}
+              </p>
+            )}
+
+            {result && (
+              <div className="mt-5 grid grid-cols-2 gap-2" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>notes<br /><span style={{ color: 'var(--text)' }}>{notes.length}</span></div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>tokens<br /><span style={{ color: 'var(--text)' }}>{totalTokens}</span></div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>cost<br /><span style={{ color: 'var(--text)' }}>${result.cost_usd.toFixed(6)}</span></div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>model<br /><span style={{ color: 'var(--text)' }}>Haiku 4.5</span></div>
+              </div>
+            )}
+          </section>
+
+          <section style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 8, overflow: 'hidden' }}>
+            <div className="flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'rgba(255,109,63,0.12)', color: 'var(--accent)' }}>
+                  <Music2 size={18} aria-hidden />
+                </div>
+                <div>
+                  <h2 style={{ color: 'var(--text)', fontWeight: 700, fontSize: 16 }}>{trackType} editor</h2>
+                  <p style={{ color: 'var(--muted)', fontSize: 13 }}>{key} {scale.replace('_', ' ')} · {bpm} BPM · {bars} bars</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-secondary btn-sm" onClick={download} disabled={!canExport}>
+                  <Download size={15} aria-hidden />
+                  Download MIDI
+                </button>
+                <button type="button" className="btn-secondary btn-sm" draggable={canExport} onDragStart={onDragStart} disabled={!canExport} title="Drag this button into your DAW">
+                  <FileAudio size={15} aria-hidden />
+                  Drag MIDI into DAW
+                </button>
+              </div>
+            </div>
+
+            {canExport ? (
+              <div className="p-4">
+                <PianoRollEditor
+                  notes={notes}
+                  color="#FF6D3F"
+                  bars={bars}
+                  layerName={trackType}
+                  bpm={bpm}
+                  onNotesChange={setNotes}
+                  gridHeightPx={360}
+                  velocityHeightPx={96}
+                />
+              </div>
+            ) : (
+              <div className="flex min-h-[520px] items-center justify-center p-8 text-center">
+                <div className="max-w-[360px]">
+                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg" style={{ background: 'rgba(255,109,63,0.12)', color: 'var(--accent)' }}>
+                    <FileAudio size={22} aria-hidden />
+                  </div>
+                  <p style={{ color: 'var(--text)', fontWeight: 700, fontSize: 18 }}>Your MIDI clip appears here.</p>
+                  <p className="mt-2" style={{ color: 'var(--muted)', lineHeight: 1.6 }}>
+                    Generate a part, edit notes and velocities, then export the clip or drag it into your DAW.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+}

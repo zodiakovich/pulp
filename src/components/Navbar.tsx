@@ -60,7 +60,7 @@ export function Navbar({
   active,
   historyCount,
 }: {
-  active?: 'create' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog' | 'changelog' | 'settings';
+  active?: 'create' | 'midi' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog' | 'changelog' | 'settings';
   onHistory?: () => void;
   historyCount?: number;
 }) {
@@ -114,6 +114,9 @@ export function Navbar({
       <Link href="/" className={navClass(active === 'create')}>
         Create
       </Link>
+      <Link href="/midi" className={navClass(active === 'midi')}>
+        MIDI
+      </Link>
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
@@ -127,6 +130,9 @@ export function Navbar({
     <>
       <Link href="/" className={navClass(active === 'create')}>
         Create
+      </Link>
+      <Link href="/midi" className={navClass(active === 'midi')}>
+        MIDI
       </Link>
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
@@ -280,6 +286,7 @@ export function Navbar({
           {isLoaded && isSignedIn ? (
             <>
               <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>
+              <a href="/midi" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>MIDI</a>
               <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
               <a href="/profile" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
               <a href="/blog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Blog</a>
@@ -288,6 +295,7 @@ export function Navbar({
           ) : (
             <>
               <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>
+              <a href="/midi" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>MIDI</a>
               <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
               <a href="/pricing" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               <a href="/blog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Blog</a>
