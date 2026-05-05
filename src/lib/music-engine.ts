@@ -474,6 +474,8 @@ function generateMelody(
     lastMelodyPitch?: number | null;
     seedDurations?: number[];
     directionBias?: number; // -1..1
+    chordProgression?: number[];
+    progressionIndex?: number;
   }
 ): NoteEvent[] {
   const notes: NoteEvent[] = [];
@@ -486,6 +488,7 @@ function generateMelody(
   
   const totalBeats = params.bars * 4;
   const startBeat = opts?.startBeat ?? 0;
+  const scaleNotesForChord = getScaleNotes(params.key, params.scale, 3);
   let currentBeat = 0;
   let lastNoteIdx = Math.floor(scaleNotes.length / 2); // start in middle
   if (typeof opts?.lastMelodyPitch === 'number') {
@@ -515,26 +518,49 @@ function generateMelody(
     const duration = pick(durationPool);
     if (currentBeat + duration > totalBeats) break;
     
-    // Melodic motion: mostly stepwise, occasional leaps (optionally biased by contour)
-    const motion = Math.random();
-    let step: number;
-    const dir = (opts?.directionBias ?? 0);
-    const stepChoices = dir > 0.25 ? [-1, 1, 1, 1] : dir < -0.25 ? [-1, -1, -1, 1] : [-1, 1];
-    const thirdChoices = dir > 0.25 ? [-2, 2, 2] : dir < -0.25 ? [-2, -2, 2] : [-2, 2];
-    if (motion < 0.5) step = pick(stepChoices);          // step
-    else if (motion < 0.75) step = pick(thirdChoices);   // third
-    else if (motion < 0.9) step = pick([-3, 3, -4, 4]);  // leap
-    else step = 0;                                       // repeat
-    
-    lastNoteIdx = Math.max(0, Math.min(scaleNotes.length - 1, lastNoteIdx + step));
+    // Emphasize downbeats
+    const isDownbeat = currentBeat % 4 === 0;
+
+    if (isDownbeat && Math.random() < 0.7 && opts?.chordProgression?.length) {
+      const barInLoop = Math.floor(currentBeat / 4);
+      const degree = opts.chordProgression[
+        ((opts.progressionIndex ?? 0) + barInLoop) % opts.chordProgression.length
+      ] ?? 0;
+      const chordTones = buildChord(scaleNotesForChord, degree, genre.chordComplexity);
+      const targetPCs = chordTones.map(p => ((p % 12) + 12) % 12);
+      let bestIdx = lastNoteIdx;
+      let bestDist = Infinity;
+      for (let i = 0; i < scaleNotes.length; i++) {
+        const pc = (((scaleNotes[i] ?? 0) % 12) + 12) % 12;
+        if (!targetPCs.includes(pc)) continue;
+        const dist = Math.abs(i - lastNoteIdx);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      }
+      lastNoteIdx = bestIdx;
+    } else {
+      // Melodic motion: mostly stepwise, occasional leaps (optionally biased by contour)
+      const motion = Math.random();
+      let step: number;
+      const dir = (opts?.directionBias ?? 0);
+      const stepChoices = dir > 0.25 ? [-1, 1, 1, 1] : dir < -0.25 ? [-1, -1, -1, 1] : [-1, 1];
+      const thirdChoices = dir > 0.25 ? [-2, 2, 2] : dir < -0.25 ? [-2, -2, 2] : [-2, 2];
+      if (motion < 0.5) step = pick(stepChoices);          // step
+      else if (motion < 0.75) step = pick(thirdChoices);   // third
+      else if (motion < 0.9) step = pick([-3, 3, -4, 4]);  // leap
+      else step = 0;                                       // repeat
+
+      lastNoteIdx = Math.max(0, Math.min(scaleNotes.length - 1, lastNoteIdx + step));
+    }
+
     const pitch = scaleNotes[lastNoteIdx];
-    
+
     // Velocity variation
     const baseVel = 80 + Math.floor(genre.energy * 30);
     const vel = Math.max(50, Math.min(120, baseVel + randInt(-15, 15)));
-    
-    // Emphasize downbeats
-    const isDownbeat = currentBeat % 4 === 0;
+
     const finalVel = isDownbeat ? Math.min(127, vel + 10) : vel;
     
     notes.push({
@@ -596,7 +622,7 @@ function generateChords(
   
   const startBeat = opts?.startBeat ?? 0;
   const scaleNotes = getScaleNotes(params.key, params.scale, 3);
-  let progression = pick(genre.chordProgressions);
+  let progression = opts?.continuation?.progression;
   let startIndex = 0;
   const cont = opts?.continuation;
   if (cont?.progression && typeof cont.progressionIndex === 'number') {
@@ -607,11 +633,12 @@ function generateChords(
     progression = r.progression;
     startIndex = r.nextIndex;
   }
+  if (!progression?.length) return notes;
   
   const totalBeats = params.bars * 4;
   
   for (let bar = 0; bar < params.bars; bar++) {
-    const degree = progression[(startIndex + bar) % progression.length];
+    const degree = progression[(startIndex + bar) % progression.length] ?? 0;
     const chordPitches = buildChord(scaleNotes, degree, genre.chordComplexity);
     
     // Move chord to octave 4 range
@@ -698,11 +725,12 @@ function generateBass(
   
   const startBeat = opts?.startBeat ?? 0;
   const scaleNotes = getScaleNotes(params.key, params.scale, genre.bassOctave);
-  const progression = opts?.continuation?.progression ?? pick(genre.chordProgressions);
+  const progression = opts?.continuation?.progression;
   const startIndex = opts?.continuation?.progressionIndex ?? 0;
+  if (!progression?.length) return notes;
   
   for (let bar = 0; bar < params.bars; bar++) {
-    const degree = progression[(startIndex + bar) % progression.length];
+    const degree = progression[(startIndex + bar) % progression.length] ?? 0;
     const root = scaleNotes[degree % scaleNotes.length];
     const fifth = scaleNotes[(degree + 4) % scaleNotes.length];
     
@@ -1078,6 +1106,9 @@ export function generateTrack(params: GenerationParams, continuation?: Continuat
     const r = resolveProgressionForContinuation(params, genre, continuation.lastChordPitches);
     progression = r.progression;
     progressionIndex = r.nextIndex;
+  } else {
+    progression = pick(genre.chordProgressions);
+    progressionIndex = 0;
   }
 
   return {
@@ -1095,6 +1126,8 @@ export function generateTrack(params: GenerationParams, continuation?: Continuat
           const diff = last - first;
           return Math.max(-1, Math.min(1, diff / 24));
         })(),
+        chordProgression: progression,
+        progressionIndex,
       }),
       params.bpm,
       h
