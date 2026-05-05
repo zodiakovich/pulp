@@ -10,6 +10,7 @@ import { ProfileAccountClient } from './ProfileAccountClient';
 import { getUserBadges, type EarnedBadge } from '@/lib/badges';
 import { BadgesSection } from './BadgesSection';
 import { UserAvatar } from '@/components/UserAvatar';
+import { getAiUsageDashboard, type AiUsageDashboard, type AiUsageSummary } from '@/lib/ai-usage';
 import Stripe from 'stripe';
 
 const db = supabaseAdmin ?? supabase;
@@ -140,6 +141,95 @@ function CreditsStatWithUpgrade({ value, isPro }: { value: string; isPro: boolea
   );
 }
 
+function formatUsd(value: number) {
+  if (value <= 0) return '$0.0000';
+  return `$${value.toFixed(4)}`;
+}
+
+function formatTokens(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(Math.round(value));
+}
+
+function UsageBar({ label, summary, denominator }: { label: string; summary: AiUsageSummary; denominator: number }) {
+  const pct = denominator > 0 ? Math.min(100, Math.round((summary.costUsd / denominator) * 100)) : 0;
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{label}</span>
+        <span style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
+          {formatUsd(summary.costUsd)} · {pct}%
+        </span>
+      </div>
+      <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 999 }} />
+      </div>
+      <p className="mt-2" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+        {summary.calls} calls · {formatTokens(summary.totalTokens)} tokens
+      </p>
+    </div>
+  );
+}
+
+function AiUsageSection({ usage }: { usage: AiUsageDashboard }) {
+  const denominator = Math.max(usage.month.costUsd, usage.week.costUsd, usage.today.costUsd, 0.000001);
+  return (
+    <section className="rounded-2xl p-6" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 11,
+              color: 'var(--muted)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginBottom: 10,
+            }}
+          >
+            Anthropic usage
+          </p>
+          <h2 style={{ color: 'var(--foreground)', fontFamily: 'DM Sans, system-ui, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em' }}>
+            Real cost dashboard
+          </h2>
+        </div>
+        <p className="max-w-[460px]" style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>
+          Observed spend only. Plan caps stay unset until enough real usage data exists.
+        </p>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-5">
+          <UsageBar label="Today" summary={usage.today} denominator={denominator} />
+          <UsageBar label="Last 7 days" summary={usage.week} denominator={denominator} />
+          <UsageBar label="Last 30 days" summary={usage.month} denominator={denominator} />
+        </div>
+
+        <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
+          <p style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+            Endpoint mix
+          </p>
+          {usage.byEndpoint.length === 0 ? (
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>No Anthropic usage logged yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {usage.byEndpoint.map((row) => (
+                <div key={row.endpoint} className="flex items-center justify-between gap-3">
+                  <span className="truncate" style={{ color: 'var(--foreground)', fontSize: 13 }}>{row.endpoint}</span>
+                  <span style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+                    {formatUsd(row.costUsd)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 
 export default async function ProfilePage() {
   const user = await currentUser();
@@ -169,9 +259,15 @@ export default async function ProfilePage() {
   }[] = [];
   let earnedBadges: EarnedBadge[] = [];
   let avatarColor: string | null = null;
+  let aiUsage: AiUsageDashboard = {
+    today: { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, totalTokens: 0, costUsd: 0 },
+    week: { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, totalTokens: 0, costUsd: 0 },
+    month: { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, totalTokens: 0, costUsd: 0 },
+    byEndpoint: [],
+  };
 
   try {
-    const [totalRes, monthRes, genreRes, recentRes, creditSnap, badgesSnap, avatarSnap] = await Promise.all([
+    const [totalRes, monthRes, genreRes, recentRes, creditSnap, badgesSnap, avatarSnap, usageSnap] = await Promise.all([
       db.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', userId),
       db
         .from('generations')
@@ -194,6 +290,7 @@ export default async function ProfilePage() {
       })),
       getUserBadges(userId).catch(() => [] as EarnedBadge[]),
       db.from('user_credits').select('avatar_color').eq('user_id', userId).maybeSingle(),
+      getAiUsageDashboard(userId).catch(() => aiUsage),
     ]);
 
     totalGenerations = totalRes.count ?? 0;
@@ -205,6 +302,7 @@ export default async function ProfilePage() {
     recentGenerations = (recentRes.data as typeof recentGenerations) ?? [];
     earnedBadges = badgesSnap;
     avatarColor = (avatarSnap.data as { avatar_color?: string | null } | null)?.avatar_color ?? null;
+    aiUsage = usageSnap;
   } catch {
     // keep defaults
   }
@@ -283,7 +381,10 @@ export default async function ProfilePage() {
           {/* SECTION 3 — Badges */}
           <BadgesSection earned={earnedBadges} />
 
-          {/* SECTION 4 — Recent generations */}
+          {/* SECTION 4 — AI usage */}
+          <AiUsageSection usage={aiUsage} />
+
+          {/* SECTION 5 — Recent generations */}
           <section>
             <p
               style={{
@@ -363,7 +464,7 @@ export default async function ProfilePage() {
             </div>
           </section>
 
-          {/* SECTION 5 — Account */}
+          {/* SECTION 6 — Account */}
           <section>
             <ProfileAccountClient isPro={isPro} currentPeriodEnd={currentPeriodEnd} />
           </section>

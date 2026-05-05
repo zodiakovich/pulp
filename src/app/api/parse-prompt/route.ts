@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { auth } from '@clerk/nextjs/server';
 import { enforceRateLimit } from '@/lib/ratelimit';
+import { logAnthropicUsage } from '@/lib/ai-usage';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -34,6 +35,13 @@ Return this exact structure:
   "styleTag": "string or null (closest matching style tag or null)"
 }`,
       messages: [{ role: 'user', content: prompt }],
+    });
+    void logAnthropicUsage({
+      userId,
+      endpoint: 'parse-prompt',
+      model: 'claude-haiku-4-5-20251001',
+      usage: message.usage,
+      metadata: { promptLength: prompt.length },
     });
 
     const text = message.content[0].type === 'text' ? message.content[0].text : '';

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
 import { auth } from '@clerk/nextjs/server';
 import { enforceRateLimit } from '@/lib/ratelimit';
+import { logAnthropicUsage } from '@/lib/ai-usage';
 
 const BodySchema = z.object({
   prompt: z.string().max(800).trim(),
@@ -73,6 +74,13 @@ export async function POST(req: NextRequest) {
       max_tokens: 512,
       system: SYSTEM,
       messages: [{ role: 'user', content: prompt }],
+    });
+    void logAnthropicUsage({
+      userId,
+      endpoint: 'parse-artist',
+      model: 'claude-haiku-4-5-20251001',
+      usage: message.usage,
+      metadata: { promptLength: prompt.length },
     });
 
     const text = message.content[0]?.type === 'text' ? message.content[0].text : '';

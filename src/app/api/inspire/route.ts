@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { auth } from '@clerk/nextjs/server';
 import { enforceRateLimit } from '@/lib/ratelimit';
+import { logAnthropicUsage } from '@/lib/ai-usage';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -35,6 +36,13 @@ Extract musical characteristics and return ONLY valid JSON:
 }`,
       messages: [{ role: 'user', content: inspiration }],
     });
+    void logAnthropicUsage({
+      userId,
+      endpoint: 'inspire',
+      model: 'claude-haiku-4-5-20251001',
+      usage: message.usage,
+      metadata: { inspirationLength: inspiration.length },
+    });
 
     const text = message.content[0].type === 'text' ? message.content[0].text : '';
     const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
@@ -44,4 +52,3 @@ Extract musical characteristics and return ONLY valid JSON:
     return NextResponse.json({ error: 'Failed to inspire' }, { status: 500 });
   }
 }
-

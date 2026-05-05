@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { enforceRateLimit } from '@/lib/ratelimit';
 import { NOTE_NAMES, SCALE_INTERVALS, type NoteEvent } from '@/lib/music-engine';
+import { logAnthropicUsage } from '@/lib/ai-usage';
 
 export const runtime = 'nodejs';
 
@@ -126,6 +127,18 @@ Return:
           }),
         },
       ],
+    });
+    void logAnthropicUsage({
+      userId,
+      endpoint: 'postprocess-transcription',
+      model: MODEL,
+      usage: message.usage,
+      metadata: {
+        sourceName: input.sourceName,
+        sourceNotes: sourceNotes.length,
+        bars: input.bars,
+        bpm: input.bpm,
+      },
     });
 
     const block = message.content[0];

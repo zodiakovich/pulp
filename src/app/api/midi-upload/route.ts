@@ -12,6 +12,7 @@ import {
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { GENRES, NOTE_NAMES, type GenerationParams, type GenerationResult, type NoteEvent } from '@/lib/music-engine';
 import { bucketNotesForPrompt, parseMidiToAnalysis, sampleNotesForPrompt } from '@/lib/midi-upload-parse';
+import { logAnthropicUsage } from '@/lib/ai-usage';
 
 export const runtime = 'nodejs';
 
@@ -126,6 +127,7 @@ function layersToResult(layers: z.infer<typeof LayersSchema>, p: GenerationParam
 async function runMidiAnthropic(opts: {
   mode: 'continue' | 'vary';
   analysisJson: string;
+  userId?: string | null;
 }): Promise<z.infer<typeof OutSchema>> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) throw new Error('no_anthropic');
@@ -163,6 +165,16 @@ The three variations must be musically different from each other.`;
     max_tokens: 8192,
     system,
     messages: [{ role: 'user', content: `Input analysis JSON:\n${opts.analysisJson}` }],
+  });
+  void logAnthropicUsage({
+    userId: opts.userId,
+    endpoint: 'midi-upload',
+    model: 'claude-haiku-4-5-20251001',
+    usage: message.usage,
+    metadata: {
+      mode: opts.mode,
+      analysisBytes: opts.analysisJson.length,
+    },
   });
 
   const block = message.content[0];
@@ -279,7 +291,7 @@ export async function POST(req: NextRequest) {
 
   let out: z.infer<typeof OutSchema>;
   try {
-    out = await runMidiAnthropic({ mode, analysisJson: JSON.stringify(analysisPayload) });
+    out = await runMidiAnthropic({ mode, analysisJson: JSON.stringify(analysisPayload), userId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown';
     if (msg === 'no_anthropic') {

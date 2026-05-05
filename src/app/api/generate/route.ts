@@ -12,6 +12,7 @@ import {
   incrementGuest,
 } from '@/lib/credits';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { logAnthropicUsage } from '@/lib/ai-usage';
 import {
   generateTrack,
   getDefaultParams,
@@ -112,7 +113,7 @@ function applyExtractedToParams(params: GenerationParams, ex: Extracted, barsBef
   }
 }
 
-async function extractWithAnthropic(userPrompt: string): Promise<Extracted | null> {
+async function extractWithAnthropic(userPrompt: string, userId?: string | null): Promise<Extracted | null> {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
   if (!key) return null;
 
@@ -122,6 +123,13 @@ async function extractWithAnthropic(userPrompt: string): Promise<Extracted | nul
     max_tokens: 512,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userPrompt }],
+  });
+  void logAnthropicUsage({
+    userId,
+    endpoint: 'generate.extract',
+    model: 'claude-haiku-4-5-20251001',
+    usage: message.usage,
+    metadata: { promptLength: userPrompt.length },
   });
 
   const block = message.content[0];
@@ -222,7 +230,7 @@ export async function POST(req: NextRequest) {
     params.genre = genre;
 
     try {
-      const ex = await extractWithAnthropic(prompt);
+      const ex = await extractWithAnthropic(prompt, userId);
       if (ex) {
         const barsBase = params.bars;
         applyExtractedToParams(params, ex, barsBase);

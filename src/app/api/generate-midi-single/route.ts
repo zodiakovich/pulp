@@ -5,12 +5,9 @@ import { z } from 'zod';
 import { enforceRateLimit } from '@/lib/ratelimit';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { NOTE_NAMES, SCALE_INTERVALS, type NoteEvent } from '@/lib/music-engine';
+import { calculateAnthropicCostUsd, logAnthropicUsage, normalizeAnthropicUsage } from '@/lib/ai-usage';
 
 const MODEL = 'claude-haiku-4-5-20251001';
-const INPUT_USD_PER_MTOK = 1;
-const OUTPUT_USD_PER_MTOK = 5;
-const CACHE_WRITE_USD_PER_MTOK = 1.25;
-const CACHE_READ_USD_PER_MTOK = 0.1;
 
 const TRACK_TYPES = ['melody', 'arp', 'bass', 'counter-melody', 'pad', 'drums', 'chords', 'lead', 'pluck'] as const;
 const KEY_WHITELIST = NOTE_NAMES as readonly string[];
@@ -38,25 +35,6 @@ const ClaudeResponseSchema = z.object({
 
 function stripCodeFence(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-}
-
-function usageNumber(usage: unknown, key: string): number {
-  if (!usage || typeof usage !== 'object') return 0;
-  const value = (usage as Record<string, unknown>)[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function calculateCostUsd(usage: unknown): number {
-  const input = usageNumber(usage, 'input_tokens');
-  const output = usageNumber(usage, 'output_tokens');
-  const cacheWrite = usageNumber(usage, 'cache_creation_input_tokens');
-  const cacheRead = usageNumber(usage, 'cache_read_input_tokens');
-  return (
-    (input * INPUT_USD_PER_MTOK) +
-    (output * OUTPUT_USD_PER_MTOK) +
-    (cacheWrite * CACHE_WRITE_USD_PER_MTOK) +
-    (cacheRead * CACHE_READ_USD_PER_MTOK)
-  ) / 1_000_000;
 }
 
 function toNoteEvents(notes: z.infer<typeof ClaudeNoteSchema>[], totalBeats: number): NoteEvent[] {
@@ -169,7 +147,20 @@ export async function POST(req: NextRequest) {
     }
 
     const usage = message.usage;
-    const costUsd = calculateCostUsd(usage);
+    const normalizedUsage = normalizeAnthropicUsage(usage);
+    const costUsd = calculateAnthropicCostUsd(usage);
+    void logAnthropicUsage({
+      userId,
+      endpoint: 'generate-midi-single',
+      model: MODEL,
+      usage,
+      metadata: {
+        trackType: input.trackType,
+        bars: input.bars,
+        bpm: input.bpm,
+        noteCount: notes.length,
+      },
+    });
 
     let generationId: string | null = null;
     if (supabaseAdmin) {
@@ -185,10 +176,10 @@ export async function POST(req: NextRequest) {
           track_type: input.trackType,
           notes,
           model: MODEL,
-          input_tokens: usageNumber(usage, 'input_tokens'),
-          output_tokens: usageNumber(usage, 'output_tokens'),
-          cache_creation_input_tokens: usageNumber(usage, 'cache_creation_input_tokens'),
-          cache_read_input_tokens: usageNumber(usage, 'cache_read_input_tokens'),
+          input_tokens: normalizedUsage.input_tokens,
+          output_tokens: normalizedUsage.output_tokens,
+          cache_creation_input_tokens: normalizedUsage.cache_creation_input_tokens,
+          cache_read_input_tokens: normalizedUsage.cache_read_input_tokens,
           cost_usd: Number(costUsd.toFixed(8)),
           raw_response: raw,
         })
@@ -208,10 +199,10 @@ export async function POST(req: NextRequest) {
       notes,
       model: MODEL,
       usage: {
-        input_tokens: usageNumber(usage, 'input_tokens'),
-        output_tokens: usageNumber(usage, 'output_tokens'),
-        cache_creation_input_tokens: usageNumber(usage, 'cache_creation_input_tokens'),
-        cache_read_input_tokens: usageNumber(usage, 'cache_read_input_tokens'),
+        input_tokens: normalizedUsage.input_tokens,
+        output_tokens: normalizedUsage.output_tokens,
+        cache_creation_input_tokens: normalizedUsage.cache_creation_input_tokens,
+        cache_read_input_tokens: normalizedUsage.cache_read_input_tokens,
       },
       cost_usd: Number(costUsd.toFixed(8)),
     });
