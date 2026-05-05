@@ -1610,9 +1610,11 @@ function VariationCard({
   onExtend?: (e: React.MouseEvent) => void;
   onTogglePublic?: (e: React.MouseEvent) => void;
 }) {
-  const totalNotes = vResult.melody.length + vResult.chords.length + vResult.bass.length + vResult.drums.length;
-  const activeLayers = LAYERS.filter(layer => vResult[layer].length > 0).length;
+  const layerCounts = LAYERS.map(layer => ({ layer, count: vResult[layer].length }));
+  const totalNotes = layerCounts.reduce((sum, item) => sum + item.count, 0);
+  const activeLayers = layerCounts.filter(item => item.count > 0).length;
   const chordProgression = deriveChordProgression(vResult.chords, variationParams.bars);
+  const maxLayerNotes = Math.max(1, ...layerCounts.map(item => item.count));
 
   return (
     <motion.div
@@ -1624,20 +1626,27 @@ function VariationCard({
       style={{
         border: compareHighlight ? '2px solid rgba(255,109,63,0.55)' : (selected ? `1.5px solid ${DS.accent}` : '1px solid var(--border)'),
         cursor: 'pointer',
-        background: selected ? 'var(--surface-strong)' : 'var(--surface)',
+        background: selected ? 'linear-gradient(180deg, rgba(255,109,63,0.10), var(--surface-strong) 42%)' : 'var(--surface)',
         transition: 'border-color 300ms cubic-bezier(0.23, 1, 0.32, 1), background 300ms cubic-bezier(0.23, 1, 0.32, 1)',
         flex: 1,
       }}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em', color: selected ? DS.accent : 'var(--text)' }}>
-            {label}
-          </span>
+          <div className="flex items-center gap-2">
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', color: selected ? DS.accent : 'var(--muted)' }}>
+              TAKE {label}
+            </span>
+            {selected && (
+              <span className="rounded-md px-1.5 py-0.5" style={{ background: 'rgba(255,109,63,0.14)', border: '1px solid rgba(255,109,63,0.32)', color: DS.accent, fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
+                ACTIVE
+              </span>
+            )}
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <span className="variation-stat">{activeLayers}/4 layers</span>
             <span className="variation-stat">{totalNotes} events</span>
-            {selected && <span className="variation-stat variation-stat--active">active</span>}
+            <span className="variation-stat">{variationParams.key} {variationParams.scale}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1665,6 +1674,25 @@ function VariationCard({
         </div>
       </div>
       <PianoRoll notes={vResult.melody} color={DS.accent} height={56} />
+      <div className="mt-3 grid grid-cols-4 gap-1.5">
+        {layerCounts.map(({ layer, count }) => (
+          <div key={layer} className="rounded-md px-1.5 py-1" style={{ border: '1px solid var(--border-weak)', background: 'rgba(255,255,255,0.025)' }}>
+            <div className="mb-1 h-1 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div
+                style={{
+                  width: `${Math.max(8, Math.round((count / maxLayerNotes) * 100))}%`,
+                  height: '100%',
+                  background: LAYER_COLORS[layer],
+                  opacity: count > 0 ? 0.9 : 0.25,
+                }}
+              />
+            </div>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5, color: count > 0 ? LAYER_COLORS[layer] : 'var(--muted)' }}>
+              {layer.slice(0, 3).toUpperCase()}
+            </span>
+          </div>
+        ))}
+      </div>
       <div className="variation-chords flex gap-1.5 flex-wrap mt-3 mb-1">
         {chordProgression.map((name, i, arr) => (
           <span key={i} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1673,16 +1701,16 @@ function VariationCard({
           </span>
         ))}
       </div>
-      <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
+      <div className="flex gap-2 mt-3" onClick={e => e.stopPropagation()}>
         <button
           onClick={onPlayToggle}
           className="flex-1 h-8 flex items-center justify-center rounded-lg text-xs transition-all tip"
           data-tip={isPlaying ? 'Stop preview' : 'Preview'}
-          style={{ border: '1px solid rgba(255,255,255,0.08)', fontSize: 12 }}
+          style={{ border: isPlaying ? '1px solid rgba(255,109,63,0.55)' : '1px solid rgba(255,255,255,0.08)', fontSize: 12, color: isPlaying ? DS.accent : 'var(--text)' }}
           onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')}
           onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
         >
-          {isPlaying ? '■' : '▶'}
+          {isPlaying ? 'Stop' : 'Play'}
         </button>
         <button
           onClick={onDownload}
@@ -1693,7 +1721,7 @@ function VariationCard({
           onMouseEnter={e => { if (selected) e.currentTarget.style.borderColor = 'rgba(0,184,148,0.7)'; }}
           onMouseLeave={e => { if (selected) e.currentTarget.style.borderColor = 'rgba(0,184,148,0.4)'; }}
         >
-          ↓ All
+          Download
         </button>
       </div>
       {selected && (
@@ -7279,13 +7307,27 @@ export default function Home() {
               {result && !isGenerating && (
                 <motion.div
                   ref={onboardingExportRef}
-                  className="result-action-bar flex gap-2 mb-5 flex-wrap items-center"
+                  className="result-action-bar mb-5"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.25, ease: EASE_UI }}
                   style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
                 >
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 4 }}>
+                        SELECTED TAKE V{selectedVariation + 1}
+                      </p>
+                      <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--muted)', margin: 0 }}>
+                        {GENRES[variations[selectedVariation]?.params.genre ?? params.genre]?.name || 'Generated track'} - {variations[selectedVariation]?.params.bpm ?? params.bpm} BPM - {variations[selectedVariation]?.params.key ?? params.key} {variations[selectedVariation]?.params.scale ?? params.scale}
+                      </p>
+                    </div>
+                    <span className="rounded-lg px-2.5 py-1" style={{ border: '1px solid var(--border)', color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>
+                      Drag MIDI into DAW
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                   <SpotlightButton onClick={handlePlayAll} className="btn-secondary btn-sm">
                     {playingAll ? '■  Stop' : '▶  Play All'}
                   </SpotlightButton>
@@ -7474,6 +7516,7 @@ export default function Home() {
                       Embed
                     </SpotlightButton>
                   )}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -8222,5 +8265,6 @@ export default function Home() {
     </>
   );
 }
+
 
 
