@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Moon, Sun } from 'lucide-react';
-import { useAuth, SignedIn, SignedOut } from '@clerk/nextjs';
-import { SignInButtonDeferred, UserButtonDeferred } from '@/components/ClerkAuthDeferred';
+import { History as HistoryIcon, Moon, Settings as SettingsIcon, Sun } from 'lucide-react';
+import { useAuth, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
 import { WhatsNew } from '@/components/WhatsNew';
 
 type CreditsData = { credits_used: number; limit: number; is_pro: boolean; plan_type: string } | null;
@@ -58,7 +58,6 @@ function beginThemeTransition() {
 
 export function Navbar({
   active,
-  onHistory,
   historyCount,
 }: {
   active?: 'create' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog' | 'changelog' | 'settings';
@@ -132,38 +131,8 @@ export function Navbar({
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
-
-      {onHistory ? (
-        <button
-          type="button"
-          onClick={onHistory}
-          className="nav-link flex items-center gap-2"
-          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-        >
-          History
-          {(historyCount ?? 0) > 0 && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded-full"
-              style={{ background: 'rgba(255,109,63,0.15)', color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}
-            >
-              {historyCount}
-            </span>
-          )}
-        </button>
-      ) : (
-        <Link href="/?history=1" className={navClass(false)}>
-          History
-        </Link>
-      )}
-
       <Link href="/profile" className={navClass(active === 'profile')}>
         Profile
-      </Link>
-      <Link href="/settings" className={navClass(active === 'settings')}>
-        Settings
-      </Link>
-      <Link href="/pricing" className={navClass(active === 'pricing')}>
-        Pricing
       </Link>
     </>
   );
@@ -254,7 +223,20 @@ export function Navbar({
                 </Link>
               </div>
             )}
-            <UserButtonDeferred />
+            <UserButton>
+              <UserButton.MenuItems>
+                <UserButton.Link
+                  label={(historyCount ?? 0) > 0 ? `History (${historyCount})` : 'History'}
+                  href="/?history=1"
+                  labelIcon={<HistoryIcon size={14} aria-hidden />}
+                />
+                <UserButton.Link
+                  label="Settings"
+                  href="/settings"
+                  labelIcon={<SettingsIcon size={14} aria-hidden />}
+                />
+              </UserButton.MenuItems>
+            </UserButton>
           </SignedIn>
           <SignedOut>
             <div className="hidden sm:block">
@@ -300,8 +282,6 @@ export function Navbar({
               <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>
               <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
               <a href="/profile" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
-              <a href="/settings" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Settings</a>
-              <a href="/pricing" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               <a href="/blog" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Blog</a>
               <a href="/about" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>About</a>
             </>

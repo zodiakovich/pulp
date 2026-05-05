@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import { CrispSupportLink } from '@/components/CrispSupportLink';
 
 type FooterLink = {
@@ -51,6 +52,16 @@ function FooterCol({ title, links }: { title: string; links: FooterLink[] }) {
 }
 
 export function SiteFooter() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const productLinks: FooterLink[] = [
+    { label: 'Generator', href: '/' },
+    { label: 'Piano Roll', href: '/' },
+    { label: 'Build My Track', href: '/build' },
+    { label: 'Templates', href: '/create' },
+    ...(isLoaded && isSignedIn ? [{ label: 'Pricing', href: '/pricing' }] : []),
+    { label: 'Changelog', href: '/changelog' },
+  ];
+
   return (
     <footer className="mt-24 px-4 sm:px-8" style={{ background: 'var(--bg)' }}>
       <div className="mx-auto max-w-[1280px] py-20 sm:py-24" style={{ borderTop: '1px solid var(--border)' }}>
@@ -156,15 +167,7 @@ export function SiteFooter() {
 
           <FooterCol
             title="Product"
-            links={[
-              { label: 'Generator', href: '/' },
-              { label: 'Piano Roll', href: '/' },
-              { label: 'Build My Track', href: '/build' },
-              { label: 'Templates', href: '/create' },
-              { label: 'Pricing', href: '/pricing' },
-              { label: 'Settings', href: '/settings' },
-              { label: 'Changelog', href: '/changelog' },
-            ]}
+            links={productLinks}
           />
 
           <FooterCol
