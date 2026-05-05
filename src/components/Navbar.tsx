@@ -132,9 +132,6 @@ export function Navbar({
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
-      <Link href="/build" className={navClass(active === 'build')}>
-        Build
-      </Link>
 
       {onHistory ? (
         <button
@@ -302,7 +299,6 @@ export function Navbar({
             <>
               <a href="/" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Create</a>
               <a href="/explore" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Explore</a>
-              <a href="/build" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Build</a>
               <a href="/profile" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
               <a href="/settings" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Settings</a>
               <a href="/pricing" className="nav-link py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>

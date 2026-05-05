@@ -159,7 +159,7 @@ export function SiteFooter() {
             links={[
               { label: 'Generator', href: '/' },
               { label: 'Piano Roll', href: '/' },
-              { label: 'Mix Engine', href: '/build' },
+              { label: 'Build My Track', href: '/build' },
               { label: 'Templates', href: '/create' },
               { label: 'Pricing', href: '/pricing' },
               { label: 'Settings', href: '/settings' },
@@ -292,4 +292,3 @@ export function SiteFooter() {
     </footer>
   );
 }
-
