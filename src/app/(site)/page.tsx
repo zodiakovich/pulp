@@ -3404,7 +3404,7 @@ export default function Home() {
     setGenerationError(null);
     setGenBar('loading');
     setIsGenerating(true);
-    setGeneratingStage('Analyzing prompt...');
+    setGeneratingStage('Reading prompt...');
     setVariationIds([]);
     setVariationPublic([]);
     posthog.capture('generation_started', {
@@ -3416,10 +3416,10 @@ export default function Home() {
     // Premium staged loading sequence (purely UI timing).
     for (const id of generatingStageTimeoutsRef.current) window.clearTimeout(id);
     generatingStageTimeoutsRef.current = [
-      window.setTimeout(() => setGeneratingStage('Analyzing prompt...'), 0),
-      window.setTimeout(() => setGeneratingStage('Composing melody...'), 800),
-      window.setTimeout(() => setGeneratingStage('Adding harmony...'), 1600),
-      window.setTimeout(() => setGeneratingStage('Building rhythm...'), 2400),
+      window.setTimeout(() => setGeneratingStage('Reading prompt...'), 0),
+      window.setTimeout(() => setGeneratingStage('Drafting melody...'), 800),
+      window.setTimeout(() => setGeneratingStage('Voicing chords...'), 1600),
+      window.setTimeout(() => setGeneratingStage('Placing bass and drums...'), 2400),
     ];
 
     // Try Claude AI prompt parsing, fall back silently
@@ -6517,33 +6517,67 @@ export default function Home() {
                 </SignInButtonDeferred>
               )}
             </div>
-            {generationError && (
-              <div className="mb-4 px-2 text-center" role="alert">
-                <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-                  {generationError}
-                </p>
-                <div className="flex items-center justify-center gap-3 mt-2">
-                  {generationError.includes('Upgrade') ? (
-                    <a
-                      href="/pricing"
-                      className="text-sm font-medium"
-                      style={{ color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 3 }}
-                    >
-                      Upgrade for more →
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-sm font-medium"
-                      style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
-                      onClick={() => { setGenerationError(null); setGenBar('idle'); }}
-                    >
-                      Retry
-                    </button>
-                  )}
+            {!generationError && !isGenerating && variations.length === 0 && (
+              <div
+                className="mb-4 rounded-xl px-4 py-3"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.06em' }}>
+                    READY
+                  </span>
+                  <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: 'var(--muted)' }}>
+                    Generates melody, chords, bass, and drums as editable MIDI layers.
+                  </span>
                 </div>
               </div>
             )}
+
+            {generationError && (
+              <div
+                className="mb-4 rounded-xl p-4"
+                role="alert"
+                style={{ background: 'var(--surface)', border: '1px solid rgba(233,69,96,0.35)' }}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#E94560', letterSpacing: '0.06em', marginBottom: 6 }}>
+                      GENERATION STOPPED
+                    </p>
+                    <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>
+                      {generationError}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {generationError.includes('Upgrade') ? (
+                      <a
+                        href="/pricing"
+                        className="btn-primary btn-sm"
+                        style={{ textDecoration: 'none' }}
+                      >
+                        Upgrade plan
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => { setGenerationError(null); setGenBar('idle'); void handleGenerate(); }}
+                      >
+                        Retry
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => { setGenerationError(null); setGenBar('idle'); }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {effectiveIsSignedIn && (
               <div className="mb-4 flex justify-center">
                 <div className="flex items-center gap-3">
@@ -6556,13 +6590,16 @@ export default function Home() {
                       borderColor: isStudio ? 'rgba(255,109,63,0.45)' : 'var(--border-weak)',
                       color: isStudio ? 'var(--text)' : 'var(--muted)',
                       background: isStudio ? 'rgba(255,109,63,0.08)' : 'transparent',
-                      opacity: isStudio ? 1 : 0.4,
-                      cursor: isStudio ? 'pointer' : 'not-allowed',
+                      opacity: isStudio ? 1 : 0.75,
+                      cursor: 'pointer',
                     }}
-                    title={isStudio ? undefined : 'Available on Studio plan'}
-                    disabled={!isStudio}
+                    title={isStudio ? undefined : 'Upgrade to Studio to upload MIDI'}
                     onClick={() => {
-                      if (isStudio) setShowMidiUploadModal(true);
+                      if (!isStudio) {
+                        setShowUpgradeModal(true);
+                        return;
+                      }
+                      setShowMidiUploadModal(true);
                     }}
                   >
                     Upload MIDI
@@ -6571,7 +6608,7 @@ export default function Home() {
                     className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
                     style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontFamily: 'DM Sans, sans-serif' }}
                   >
-                    Studio only
+                    Studio
                   </span>
                 </div>
                   <div className="relative inline-block">
@@ -6583,11 +6620,10 @@ export default function Home() {
                         borderColor: isStudio ? 'rgba(255,109,63,0.40)' : 'var(--border-weak)',
                         color: isStudio ? 'var(--text)' : 'var(--muted)',
                         background: isStudio ? 'rgba(255,109,63,0.10)' : 'transparent',
-                        opacity: isStudio ? 1 : 0.4,
-                        cursor: isStudio ? 'pointer' : 'not-allowed',
+                        opacity: isStudio ? 1 : 0.75,
+                        cursor: 'pointer',
                       }}
-                      title={isStudio ? undefined : 'Available on Studio plan'}
-                      disabled={!isStudio}
+                      title={isStudio ? undefined : 'Upgrade to Studio to convert audio to MIDI'}
                       onClick={() => {
                         if (!isStudio) {
                           setShowUpgradeModal(true);
@@ -6602,7 +6638,7 @@ export default function Home() {
                       className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
                       style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontFamily: 'DM Sans, sans-serif' }}
                     >
-                      Studio only
+                      Studio
                     </span>
                   </div>
                 </div>
@@ -6803,11 +6839,11 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em' }}>
-                      EXAMPLE OUTPUT — Tech House 128 BPM · Am
+                      OUTPUT PREVIEW
                     </span>
                   </div>
                   <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-                    Generate yours →
+                    Generate to unlock editor
                   </span>
                 </div>
 
@@ -6865,7 +6901,7 @@ export default function Home() {
                   style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 100%)' }}
                 >
                   <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
-                    ↑ Hit Generate to create yours
+                    Results appear here as editable MIDI layers
                   </p>
                 </div>
               </div>
@@ -7108,10 +7144,31 @@ export default function Home() {
             {/* Skeleton while generating */}
             <AnimatePresence>
               {isGenerating && (
-                <div>
-                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--accent)', textAlign: 'center', marginBottom: 16, letterSpacing: '0.06em' }}>
-                    {generatingStage}
-                  </p>
+                <div
+                  className="rounded-2xl p-4"
+                  style={{ background: 'var(--surface)', border: '1px solid rgba(255,109,63,0.28)' }}
+                >
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.06em', marginBottom: 6 }}>
+                        BUILDING ARRANGEMENT
+                      </p>
+                      <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: 'var(--text)', margin: 0 }}>
+                        {generatingStage}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {['4 layers', `${params.bars} bars`, `${params.bpm} BPM`].map(item => (
+                        <span
+                          key={item}
+                          className="rounded-lg px-2.5 py-1"
+                          style={{ border: '1px solid var(--border)', color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                   <motion.div
                     className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                     variants={staggerContainer}
@@ -8165,4 +8222,5 @@ export default function Home() {
     </>
   );
 }
+
 
