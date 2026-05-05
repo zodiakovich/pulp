@@ -49,6 +49,59 @@ function stripCodeFence(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 }
 
+function extractJsonObject(text: string): unknown | null {
+  const cleaned = stripCodeFence(text);
+  const attempts = [
+    cleaned,
+    cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1),
+  ].filter((candidate) => candidate.trim().startsWith('{') && candidate.trim().endsWith('}'));
+
+  for (const candidate of attempts) {
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch {
+      // try next extraction
+    }
+  }
+  return null;
+}
+
+function quantizeBeat(value: number, step = 0.25): number {
+  return Number((Math.round(value / step) * step).toFixed(3));
+}
+
+function fallbackCleanup(notes: NoteEvent[], totalBeats: number): NoteEvent[] {
+  const cleaned = notes
+    .map((note) => {
+      const startTime = Math.max(0, Math.min(totalBeats - 0.125, quantizeBeat(note.startTime)));
+      const duration = Math.max(0.125, Math.min(totalBeats - startTime, quantizeBeat(note.duration)));
+      return {
+        pitch: Math.max(0, Math.min(127, Math.round(note.pitch))),
+        startTime,
+        duration,
+        velocity: Math.max(1, Math.min(127, Math.round(note.velocity))),
+      };
+    })
+    .filter((note) => note.duration > 0 && note.startTime < totalBeats)
+    .sort((a, b) => a.startTime - b.startTime || a.pitch - b.pitch);
+
+  const deduped: NoteEvent[] = [];
+  for (const note of cleaned) {
+    const prev = deduped[deduped.length - 1];
+    if (
+      prev &&
+      prev.pitch === note.pitch &&
+      Math.abs(prev.startTime - note.startTime) < 0.001 &&
+      Math.abs(prev.duration - note.duration) < 0.001
+    ) {
+      prev.velocity = Math.max(prev.velocity, note.velocity);
+      continue;
+    }
+    deduped.push(note);
+  }
+  return deduped;
+}
+
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   const rl = await enforceRateLimit({ req, userId: userId ?? null });
@@ -140,13 +193,33 @@ Return:
         bpm: input.bpm,
       },
     });
+    const usage = normalizeAnthropicUsage(message.usage);
 
     const block = message.content[0];
     const text = block?.type === 'text' ? block.text : '';
-    const raw = JSON.parse(stripCodeFence(text)) as unknown;
+    const raw = extractJsonObject(text);
+    if (!raw) {
+      const notes = fallbackCleanup(sourceNotes, totalBeats);
+      return NextResponse.json({
+        notes,
+        suggestions: ['Claude returned invalid JSON, so pulp applied deterministic quantize cleanup.'],
+        model: MODEL,
+        usage,
+        cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
+        cleanup_mode: 'fallback',
+      });
+    }
     const parsedOut = OutSchema.safeParse(raw);
     if (!parsedOut.success) {
-      return NextResponse.json({ error: 'Claude returned invalid cleanup JSON', details: parsedOut.error.issues }, { status: 502 });
+      const notes = fallbackCleanup(sourceNotes, totalBeats);
+      return NextResponse.json({
+        notes,
+        suggestions: ['Claude cleanup schema failed, so pulp applied deterministic quantize cleanup.'],
+        model: MODEL,
+        usage,
+        cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
+        cleanup_mode: 'fallback',
+      });
     }
 
     const notes = parsedOut.data.notes
@@ -157,8 +230,6 @@ Return:
     if (notes.length === 0) {
       return NextResponse.json({ error: 'Claude returned no usable notes' }, { status: 502 });
     }
-    const usage = normalizeAnthropicUsage(message.usage);
-
     return NextResponse.json({
       notes,
       suggestions: parsedOut.data.suggestions.slice(0, 5),
