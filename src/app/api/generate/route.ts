@@ -13,6 +13,7 @@ import {
 } from '@/lib/credits';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logAnthropicUsage } from '@/lib/ai-usage';
+import { checkFeatureAllowed, incrementFeatureUsage, type WindowCheckResult } from '@/lib/feature-credits';
 import {
   generateTrack,
   getDefaultParams,
@@ -168,6 +169,7 @@ export async function POST(req: NextRequest) {
   const { bpm, genre, key, bars, prompt } = parsed.data;
 
   const guestIp = getIp(req);
+  let featureCheck: WindowCheckResult | null = null;
 
   if (!userId && !supabaseAdmin) {
     return NextResponse.json({ error: 'Guest generation unavailable' }, { status: 503 });
@@ -183,6 +185,22 @@ export async function POST(req: NextRequest) {
             credits_used: c.credits_used,
             limit: c.limit,
             is_pro: c.is_pro,
+          },
+          { status: 429 },
+        );
+      }
+      featureCheck = await checkFeatureAllowed(userId, 'build');
+      if (!featureCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: featureCheck.blocked_by === 'daily'
+              ? 'Daily build limit reached'
+              : 'Monthly build limit reached',
+            blocked_by: featureCheck.blocked_by,
+            daily_used: featureCheck.daily_used,
+            daily_limit: featureCheck.daily_limit,
+            monthly_used: featureCheck.monthly_used,
+            monthly_limit: featureCheck.monthly_limit,
           },
           { status: 429 },
         );
@@ -265,6 +283,7 @@ export async function POST(req: NextRequest) {
   try {
     if (userId) {
       await incrementCredits(userId);
+      await incrementFeatureUsage(userId, 'build');
       const fin = await checkCreditsAllowed(userId);
       creditsPayload = {
         credits_used: fin.credits_used,
@@ -347,6 +366,16 @@ export async function POST(req: NextRequest) {
       { result: gen3, params: p3 },
     ],
     credits: creditsPayload,
+    ...(featureCheck && {
+      feature_usage: {
+        daily_used: featureCheck.daily_used + 1,
+        daily_limit: featureCheck.daily_limit,
+        monthly_used: featureCheck.monthly_used + 1,
+        monthly_limit: featureCheck.monthly_limit,
+        blocked_by: null,
+        allowed: true,
+      },
+    }),
     ...(mood_tags !== undefined && { mood_tags }),
     ...(density !== undefined && { density }),
     ...(energy !== undefined && { energy }),

@@ -6,6 +6,7 @@ import { enforceRateLimit } from '@/lib/ratelimit';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { NOTE_NAMES, SCALE_INTERVALS, type NoteEvent } from '@/lib/music-engine';
 import { calculateAnthropicCostUsd, logAnthropicUsage, normalizeAnthropicUsage } from '@/lib/ai-usage';
+import { checkFeatureAllowed, incrementFeatureUsage } from '@/lib/feature-credits';
 
 const MODEL = 'claude-haiku-4-5-20251001';
 
@@ -109,6 +110,22 @@ export async function POST(req: NextRequest) {
 
   const input = parsed.data;
   const totalBeats = input.bars * 4;
+  const featureCheck = await checkFeatureAllowed(userId, 'midi');
+  if (!featureCheck.allowed) {
+    return NextResponse.json(
+      {
+        error: featureCheck.blocked_by === 'daily'
+          ? 'Daily midi limit reached'
+          : 'Monthly midi limit reached',
+        blocked_by: featureCheck.blocked_by,
+        daily_used: featureCheck.daily_used,
+        daily_limit: featureCheck.daily_limit,
+        monthly_used: featureCheck.monthly_used,
+        monthly_limit: featureCheck.monthly_limit,
+      },
+      { status: 429 },
+    );
+  }
   const client = new Anthropic({ apiKey });
 
   try {
@@ -191,6 +208,7 @@ export async function POST(req: NextRequest) {
       }
       generationId = data?.id ?? null;
     }
+    await incrementFeatureUsage(userId, 'midi');
 
     return NextResponse.json({
       id: generationId,
@@ -205,6 +223,14 @@ export async function POST(req: NextRequest) {
         cache_read_input_tokens: normalizedUsage.cache_read_input_tokens,
       },
       cost_usd: Number(costUsd.toFixed(8)),
+      feature_usage: {
+        daily_used: featureCheck.daily_used + 1,
+        daily_limit: featureCheck.daily_limit,
+        monthly_used: featureCheck.monthly_used + 1,
+        monthly_limit: featureCheck.monthly_limit,
+        blocked_by: null,
+        allowed: true,
+      },
     });
   } catch (error) {
     console.error('[generate-midi-single]', error);

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { enforceRateLimit } from '@/lib/ratelimit';
 import { NOTE_NAMES, SCALE_INTERVALS, type NoteEvent } from '@/lib/music-engine';
 import { calculateAnthropicCostUsd, logAnthropicUsage, normalizeAnthropicUsage } from '@/lib/ai-usage';
+import { checkFeatureAllowed, incrementFeatureUsage } from '@/lib/feature-credits';
 
 export const runtime = 'nodejs';
 
@@ -141,6 +142,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No usable notes to post-process' }, { status: 400 });
   }
 
+  const featureCheck = await checkFeatureAllowed(userId, 'audio');
+  if (!featureCheck.allowed) {
+    return NextResponse.json(
+      {
+        error: featureCheck.blocked_by === 'daily'
+          ? 'Daily transcription limit reached'
+          : 'Monthly transcription limit reached',
+        blocked_by: featureCheck.blocked_by,
+        daily_used: featureCheck.daily_used,
+        daily_limit: featureCheck.daily_limit,
+        monthly_used: featureCheck.monthly_used,
+        monthly_limit: featureCheck.monthly_limit,
+      },
+      { status: 429 },
+    );
+  }
+
   const client = new Anthropic({ apiKey });
   const system = `You are pulp's MIDI transcription cleanup engineer.
 Return ONLY valid JSON. No markdown.
@@ -200,6 +218,7 @@ Return:
     const raw = extractJsonObject(text);
     if (!raw) {
       const notes = fallbackCleanup(sourceNotes, totalBeats);
+      await incrementFeatureUsage(userId, 'audio');
       return NextResponse.json({
         notes,
         suggestions: ['Claude returned invalid JSON, so pulp applied deterministic quantize cleanup.'],
@@ -207,11 +226,20 @@ Return:
         usage,
         cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
         cleanup_mode: 'fallback',
+        feature_usage: {
+          daily_used: featureCheck.daily_used + 1,
+          daily_limit: featureCheck.daily_limit,
+          monthly_used: featureCheck.monthly_used + 1,
+          monthly_limit: featureCheck.monthly_limit,
+          blocked_by: null,
+          allowed: true,
+        },
       });
     }
     const parsedOut = OutSchema.safeParse(raw);
     if (!parsedOut.success) {
       const notes = fallbackCleanup(sourceNotes, totalBeats);
+      await incrementFeatureUsage(userId, 'audio');
       return NextResponse.json({
         notes,
         suggestions: ['Claude cleanup schema failed, so pulp applied deterministic quantize cleanup.'],
@@ -219,6 +247,14 @@ Return:
         usage,
         cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
         cleanup_mode: 'fallback',
+        feature_usage: {
+          daily_used: featureCheck.daily_used + 1,
+          daily_limit: featureCheck.daily_limit,
+          monthly_used: featureCheck.monthly_used + 1,
+          monthly_limit: featureCheck.monthly_limit,
+          blocked_by: null,
+          allowed: true,
+        },
       });
     }
 
@@ -230,12 +266,21 @@ Return:
     if (notes.length === 0) {
       return NextResponse.json({ error: 'Claude returned no usable notes' }, { status: 502 });
     }
+    await incrementFeatureUsage(userId, 'audio');
     return NextResponse.json({
       notes,
       suggestions: parsedOut.data.suggestions.slice(0, 5),
       model: MODEL,
       usage,
       cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
+      feature_usage: {
+        daily_used: featureCheck.daily_used + 1,
+        daily_limit: featureCheck.daily_limit,
+        monthly_used: featureCheck.monthly_used + 1,
+        monthly_limit: featureCheck.monthly_limit,
+        blocked_by: null,
+        allowed: true,
+      },
     });
   } catch (error) {
     console.error('[postprocess-transcription]', error);
