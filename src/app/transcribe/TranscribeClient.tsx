@@ -26,7 +26,13 @@ type CleanupResponse = {
   notes: NoteEvent[];
   suggestions: string[];
   model: string;
-  usage?: unknown;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens: number;
+    cache_read_input_tokens: number;
+  };
+  cost_usd?: number;
 };
 
 function clamp(v: number, lo: number, hi: number) {
@@ -157,6 +163,8 @@ export function TranscribeClient() {
   const [sourceName, setSourceName] = useState('audio');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [progress, setProgress] = useState('Ready');
+  const [cleanupCost, setCleanupCost] = useState<number | null>(null);
+  const [cleanupTokens, setCleanupTokens] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +190,8 @@ export function TranscribeClient() {
     stopAllAppAudio();
     setError(null);
     setSuggestions([]);
+    setCleanupCost(null);
+    setCleanupTokens(null);
     setNotes([]);
     setRawCount(0);
     setSourceName(file.name);
@@ -218,6 +228,8 @@ export function TranscribeClient() {
         const cleaned = await cleanupWithClaude(rawNotes, file.name);
         setNotes(cleaned.notes);
         setSuggestions(cleaned.suggestions ?? []);
+        setCleanupCost(typeof cleaned.cost_usd === 'number' ? cleaned.cost_usd : null);
+        setCleanupTokens(cleaned.usage ? cleaned.usage.input_tokens + cleaned.usage.output_tokens : null);
         setProgress(`Done: ${cleaned.notes.length} cleaned notes`);
       } catch (cleanupError) {
         setNotes(rawNotes);
@@ -368,6 +380,8 @@ export function TranscribeClient() {
               <div className="mt-5 grid grid-cols-2 gap-2" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>raw notes<br /><span style={{ color: 'var(--text)' }}>{rawCount}</span></div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>clean notes<br /><span style={{ color: 'var(--text)' }}>{notes.length}</span></div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>cleanup cost<br /><span style={{ color: 'var(--text)' }}>{cleanupCost === null ? 'raw' : `$${cleanupCost.toFixed(6)}`}</span></div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>cleanup tokens<br /><span style={{ color: 'var(--text)' }}>{cleanupTokens ?? 'raw'}</span></div>
               </div>
             )}
 

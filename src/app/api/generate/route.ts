@@ -124,7 +124,7 @@ async function extractWithAnthropic(userPrompt: string, userId?: string | null):
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userPrompt }],
   });
-  void logAnthropicUsage({
+  await logAnthropicUsage({
     userId,
     endpoint: 'generate.extract',
     model: 'claude-haiku-4-5-20251001',

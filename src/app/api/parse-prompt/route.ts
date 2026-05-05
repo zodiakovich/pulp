@@ -36,7 +36,7 @@ Return this exact structure:
 }`,
       messages: [{ role: 'user', content: prompt }],
     });
-    void logAnthropicUsage({
+    await logAnthropicUsage({
       userId,
       endpoint: 'parse-prompt',
       model: 'claude-haiku-4-5-20251001',

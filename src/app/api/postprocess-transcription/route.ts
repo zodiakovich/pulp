@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { enforceRateLimit } from '@/lib/ratelimit';
 import { NOTE_NAMES, SCALE_INTERVALS, type NoteEvent } from '@/lib/music-engine';
-import { logAnthropicUsage } from '@/lib/ai-usage';
+import { calculateAnthropicCostUsd, logAnthropicUsage, normalizeAnthropicUsage } from '@/lib/ai-usage';
 
 export const runtime = 'nodejs';
 
@@ -128,7 +128,7 @@ Return:
         },
       ],
     });
-    void logAnthropicUsage({
+    await logAnthropicUsage({
       userId,
       endpoint: 'postprocess-transcription',
       model: MODEL,
@@ -157,12 +157,14 @@ Return:
     if (notes.length === 0) {
       return NextResponse.json({ error: 'Claude returned no usable notes' }, { status: 502 });
     }
+    const usage = normalizeAnthropicUsage(message.usage);
 
     return NextResponse.json({
       notes,
       suggestions: parsedOut.data.suggestions.slice(0, 5),
       model: MODEL,
-      usage: message.usage,
+      usage,
+      cost_usd: Number(calculateAnthropicCostUsd(usage).toFixed(8)),
     });
   } catch (error) {
     console.error('[postprocess-transcription]', error);

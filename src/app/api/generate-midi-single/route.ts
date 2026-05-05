@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     const usage = message.usage;
     const normalizedUsage = normalizeAnthropicUsage(usage);
     const costUsd = calculateAnthropicCostUsd(usage);
-    void logAnthropicUsage({
+    await logAnthropicUsage({
       userId,
       endpoint: 'generate-midi-single',
       model: MODEL,

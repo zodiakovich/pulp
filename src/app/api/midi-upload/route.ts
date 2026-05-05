@@ -166,7 +166,7 @@ The three variations must be musically different from each other.`;
     system,
     messages: [{ role: 'user', content: `Input analysis JSON:\n${opts.analysisJson}` }],
   });
-  void logAnthropicUsage({
+  await logAnthropicUsage({
     userId: opts.userId,
     endpoint: 'midi-upload',
     model: 'claude-haiku-4-5-20251001',

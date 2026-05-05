@@ -36,7 +36,7 @@ Extract musical characteristics and return ONLY valid JSON:
 }`,
       messages: [{ role: 'user', content: inspiration }],
     });
-    void logAnthropicUsage({
+    await logAnthropicUsage({
       userId,
       endpoint: 'inspire',
       model: 'claude-haiku-4-5-20251001',

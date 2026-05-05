@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       system: SYSTEM,
       messages: [{ role: 'user', content: prompt }],
     });
-    void logAnthropicUsage({
+    await logAnthropicUsage({
       userId,
       endpoint: 'parse-artist',
       model: 'claude-haiku-4-5-20251001',
