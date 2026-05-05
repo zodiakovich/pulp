@@ -656,6 +656,15 @@ function LayerCard({
   const color = LAYER_COLORS[name] || DS.accent;
   const instrumentOptions = LAYER_INSTRUMENT_OPTIONS[name] ?? [];
   const isAfroHouse = genre === 'afro_house' || genre === 'afro-house';
+  const pitchRange = notes.length > 0
+    ? `${Math.min(...notes.map(n => n.pitch))}-${Math.max(...notes.map(n => n.pitch))}`
+    : 'empty';
+  const activeTools = [
+    muted ? 'muted' : null,
+    soloed ? 'solo' : null,
+    reversed ? 'reversed' : null,
+    fxOpen ? 'fx open' : null,
+  ].filter((item): item is string => Boolean(item));
 
   const [ahOptions, setAhOptions] = useState<AfroHouseSampleOptions | null>(null);
   const [ahKick, setAhKick] = useState('');
@@ -717,16 +726,32 @@ function LayerCard({
         border: dragging ? `1px solid ${DS.accent}` : undefined,
       }}
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <div
+            className="mt-1 h-10 w-1.5 flex-shrink-0 rounded-full"
+            style={{ background: color, boxShadow: `0 0 18px ${color}55` }}
+          />
           <div>
-            <p className="text-sm font-semibold capitalize leading-tight" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-              {name}
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-              {notes.length} notes
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold capitalize leading-tight" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                {name}
+              </p>
+              {activeTools.map(item => (
+                <span
+                  key={item}
+                  className="rounded-md px-1.5 py-0.5"
+                  style={{ border: '1px solid rgba(255,109,63,0.28)', color: '#FF6D3F', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="variation-stat">{notes.length} notes</span>
+              <span className="variation-stat">range {pitchRange}</span>
+              <span className="variation-stat">{bpm} BPM</span>
+            </div>
             {/* Soundfont instrument selector (non-afro-house) */}
             {instrumentOptions.length > 0 && onInstrumentChange && !isAfroHouse && (
               <CustomSelect
@@ -770,23 +795,23 @@ function LayerCard({
             )}
           </div>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap justify-end gap-1.5">
           <button
             onClick={handlePlay}
             disabled={!enabled || notes.length === 0}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
-            style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+            className="h-8 px-2.5 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
+            style={{ border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'JetBrains Mono, monospace' }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')}
             onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
             title={playing ? 'Stop' : 'Play'}
           >
-            {playing ? '■' : '▶'}
+            {playing ? 'Stop' : 'Play'}
           </button>
           <button
             onClick={onRegenerate}
             disabled={!enabled}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
-            style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+            className="h-8 px-2.5 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
+            style={{ border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'JetBrains Mono, monospace' }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,109,63,0.4)')}
             onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
             title={`Regenerate ${name}`}
@@ -796,8 +821,8 @@ function LayerCard({
           <button
             onClick={onDownload}
             disabled={!enabled || notes.length === 0}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
-            style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+            className="h-8 px-2.5 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
+            style={{ border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'JetBrains Mono, monospace' }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(0,184,148,0.4)')}
             onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
             title="Download .mid"
@@ -828,7 +853,7 @@ function LayerCard({
             <button
               onClick={onReverse}
               disabled={!enabled || notes.length === 0}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-all disabled:opacity-30"
+              className="h-8 px-2.5 flex items-center justify-center rounded-lg text-xs transition-all disabled:opacity-30"
               style={{
                 border: reversed ? '1px solid rgba(255,109,63,0.5)' : '1px solid rgba(255,255,255,0.08)',
                 color: reversed ? '#FF6D3F' : 'var(--muted)',
@@ -846,7 +871,20 @@ function LayerCard({
       </div>
       {/* Mixer row */}
       {onVolumeChange && (
-        <div className="flex items-center gap-1.5 mt-3 mb-1" onClick={e => e.stopPropagation()}>
+        <div
+          className="mt-3 mb-3 rounded-xl px-3 py-2"
+          style={{ border: '1px solid var(--border-weak)', background: 'rgba(255,255,255,0.025)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.08em' }}>
+              MIX
+            </span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: muted ? 'rgba(255,255,255,0.25)' : color }}>
+              {volume ?? 75}%
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onMuteToggle}
@@ -899,29 +937,22 @@ function LayerCard({
               transition: 'opacity 120ms',
             }}
           />
-          <span
-            style={{
-              fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 10,
-              color: muted ? 'rgba(255,255,255,0.25)' : '#FF6D3F',
-              width: 24,
-              textAlign: 'right',
-              flexShrink: 0,
-            }}
-          >{volume ?? 75}</span>
+          </div>
         </div>
       )}
-      <PianoRoll notes={notes} color={color} />
-      <p style={{
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: 9,
-        color: 'rgba(255,255,255,0.30)',
-        textAlign: 'center',
-        marginTop: 8,
-        letterSpacing: '0.06em',
-      }}>
-        drag into DAW
-      </p>
+      <div className="rounded-xl p-2" style={{ border: '1px solid var(--border-weak)', background: 'rgba(0,0,0,0.16)' }}>
+        <PianoRoll notes={notes} color={color} />
+        <p style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 9,
+          color: 'rgba(255,255,255,0.30)',
+          textAlign: 'center',
+          marginTop: 8,
+          letterSpacing: '0.06em',
+        }}>
+          drag into DAW
+        </p>
+      </div>
 
       {/* FX panel */}
       {fxOpen && (
@@ -1010,7 +1041,7 @@ function SkeletonCard({ name }: { name: string }) {
             <div className="skeleton h-3 w-10 rounded" />
           </div>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap justify-end gap-1.5">
           <div className="skeleton w-8 h-8 rounded-lg" />
           <div className="skeleton w-8 h-8 rounded-lg" />
         </div>
@@ -8265,6 +8296,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
