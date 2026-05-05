@@ -24,7 +24,10 @@ function barColor(percent: number) {
 }
 
 function pctLabel(value: number) {
-  return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
+  const clamped = Math.max(0, Math.min(100, value));
+  if (clamped === 0) return '0%';
+  if (clamped < 1) return `${clamped.toFixed(1)}%`;
+  return `${Math.round(clamped)}%`;
 }
 
 function UsageBar({
@@ -37,6 +40,7 @@ function UsageBar({
   blocked: boolean;
 }) {
   const color = barColor(percent);
+  const width = Math.max(0, Math.min(100, percent));
   return (
     <div
       style={{
@@ -76,7 +80,8 @@ function UsageBar({
       <div style={{ height: 10, borderRadius: 999, background: `${color}22`, overflow: 'hidden' }}>
         <div
           style={{
-            width: pctLabel(percent),
+            width: `${width}%`,
+            minWidth: width > 0 ? 3 : 0,
             height: '100%',
             background: color,
             borderRadius: 999,
