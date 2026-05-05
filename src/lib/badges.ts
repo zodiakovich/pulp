@@ -37,22 +37,30 @@ export async function checkAndAwardBadges(userId: string): Promise<BadgeDef[]> {
   if (!supabaseAdmin) return [];
 
   // Fetch already-earned badges
-  const { data: earned } = await supabaseAdmin
+  const { data: earned, error: earnedError } = await supabaseAdmin
     .from('user_badges')
     .select('badge_id')
     .eq('user_id', userId);
+
+  if (earnedError) {
+    console.error('[badges] failed to fetch earned badges', earnedError);
+    return [];
+  }
 
   const earnedSet = new Set<string>((earned ?? []).map((r: { badge_id: string }) => r.badge_id));
   const unearned = BADGE_DEFS.filter(b => !earnedSet.has(b.id));
   if (!unearned.length) return [];
 
   // Fetch generation data needed for condition checks
-  const { data: gens } = await supabaseAdmin
+  const { data: gens, error: gensError } = await supabaseAdmin
     .from('generations')
     .select('genre, created_at')
     .eq('user_id', userId);
 
-  if (!gens) return [];
+  if (gensError || !gens) {
+    console.error('[badges] failed to fetch generation data', gensError);
+    return [];
+  }
 
   const totalCount = gens.length;
   const distinctGenres = new Set(gens.map((g: { genre: string }) => g.genre)).size;
@@ -84,17 +92,33 @@ export async function checkAndAwardBadges(userId: string): Promise<BadgeDef[]> {
 
   if (!toAward.length) return [];
 
-  // Upsert — ignore duplicates in case of race conditions
-  await supabaseAdmin
+  // Upsert and confirm persistence before telling the UI a badge was earned.
+  const { error: upsertError } = await supabaseAdmin
     .from('user_badges')
     .upsert(
       toAward.map(id => ({ user_id: userId, badge_id: id })),
       { onConflict: 'user_id,badge_id', ignoreDuplicates: true },
     );
 
-  return toAward.map(id => BADGE_MAP[id]);
-}
+  if (upsertError) {
+    console.error('[badges] failed to persist badges', upsertError);
+    return [];
+  }
 
+  const { data: persisted, error: persistedError } = await supabaseAdmin
+    .from('user_badges')
+    .select('badge_id')
+    .eq('user_id', userId)
+    .in('badge_id', toAward);
+
+  if (persistedError) {
+    console.error('[badges] failed to confirm persisted badges', persistedError);
+    return [];
+  }
+
+  const persistedSet = new Set((persisted ?? []).map((r: { badge_id: string }) => r.badge_id));
+  return toAward.filter(id => persistedSet.has(id)).map(id => BADGE_MAP[id]);
+}
 /** Fetch all badges for a user with earned timestamps. */
 export async function getUserBadges(userId: string): Promise<EarnedBadge[]> {
   if (!supabaseAdmin) return [];
@@ -109,3 +133,4 @@ export async function getUserBadges(userId: string): Promise<EarnedBadge[]> {
     earned_at: r.earned_at,
   })).filter(b => b.id);
 }
+
