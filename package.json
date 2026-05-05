@@ -19,6 +19,7 @@
     "@anthropic-ai/sdk": "^0.82.0",
     "@clerk/nextjs": "^6.0.0",
     "@sentry/nextjs": "^10.50.0",
+    "@spotify/basic-pitch": "^1.0.1",
     "@stripe/stripe-js": "^9.1.0",
     "@supabase/supabase-js": "^2.102.1",
     "@upstash/ratelimit": "^2.0.8",
