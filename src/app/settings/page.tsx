@@ -7,15 +7,17 @@ import { Navbar } from '@/components/Navbar';
 import { SiteFooter } from '@/components/SiteFooter';
 import { useToast } from '@/components/toast/useToast';
 import { UserAvatar, AVATAR_COLORS } from '@/components/UserAvatar';
+import { UsageDashboard } from '@/components/UsageDashboard';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { GENRES, NOTE_NAMES, SCALE_INTERVALS } from '@/lib/music-engine';
 
-type Tab = 'profile' | 'account' | 'billing' | 'preferences' | 'notifications' | 'danger';
+type Tab = 'profile' | 'account' | 'billing' | 'usage' | 'preferences' | 'notifications' | 'danger';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'account', label: 'Account & Security' },
   { id: 'billing', label: 'Billing' },
+  { id: 'usage', label: 'Usage' },
   { id: 'preferences', label: 'Preferences' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'danger', label: 'Danger Zone' },
@@ -1106,6 +1108,32 @@ function DangerSection() {
   );
 }
 
+function UsageSection() {
+  return (
+    <div className="space-y-3">
+      <SectionCard>
+        <SectionLabel>Usage</SectionLabel>
+        <h2
+          style={{
+            fontFamily: 'Syne, DM Sans, system-ui, sans-serif',
+            fontWeight: 800,
+            fontSize: 24,
+            letterSpacing: 0,
+            color: 'var(--foreground)',
+            marginBottom: 8,
+          }}
+        >
+          Feature limits
+        </h2>
+        <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.6 }}>
+          Track your daily and monthly windows for each creation tool.
+        </p>
+        <UsageDashboard />
+      </SectionCard>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
@@ -1169,6 +1197,7 @@ export default function SettingsPage() {
           {activeTab === 'profile' && <ProfileSection />}
           {activeTab === 'account' && <AccountSection />}
           {activeTab === 'billing' && <BillingSection />}
+          {activeTab === 'usage' && <UsageSection />}
           {activeTab === 'preferences' && <PreferencesSection />}
           {activeTab === 'notifications' && <NotificationsSection />}
           {activeTab === 'danger' && <DangerSection />}
