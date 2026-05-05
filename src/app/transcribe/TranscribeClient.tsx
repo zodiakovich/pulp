@@ -13,6 +13,7 @@ const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] a
 const SCALES = ['minor', 'major', 'dorian', 'mixolydian', 'phrygian', 'lydian', 'harmonic_minor', 'melodic_minor', 'pentatonic_minor', 'pentatonic_major', 'blues'] as const;
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_SECONDS = 45;
+const BASIC_PITCH_SAMPLE_RATE = 22050;
 
 type BasicPitchNote = {
   startTimeSeconds: number;
@@ -72,6 +73,24 @@ async function decodeAudioFile(file: File): Promise<AudioBuffer> {
   } finally {
     try { await ctx.close(); } catch { /* ignore */ }
   }
+}
+
+async function resampleAudioBuffer(buffer: AudioBuffer, targetSampleRate: number): Promise<AudioBuffer> {
+  if (buffer.sampleRate === targetSampleRate) return buffer;
+  const channels = Math.min(2, buffer.numberOfChannels);
+  const length = Math.max(1, Math.ceil(buffer.duration * targetSampleRate));
+  const offline = new OfflineAudioContext(channels, length, targetSampleRate);
+  const source = offline.createBufferSource();
+  const resampledInput = offline.createBuffer(channels, buffer.length, buffer.sampleRate);
+
+  for (let ch = 0; ch < channels; ch++) {
+    resampledInput.copyToChannel(buffer.getChannelData(ch), ch);
+  }
+
+  source.buffer = resampledInput;
+  source.connect(offline.destination);
+  source.start(0);
+  return offline.startRendering();
 }
 
 function basicPitchToNotes(notes: BasicPitchNote[], bpm: number, bars: number): NoteEvent[] {
@@ -183,12 +202,13 @@ export function TranscribeClient() {
       if (audio.duration > MAX_SECONDS) {
         throw new Error(`Max duration is ${MAX_SECONDS}s for this workspace.`);
       }
+      const modelAudio = await resampleAudioBuffer(audio, BASIC_PITCH_SAMPLE_RATE);
 
       const estimatedBars = Math.max(1, Math.min(32, Math.ceil(audio.duration / (60 / bpm) / 4)));
       setBars((current) => Math.max(current, estimatedBars));
 
       setProgress('Running Basic Pitch...');
-      const rawNotes = await runBasicPitch(audio, bpm, Math.max(bars, estimatedBars), setProgress);
+      const rawNotes = await runBasicPitch(modelAudio, bpm, Math.max(bars, estimatedBars), setProgress);
       if (rawNotes.length === 0) {
         throw new Error('No notes detected. Try a clearer single-instrument recording.');
       }
