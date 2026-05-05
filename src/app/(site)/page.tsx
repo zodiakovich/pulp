@@ -7554,66 +7554,115 @@ export default function Home() {
 
             {/* Audio → MIDI is now a Studio modal next to Upload MIDI */}
 
-            {/* Humanize control */}
+            {/* Performance & Sound */}
             <AnimatePresence>
               {result && !isGenerating && (
                 <motion.div
-                  className="mb-5 flex items-center gap-3"
-                  initial={{ opacity: 0, y: 6 }}
+                  className="mb-5 rounded-2xl p-4"
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.25, ease: EASE_UI }}
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
                 >
-                  {/* Waveform icon */}
-                  <svg width="15" height="12" viewBox="0 0 15 12" fill="none" aria-hidden style={{ flexShrink: 0 }}>
-                    <path d="M1 6h1.5M13.5 6H15M3.5 6V3.5M5 6V1.5M6.5 6V4M8 6V2M9.5 6V4.5M11 6V3.5M12.5 6V5"
-                      stroke="#FF6D3F" strokeWidth="1.4" strokeLinecap="round" />
-                  </svg>
-                  <label
-                    htmlFor="humanize-slider"
-                    style={{
-                      fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 11,
-                      color: 'var(--text)',
-                      letterSpacing: '0.04em',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                      cursor: 'default',
-                    }}
-                  >
-                    Humanize{' '}
-                    <span style={{ color: 'var(--accent)', minWidth: 24, display: 'inline-block' }}>
-                      {humanize}
-                    </span>
-                  </label>
-                  <input
-                    id="humanize-slider"
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={humanize}
-                    onChange={e => setHumanize(Number(e.target.value))}
-                    style={{
-                      width: 160,
-                      flexShrink: 0,
-                      background: `linear-gradient(to right, #FF6D3F ${humanize}%, var(--border) ${humanize}%)`,
-                    }}
-                  />
-                  {humanize === 0 && (
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                      quantized
-                    </span>
-                  )}
-                  {humanize >= 80 && (
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
-                      max feel
-                    </span>
-                  )}
+                  <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 4 }}>
+                        PERFORMANCE & SOUND
+                      </p>
+                      <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: 'var(--muted)', margin: 0 }}>
+                        Shape the feel, source sounds, and session context before exporting.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[GENRES[selectedParams.genre]?.name, `${selectedParams.key} ${selectedParams.scale}`, `${selectedParams.bpm} BPM`, `${selectedParams.bars} bars`]
+                        .filter(Boolean)
+                        .map(tag => (
+                          <span
+                            key={tag}
+                            className="rounded-lg px-2.5 py-1"
+                            style={{ border: '1px solid var(--border)', color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                    <div
+                      className="rounded-xl px-3 py-3"
+                      style={{ border: '1px solid var(--border-weak)', background: 'rgba(255,255,255,0.025)' }}
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <label
+                          htmlFor="humanize-slider"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: 11,
+                            color: 'var(--text)',
+                            letterSpacing: '0.04em',
+                            whiteSpace: 'nowrap',
+                            cursor: 'default',
+                          }}
+                        >
+                          Humanize
+                        </label>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--accent)' }}>
+                          {humanize}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <svg width="15" height="12" viewBox="0 0 15 12" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+                          <path d="M1 6h1.5M13.5 6H15M3.5 6V3.5M5 6V1.5M6.5 6V4M8 6V2M9.5 6V4.5M11 6V3.5M12.5 6V5"
+                            stroke="#FF6D3F" strokeWidth="1.4" strokeLinecap="round" />
+                        </svg>
+                        <input
+                          id="humanize-slider"
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={humanize}
+                          onChange={e => setHumanize(Number(e.target.value))}
+                          className="min-w-0 flex-1"
+                          style={{
+                            background: `linear-gradient(to right, #FF6D3F ${humanize}%, var(--border) ${humanize}%)`,
+                          }}
+                        />
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: humanize >= 80 ? 'var(--accent)' : 'var(--muted)', whiteSpace: 'nowrap' }}>
+                          {humanize === 0 ? 'quantized' : humanize >= 80 ? 'max feel' : 'natural'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMatchSoundsPanelOpen(true)}
+                      className="inline-flex h-full min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm transition-all"
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        border: '1px solid rgba(255,109,63,0.35)',
+                        background: 'rgba(255,109,63,0.08)',
+                        color: '#FF6D3F',
+                        cursor: 'pointer',
+                        letterSpacing: '0.02em',
+                        transition: 'border-color 150ms, background 150ms',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.6)'; e.currentTarget.style.background = 'rgba(255,109,63,0.14)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.35)'; e.currentTarget.style.background = 'rgba(255,109,63,0.08)'; }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+                        <path d="M6.5 1v2M6.5 10v2M1 6.5h2M10 6.5h2M2.93 2.93l1.41 1.41M8.66 8.66l1.41 1.41M2.93 10.07l1.41-1.41M8.66 4.34l1.41-1.41" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                      </svg>
+                      Match Sounds
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
-
             {/* Chord progression (prominent) */}
             <AnimatePresence>
               {result && !isGenerating && (
@@ -7693,63 +7742,6 @@ export default function Home() {
                       />
                     )
                   )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Match Sounds button */}
-            <AnimatePresence>
-              {result && !isGenerating && (
-                <motion.div
-                  className="mt-4"
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2, duration: 0.3 }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setMatchSoundsPanelOpen(true)}
-                    className="inline-flex items-center gap-2 text-sm transition-all"
-                    style={{
-                      fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      padding: '8px 16px',
-                      borderRadius: 10,
-                      border: '1px solid rgba(255,109,63,0.35)',
-                      background: 'rgba(255,109,63,0.08)',
-                      color: '#FF6D3F',
-                      cursor: 'pointer',
-                      letterSpacing: '0.02em',
-                      transition: 'border-color 150ms, background 150ms',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.6)'; e.currentTarget.style.background = 'rgba(255,109,63,0.14)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,109,63,0.35)'; e.currentTarget.style.background = 'rgba(255,109,63,0.08)'; }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden style={{ flexShrink: 0 }}>
-                      <path d="M6.5 1v2M6.5 10v2M1 6.5h2M10 6.5h2M2.93 2.93l1.41 1.41M8.66 8.66l1.41 1.41M2.93 10.07l1.41-1.41M8.66 4.34l1.41-1.41" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                    </svg>
-                    Match Sounds
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Generation metadata */}
-            <AnimatePresence>
-              {result && !isGenerating && (
-                <motion.div
-                  className="mt-4 flex flex-wrap gap-2"
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3, duration: 0.3 }}
-                >
-                  {[GENRES[params.genre]?.name, `${params.key} ${params.scale}`, `${variations[selectedVariation]?.params.bpm ?? params.bpm} BPM`, `${params.bars} bars`]
-                    .filter(Boolean)
-                    .map(tag => (
-                      <span key={tag} className="px-2 py-1 rounded-md text-xs"
-                        style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                        {tag}
-                      </span>
-                    ))}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -8317,6 +8309,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
