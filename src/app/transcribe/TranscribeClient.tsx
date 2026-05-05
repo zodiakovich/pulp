@@ -76,14 +76,14 @@ async function decodeAudioFile(file: File): Promise<AudioBuffer> {
 }
 
 async function resampleAudioBuffer(buffer: AudioBuffer, targetSampleRate: number): Promise<AudioBuffer> {
-  if (buffer.sampleRate === targetSampleRate) return buffer;
-  const channels = Math.min(2, buffer.numberOfChannels);
+  if (buffer.sampleRate === targetSampleRate && buffer.numberOfChannels === 1) return buffer;
+  const sourceChannels = Math.min(2, buffer.numberOfChannels);
   const length = Math.max(1, Math.ceil(buffer.duration * targetSampleRate));
-  const offline = new OfflineAudioContext(channels, length, targetSampleRate);
+  const offline = new OfflineAudioContext(1, length, targetSampleRate);
   const source = offline.createBufferSource();
-  const resampledInput = offline.createBuffer(channels, buffer.length, buffer.sampleRate);
+  const resampledInput = offline.createBuffer(sourceChannels, buffer.length, buffer.sampleRate);
 
-  for (let ch = 0; ch < channels; ch++) {
+  for (let ch = 0; ch < sourceChannels; ch++) {
     resampledInput.copyToChannel(buffer.getChannelData(ch), ch);
   }
 
