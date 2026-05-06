@@ -5144,6 +5144,8 @@ export default function Home() {
                 borderRadius: 20,
                 padding: '4px 12px',
                 marginBottom: 16,
+                lineHeight: 1.4,
+                whiteSpace: 'normal',
               }}
             >
               Multi-track MIDI, ready for your DAW
@@ -5231,11 +5233,13 @@ export default function Home() {
             style={{
               position: 'relative',
               minHeight: 420,
+              height: 'auto',
               background: 'linear-gradient(180deg, rgba(17,17,24,0.98) 0%, rgba(10,10,11,1) 100%)',
               border: '1px solid #1A1A2E',
               borderRadius: 12,
-              overflow: 'hidden',
+              overflow: 'visible',
               boxShadow: '0 30px 80px rgba(0,0,0,0.35)',
+              paddingBottom: 4,
             }}
           >
             <div
@@ -5317,6 +5321,8 @@ export default function Home() {
                         <div
                           key={layer}
                           style={{
+                            display: 'flex',
+                            alignItems: 'center',
                             fontFamily: 'JetBrains Mono, monospace',
                             fontSize: 11,
                             color: index === 2 ? 'var(--text)' : 'rgba(255,255,255,0.55)',
@@ -5324,6 +5330,8 @@ export default function Home() {
                             border: index === 2 ? '1px solid rgba(255,109,63,0.25)' : '1px solid transparent',
                             borderRadius: 8,
                             padding: '8px 10px',
+                            minHeight: 34,
+                            lineHeight: 1,
                           }}
                         >
                           {layer}
