@@ -21,6 +21,17 @@ const MidiSingleSchema = z.object({
   bpm: z.number().int().min(60).max(220).optional().default(124),
   bars: z.number().int().min(1).max(16).optional().default(4),
   trackType: z.enum(TRACK_TYPES).optional().default('melody'),
+  referenceMidi: z.object({
+    notes: z.array(z.object({
+      pitch: z.number().int().min(0).max(127),
+      startTime: z.number().min(0).max(256),
+      duration: z.number().positive().max(64),
+      velocity: z.number().int().min(1).max(127),
+    })).max(256),
+    estimatedBpm: z.number().int().min(60).max(220),
+    estimatedKey: z.string().refine((k) => KEY_WHITELIST.includes(k), { message: 'Invalid reference key' }),
+    noteCount: z.number().int().min(0).max(100000),
+  }).optional(),
 });
 
 const ClaudeNoteSchema = z.object({
@@ -78,6 +89,26 @@ Rules:
 - For pads/chords, create sustained chord tones as overlapping notes.
 - Velocity should feel performed, usually 55-118.
 - Prefer memorable musical motifs over random notes.`;
+}
+
+function buildUserMessage(input: z.infer<typeof MidiSingleSchema>, totalBeats: number) {
+  const base = {
+    prompt: input.prompt,
+    key: input.key,
+    scale: input.scale,
+    bpm: input.bpm,
+    bars: input.bars,
+    trackType: input.trackType,
+    totalBeats,
+  };
+
+  if (!input.referenceMidi) return JSON.stringify(base);
+
+  return `${JSON.stringify(base)}
+
+Reference MIDI provided: ${input.referenceMidi.noteCount} notes, estimated key ${input.referenceMidi.estimatedKey}, ${input.referenceMidi.estimatedBpm} BPM.
+Reference notes (first 32): ${JSON.stringify(input.referenceMidi.notes.slice(0, 32))}
+Generate a ${input.trackType} that complements this reference musically.`;
 }
 
 export async function POST(req: NextRequest) {
@@ -139,15 +170,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: JSON.stringify({
-            prompt: input.prompt,
-            key: input.key,
-            scale: input.scale,
-            bpm: input.bpm,
-            bars: input.bars,
-            trackType: input.trackType,
-            totalBeats,
-          }),
+          content: buildUserMessage(input, totalBeats),
         },
       ],
     });
@@ -178,6 +201,7 @@ export async function POST(req: NextRequest) {
         bars: input.bars,
         bpm: input.bpm,
         noteCount: notes.length,
+        referenceNoteCount: input.referenceMidi?.noteCount ?? null,
       },
     });
 

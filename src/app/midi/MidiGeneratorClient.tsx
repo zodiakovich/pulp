@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, Download, FileAudio, Loader2, Music2, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ChevronDown, Download, FileAudio, Loader2, Music2, SlidersHorizontal, Sparkles, Upload, X } from 'lucide-react';
 import { SignedIn, SignedOut } from '@clerk/nextjs';
 import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
 import { PianoRollEditor } from '@/components/PianoRollEditor';
@@ -12,6 +12,22 @@ import { stopAllAppAudio } from '@/lib/audio-control';
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 const SCALES = ['minor', 'major', 'dorian', 'mixolydian', 'phrygian', 'lydian', 'harmonic_minor', 'melodic_minor', 'pentatonic_minor', 'pentatonic_major', 'blues'] as const;
 const TRACK_TYPES = ['melody', 'arp', 'bass', 'counter-melody', 'pad', 'drums', 'chords', 'lead', 'pluck'] as const;
+const PITCH_CLASS_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+
+type ReferenceMidiNote = {
+  pitch: number;
+  startTime: number;
+  duration: number;
+  velocity: number;
+};
+
+type ReferenceMidiSummary = {
+  fileName: string;
+  notes: ReferenceMidiNote[];
+  estimatedBpm: number;
+  estimatedKey: (typeof KEYS)[number];
+  noteCount: number;
+};
 
 type MidiSingleResponse = {
   id: string | null;
@@ -59,6 +75,26 @@ function midiFileName(trackType: string, bpm: number) {
   return `pulp-${trackType}-${bpm}bpm.mid`.replace(/[^a-z0-9.-]+/gi, '-').toLowerCase();
 }
 
+function clampInt(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function estimateKey(notes: ReferenceMidiNote[]): (typeof KEYS)[number] {
+  const counts = new Array(12).fill(0) as number[];
+  for (const note of notes) {
+    counts[((note.pitch % 12) + 12) % 12] += 1;
+  }
+  let best = 0;
+  for (let i = 1; i < counts.length; i++) {
+    if (counts[i] > counts[best]) best = i;
+  }
+  return PITCH_CLASS_NAMES[best];
+}
+
+function detectedLabel(referenceMidi: ReferenceMidiSummary) {
+  return `Detected: ~${referenceMidi.estimatedBpm} BPM · ${referenceMidi.estimatedKey} minor · ${referenceMidi.noteCount} notes`;
+}
+
 export function MidiGeneratorClient() {
   const [prompt, setPrompt] = useState('warm afro house counter-melody with short syncopated notes');
   const [key, setKey] = useState<(typeof KEYS)[number]>('C');
@@ -69,8 +105,11 @@ export function MidiGeneratorClient() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [notes, setNotes] = useState<NoteEvent[]>([]);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [referenceMidi, setReferenceMidi] = useState<ReferenceMidiSummary | null>(null);
+  const [referenceLoading, setReferenceLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canExport = notes.length > 0;
 
@@ -79,10 +118,16 @@ export function MidiGeneratorClient() {
     setLoading(true);
     setError(null);
     try {
+      const referencePayload = referenceMidi ? {
+        notes: referenceMidi.notes,
+        estimatedBpm: referenceMidi.estimatedBpm,
+        estimatedKey: referenceMidi.estimatedKey,
+        noteCount: referenceMidi.noteCount,
+      } : undefined;
       const res = await fetch('/api/generate-midi-single', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, key, scale, bpm, bars, trackType }),
+        body: JSON.stringify({ prompt, key, scale, bpm, bars, trackType, referenceMidi: referencePayload }),
       });
       const data = await res.json() as MidiSingleResponse | { error?: string };
       if (!res.ok) {
@@ -96,6 +141,62 @@ export function MidiGeneratorClient() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleReferenceFile(file: File) {
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith('.mid') && !lower.endsWith('.midi')) {
+      setError('Upload a .mid or .midi file.');
+      return;
+    }
+
+    setReferenceLoading(true);
+    setError(null);
+    try {
+      const { Midi } = await import('@tonejs/midi');
+      const buffer = await file.arrayBuffer();
+      const midi = new Midi(buffer);
+      const tempo = midi.header.tempos[0]?.bpm;
+      const estimatedBpm = clampInt(Number.isFinite(tempo) ? tempo : bpm, 60, 220);
+      const secondsToBeats = estimatedBpm / 60;
+      const parsedNotes = midi.tracks
+        .flatMap(track => track.notes)
+        .map((note) => ({
+          pitch: clampInt(note.midi, 0, 127),
+          startTime: Number((note.time * secondsToBeats).toFixed(3)),
+          duration: Number(Math.max(0.125, note.duration * secondsToBeats).toFixed(3)),
+          velocity: clampInt(note.velocity * 127, 1, 127),
+        }))
+        .filter(note => note.duration > 0)
+        .sort((a, b) => a.startTime - b.startTime || a.pitch - b.pitch);
+
+      if (parsedNotes.length === 0) {
+        throw new Error('No notes found in this MIDI file.');
+      }
+
+      const estimatedKey = estimateKey(parsedNotes);
+      setReferenceMidi({
+        fileName: file.name,
+        notes: parsedNotes.slice(0, 256),
+        estimatedBpm,
+        estimatedKey,
+        noteCount: parsedNotes.length,
+      });
+      setBpm(estimatedBpm);
+      setKey(estimatedKey);
+      setScale('minor');
+    } catch (err) {
+      setReferenceMidi(null);
+      setError(err instanceof Error ? err.message : 'Could not read this MIDI file.');
+    } finally {
+      setReferenceLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function clearReferenceMidi() {
+    setReferenceMidi(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   function download() {
@@ -150,6 +251,59 @@ export function MidiGeneratorClient() {
               placeholder="short rolling bass line for dark UK garage, bouncy and offbeat"
               style={{ ...fieldStyle(), resize: 'vertical', minHeight: 150 }}
             />
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".mid,.midi,audio/midi"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleReferenceFile(file);
+              }}
+            />
+
+            <div className="mt-3">
+              {referenceMidi ? (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--bg)' }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate" style={{ color: 'var(--text)', fontSize: 13, fontWeight: 700, margin: 0 }}>
+                        {referenceMidi.fileName}
+                      </p>
+                      <p className="mt-1" style={{ color: 'var(--muted)', fontSize: 12, margin: 0 }}>
+                        {detectedLabel(referenceMidi)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md"
+                      style={{ border: '1px solid var(--border)', color: 'var(--muted)', background: 'transparent' }}
+                      onClick={clearReferenceMidi}
+                      aria-label="Remove MIDI reference"
+                    >
+                      <X size={15} aria-hidden />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors"
+                  style={{
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'var(--muted)',
+                    fontFamily: 'DM Sans, system-ui, sans-serif',
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={referenceLoading}
+                >
+                  {referenceLoading ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />}
+                  {referenceLoading ? 'Reading MIDI...' : 'Upload MIDI reference'}
+                </button>
+              )}
+            </div>
 
             <button
               type="button"
