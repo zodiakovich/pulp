@@ -6,15 +6,9 @@ import { useEffect, useState } from 'react';
 type PlanType = 'free' | 'pro' | 'studio';
 
 type UsageResponse = {
-  daily_cost: number;
-  daily_limit: number;
-  monthly_cost: number;
-  monthly_limit: number;
   daily_pct: number;
   monthly_pct: number;
   plan_type: PlanType;
-  blocked_by: 'daily' | 'monthly' | null;
-  allowed: boolean;
 };
 
 function barColor(percent: number) {
@@ -33,45 +27,26 @@ function pctLabel(value: number) {
 function UsageBar({
   label,
   percent,
-  blocked,
 }: {
   label: 'Today' | 'This month';
   percent: number;
-  blocked: boolean;
 }) {
   const color = barColor(percent);
   const width = Math.max(0, Math.min(100, percent));
+
   return (
     <div
       style={{
-        border: '1px solid #1A1A2E',
-        background: '#111118',
+        border: '1px solid var(--border)',
+        background: 'var(--surface-strong)',
         borderRadius: 12,
         padding: 20,
       }}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--foreground)' }}>
-            {label}
-          </span>
-          {blocked && (
-            <span
-              style={{
-                border: '1px solid rgba(233,69,96,0.35)',
-                background: 'rgba(233,69,96,0.12)',
-                color: '#E94560',
-                borderRadius: 999,
-                padding: '2px 7px',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 10,
-                lineHeight: 1.4,
-              }}
-            >
-              Limit reached
-            </span>
-          )}
-        </div>
+        <span style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--foreground)' }}>
+          {label}
+        </span>
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
           {pctLabel(percent)}
         </span>
@@ -89,10 +64,6 @@ function UsageBar({
           }}
         />
       </div>
-
-      <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 13, color: '#8A8A9A', marginTop: 10 }}>
-        {pctLabel(percent)} of {label === 'Today' ? 'daily' : 'monthly'} limit used
-      </p>
     </div>
   );
 }
@@ -104,8 +75,8 @@ function Skeleton() {
         <div
           key={item}
           style={{
-            border: '1px solid #1A1A2E',
-            background: '#111118',
+            border: '1px solid var(--border)',
+            background: 'var(--surface-strong)',
             borderRadius: 12,
             padding: 20,
           }}
@@ -148,19 +119,19 @@ export function UsageDashboard() {
 
   return (
     <div>
-      <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 13, color: '#8A8A9A', marginBottom: 14 }}>
-        Daily limits reset every 24h · Monthly limits reset every 30 days
+      <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>
+        Daily limits reset every 24h {'\u00b7'} Monthly limits reset every 30 days
       </p>
 
       <div className="space-y-3">
-        <UsageBar label="Today" percent={usage.daily_pct} blocked={usage.blocked_by === 'daily'} />
-        <UsageBar label="This month" percent={usage.monthly_pct} blocked={usage.blocked_by === 'monthly'} />
+        <UsageBar label="Today" percent={usage.daily_pct} />
+        <UsageBar label="This month" percent={usage.monthly_pct} />
       </div>
 
       {usage.plan_type === 'free' && (
-        <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 14, color: '#8A8A9A', marginTop: 16 }}>
+        <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 14, color: 'var(--muted)', marginTop: 16 }}>
           <Link href="/pricing" style={{ color: '#FF6D3F', textDecoration: 'none', fontWeight: 700 }}>
-            Upgrade to Pro for higher limits →
+            Upgrade to Pro for higher limits
           </Link>
         </p>
       )}

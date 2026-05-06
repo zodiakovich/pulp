@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
-import { auth, currentUser } from '@clerk/nextjs/server';
-import { enforceRateLimit, getIp } from '@/lib/ratelimit';
-import { sendEmail } from '@/lib/email';
-import {
-  checkCreditsAllowed,
-  checkGuestAllowed,
-  GUEST_DAILY_LIMIT,
-  incrementCredits,
-  incrementGuest,
-} from '@/lib/credits';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { auth } from '@clerk/nextjs/server';
+import { enforceRateLimit } from '@/lib/ratelimit';
 import { calculateAnthropicCostUsd, logAnthropicUsage } from '@/lib/ai-usage';
 import { checkFeatureAllowed, incrementFeatureCost, type WindowCheckResult } from '@/lib/feature-credits';
 import {
@@ -170,27 +161,10 @@ export async function POST(req: NextRequest) {
 
   const { bpm, genre, key, bars, prompt } = parsed.data;
 
-  const guestIp = getIp(req);
   let featureCheck: WindowCheckResult | null = null;
-
-  if (!userId && !supabaseAdmin) {
-    return NextResponse.json({ error: 'Guest generation unavailable' }, { status: 503 });
-  }
 
   if (userId) {
     try {
-      const c = await checkCreditsAllowed(userId);
-      if (!c.allowed) {
-        return NextResponse.json(
-          {
-            error: 'Monthly limit reached',
-            credits_used: c.credits_used,
-            limit: c.limit,
-            is_pro: c.is_pro,
-          },
-          { status: 429 },
-        );
-      }
       featureCheck = await checkFeatureAllowed(userId, 'build');
       if (!featureCheck.allowed) {
         return NextResponse.json(
@@ -210,20 +184,7 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch {
-      return NextResponse.json({ error: 'Credits check unavailable' }, { status: 503 });
-    }
-  } else {
-    const g = await checkGuestAllowed(guestIp);
-    if (!g.allowed) {
-      return NextResponse.json(
-        {
-          error: 'Guest limit reached',
-          credits_used: g.count,
-          limit: GUEST_DAILY_LIMIT,
-          is_pro: false,
-        },
-        { status: 429 },
-      );
+      return NextResponse.json({ error: 'Usage check unavailable' }, { status: 503 });
     }
   }
 
@@ -285,79 +246,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Generation failed' }, { status: 500 });
   }
 
-  let creditsPayload: { credits_used: number; limit: number; is_pro: boolean; plan_type: string };
   try {
     if (userId) {
-      await incrementCredits(userId);
       await incrementFeatureCost(userId, 'build', buildCost);
-      const fin = await checkCreditsAllowed(userId);
-      creditsPayload = {
-        credits_used: fin.credits_used,
-        limit: fin.limit,
-        is_pro: fin.is_pro,
-        plan_type: fin.plan_type,
-      };
-
-      // Send one-time low-gen warning when user just crossed 80% of their limit.
-      const threshold = Math.floor(fin.limit * 0.8);
-      if (fin.credits_used === threshold && supabaseAdmin) {
-        void (async () => {
-          try {
-            const { data: row } = await supabaseAdmin
-              .from('user_credits')
-              .select('low_gen_warning_sent')
-              .eq('user_id', userId)
-              .maybeSingle();
-            if (row && !row.low_gen_warning_sent) {
-              await supabaseAdmin
-                .from('user_credits')
-                .update({ low_gen_warning_sent: true })
-                .eq('user_id', userId);
-              const user = await currentUser();
-              const email = user?.emailAddresses?.[0]?.emailAddress;
-              if (email) {
-                await sendEmail({
-                  to: email,
-                  subject: "You're running low on generations",
-                  html: `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#09090B;font-family:DM Sans,system-ui,sans-serif;color:#FAFAFA;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#111113;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:40px 40px 32px;">
-        <tr><td>
-          <p style="font-family:Syne,system-ui,sans-serif;font-size:28px;font-weight:700;color:#FF6D3F;margin:0 0 24px;">pulp.</p>
-          <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em;margin:0 0 16px;color:#FAFAFA;">Running low on generations.</h1>
-          <p style="font-size:15px;line-height:1.7;color:#A1A1AA;margin:0 0 24px;">You've used <strong style="color:#FAFAFA;">${fin.credits_used} of ${fin.limit}</strong> monthly generations. Upgrade to Pro for 150/month and keep creating without limits.</p>
-          <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
-            <tr><td style="background:#FF6D3F;border-radius:10px;">
-              <a href="https://pulp.bypapaya.com/pricing" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#fff;text-decoration:none;letter-spacing:-0.01em;">Upgrade now →</a>
-            </td></tr>
-          </table>
-          <p style="font-size:14px;color:#71717A;margin:0;">Your generations reset at the start of next month.</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`,
-                });
-              }
-            }
-          } catch {
-            // Never block the generation response for email failures.
-          }
-        })();
-      }
-    } else {
-      const g = await incrementGuest(guestIp);
-      creditsPayload = {
-        credits_used: g.credits_used,
-        limit: g.limit,
-        is_pro: false,
-        plan_type: 'free',
-      };
     }
   } catch {
     return NextResponse.json({ error: 'Usage accounting failed' }, { status: 500 });
@@ -371,7 +262,6 @@ export async function POST(req: NextRequest) {
       { result: gen2, params: p2 },
       { result: gen3, params: p3 },
     ],
-    credits: creditsPayload,
     ...(featureCheck && {
       feature_usage: {
         daily_cost: featureCheck.daily_cost + buildCost,

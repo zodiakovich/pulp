@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import type { PlanType } from '@/lib/credits';
+import type { PlanType } from '@/lib/feature-credits';
 import { sendEmail } from '@/lib/email';
 import { getLoopsClient } from '@/lib/loops';
 
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
         <tr><td>
           <p style="font-family:Syne,system-ui,sans-serif;font-size:28px;font-weight:700;color:#FF6D3F;margin:0 0 24px;">pulp.</p>
           <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em;margin:0 0 16px;color:#FAFAFA;">Your Pro plan is active.</h1>
-          <p style="font-size:15px;line-height:1.7;color:#A1A1AA;margin:0 0 24px;">You now have <strong style="color:#FAFAFA;">150 generations/month</strong>. Make something great.</p>
+          <p style="font-size:15px;line-height:1.7;color:#A1A1AA;margin:0 0 24px;">Your upgraded usage windows are active. Make something great.</p>
           <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
             <tr><td style="background:#FF6D3F;border-radius:10px;">
               <a href="https://pulp.bypapaya.com" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#fff;text-decoration:none;letter-spacing:-0.01em;">Start generating →</a>
@@ -130,7 +130,7 @@ export async function POST(req: Request) {
         <tr><td>
           <p style="font-family:Syne,system-ui,sans-serif;font-size:28px;font-weight:700;color:#FF6D3F;margin:0 0 24px;">pulp.</p>
           <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em;margin:0 0 16px;color:#FAFAFA;">Your subscription has ended.</h1>
-          <p style="font-size:15px;line-height:1.7;color:#A1A1AA;margin:0 0 24px;">You're now on the <strong style="color:#FAFAFA;">Free plan</strong> (20 generations/month). Resubscribe anytime to get back to 150/month.</p>
+          <p style="font-size:15px;line-height:1.7;color:#A1A1AA;margin:0 0 24px;">You're now on the <strong style="color:#FAFAFA;">Free plan</strong>. Resubscribe anytime to restore paid usage windows.</p>
           <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
             <tr><td style="background:#FF6D3F;border-radius:10px;">
               <a href="https://pulp.bypapaya.com/pricing" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#fff;text-decoration:none;letter-spacing:-0.01em;">Resubscribe →</a>

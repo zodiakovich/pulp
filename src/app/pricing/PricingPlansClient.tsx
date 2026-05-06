@@ -178,15 +178,15 @@ function CheckoutCta({
   );
 }
 
-const FREE_FEATURES = ['20 monthly generations', 'Multi-track MIDI export', '5 core genres', 'Generation history'] as const;
+const FREE_FEATURES = ['Starter usage windows', 'Multi-track MIDI export', '5 core genres', 'Generation history'] as const;
 
-const PRO_EXTRA = ['150 monthly generations', 'All visible genres', 'Find Similar variations', 'Public/private sharing', 'WAV and Ableton export'] as const;
+const PRO_EXTRA = ['Higher usage windows', 'All visible genres', 'Find Similar variations', 'Public/private sharing', 'WAV and Ableton export'] as const;
 
-const STUDIO_EXTRA = ['600 monthly generations', 'Upload MIDI & continue', 'Audio to MIDI workspace', 'Advanced mix controls'] as const;
+const STUDIO_EXTRA = ['Studio usage windows', 'Upload MIDI & continue', 'Audio to MIDI workspace', 'Advanced mix controls'] as const;
 
 const COMPARE_ROWS: { label: string; free: boolean; pro: boolean; studio: boolean }[] = [
   { label: 'MIDI export', free: true, pro: true, studio: true },
-  { label: 'Monthly generations', free: true, pro: true, studio: true },
+  { label: 'Usage windows', free: true, pro: true, studio: true },
   { label: 'Genre library', free: true, pro: true, studio: true },
   { label: 'Piano roll editor', free: true, pro: true, studio: true },
   { label: 'Generation history', free: true, pro: true, studio: true },
@@ -350,7 +350,7 @@ export function PricingPlansClient() {
                 </span>
               </div>
               <p className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}>
-                20 generations / month
+                Starter usage windows
               </p>
             </div>
             <ul className="mb-8 flex flex-1 flex-col gap-4">
@@ -393,7 +393,7 @@ export function PricingPlansClient() {
               </p>
               <PaidPlanPriceBlock baseMonthly={PRO_MONTHLY} billing={billing} />
               <p className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}>
-                150 generations / month
+                Higher usage windows
                 {billing === 'annual' ? ' - billed annually' : ''}
               </p>
             </div>
@@ -422,7 +422,7 @@ export function PricingPlansClient() {
               </p>
               <PaidPlanPriceBlock baseMonthly={STUDIO_MONTHLY} billing={billing} />
               <p className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}>
-                600 generations / month
+                Studio usage windows
                 {billing === 'annual' ? ' - billed annually' : ''}
               </p>
             </div>
@@ -478,9 +478,9 @@ export function PricingPlansClient() {
                       {row.label}
                     </td>
                     <td className="px-4 py-4 text-center align-middle">
-                      {row.label === 'Monthly generations' ? (
+                      {row.label === 'Usage windows' ? (
                         <span className="text-sm font-medium" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
-                          20
+                          Starter
                         </span>
                       ) : row.label === 'Genre library' ? (
                         <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
@@ -497,9 +497,9 @@ export function PricingPlansClient() {
                       )}
                     </td>
                     <td className="px-4 py-4 text-center align-middle">
-                      {row.label === 'Monthly generations' ? (
+                      {row.label === 'Usage windows' ? (
                         <span className="text-sm font-medium" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
-                          150
+                          Higher
                         </span>
                       ) : row.label === 'Genre library' ? (
                         <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
@@ -516,9 +516,9 @@ export function PricingPlansClient() {
                       )}
                     </td>
                     <td className="px-4 py-4 text-center align-middle">
-                      {row.label === 'Monthly generations' ? (
+                      {row.label === 'Usage windows' ? (
                         <span className="text-sm font-medium" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>
-                          600
+                          Studio
                         </span>
                       ) : row.label === 'Genre library' ? (
                         <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--text)' }}>

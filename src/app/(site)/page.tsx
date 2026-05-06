@@ -58,11 +58,12 @@ const StudioAudioToMidiModal = dynamic(
   () => import('@/components/StudioAudioToMidiModal').then(m => ({ default: m.StudioAudioToMidiModal })),
   { ssr: false },
 );
-import type { PlanType } from '@/lib/credits';
 import { DS, LAYER_VIZ_COLORS, readCssColor, getLayerVizColorsForCanvas } from '@/lib/design-system';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+
+type PlanType = 'free' | 'pro' | 'studio';
 
 // ─── MOTION VARIANTS ─────────────────────────────────────────
 /** Default UI easing — hover, enters, in-view */
@@ -2638,7 +2639,78 @@ function normalizeScaleToEngine(value: string): string {
   return 'minor';
 }
 
-function HeroDemoPreview() {
+function OutputPreview({ result }: { result: GenerationResult | null }) {
+  const layers = [
+    { key: 'melody', name: 'Melody', color: LAYER_VIZ_COLORS.melody, notes: result?.melody ?? [] },
+    { key: 'chords', name: 'Chords', color: LAYER_VIZ_COLORS.chords, notes: result?.chords ?? [] },
+    { key: 'bass', name: 'Bass', color: LAYER_VIZ_COLORS.bass, notes: result?.bass ?? [] },
+    { key: 'drums', name: 'Drums', color: LAYER_VIZ_COLORS.drums, notes: result?.drums ?? [] },
+  ] as const;
+  const hasResult = layers.some(layer => layer.notes.length > 0);
+
+  return (
+    <div
+      className="mb-6 rounded-2xl overflow-hidden"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)', position: 'relative' }}
+    >
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em' }}>
+            OUTPUT PREVIEW
+          </span>
+        </div>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>
+          {hasResult ? 'Editable MIDI layers ready' : 'Generate to unlock editor'}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 p-4">
+        {layers.map(layer => (
+          <div
+            key={layer.key}
+            className="rounded-xl overflow-hidden"
+            style={{ border: '1px solid var(--border-weak)', background: 'var(--bg)', minHeight: 72 }}
+          >
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: layer.color }} />
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: layer.color, opacity: 0.85 }}>
+                  {layer.name.toUpperCase()}
+                </span>
+              </div>
+              {hasResult && (
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'var(--muted)' }}>
+                  {layer.notes.length} notes
+                </span>
+              )}
+            </div>
+            <div className="px-3 pb-3">
+              {layer.notes.length > 0 ? (
+                <PianoRoll notes={layer.notes} color={layer.color} height={44} />
+              ) : (
+                <div style={{ height: 44, borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-weak)' }} />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {!hasResult && (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 100%)' }}
+        >
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
+            Results appear here as editable MIDI layers
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeroDemoPreview({ result, params }: { result?: GenerationResult | null; params?: GenerationParams }) {
   const [tick, setTick] = React.useState(0)
   const [playhead, setPlayhead] = React.useState(0)
 
@@ -2656,6 +2728,16 @@ function HeroDemoPreview() {
     { name: 'Bass',   color: LAYER_VIZ_COLORS.bass, pattern: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
     { name: 'Drums',  color: LAYER_VIZ_COLORS.drums, pattern: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
   ]
+  const liveLayers = [
+    { name: 'Melody', color: LAYER_VIZ_COLORS.melody, notes: result?.melody ?? [] },
+    { name: 'Chords', color: LAYER_VIZ_COLORS.chords, notes: result?.chords ?? [] },
+    { name: 'Bass', color: LAYER_VIZ_COLORS.bass, notes: result?.bass ?? [] },
+    { name: 'Drums', color: LAYER_VIZ_COLORS.drums, notes: result?.drums ?? [] },
+  ]
+  const hasResult = liveLayers.some(layer => layer.notes.length > 0)
+  const liveLabel = hasResult && params
+    ? `LIVE PREVIEW · ${GENRES[params.genre]?.name ?? params.genre} · ${params.bpm} BPM · ${params.key}${params.scale === 'minor' ? 'm' : ` ${params.scale}`}`
+    : 'LIVE PREVIEW · Tech House · 128 BPM · Am'
 
   return (
     <div className="relative mb-6" style={{ position: 'relative' }}>
@@ -2690,15 +2772,40 @@ function HeroDemoPreview() {
               }}
             />
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.06em' }}>
-              LIVE PREVIEW · Tech House · 128 BPM · Am
+              {liveLabel}
             </span>
           </div>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-            generate yours →
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>
+            {hasResult ? 'updated from generation' : 'generate yours'}
           </span>
         </div>
         <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {layers.map(layer => (
+          {hasResult ? liveLayers.map(layer => (
+            <div
+              key={layer.name}
+              className="rounded-xl overflow-hidden"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border-weak)', minHeight: 62 }}
+            >
+              <div className="flex items-center justify-between gap-2 px-2 pt-1.5">
+                <div className="flex items-center gap-1.5">
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: layer.color, flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: layer.color, opacity: 0.7 }}>
+                    {layer.name.toUpperCase()}
+                  </span>
+                </div>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: 'var(--muted)' }}>
+                  {layer.notes.length}
+                </span>
+              </div>
+              <div className="px-2 pb-2 pt-1">
+                {layer.notes.length > 0 ? (
+                  <PianoRoll notes={layer.notes} color={layer.color} height={34} />
+                ) : (
+                  <div style={{ height: 34, borderRadius: 6, background: 'rgba(255,255,255,0.04)' }} />
+                )}
+              </div>
+            </div>
+          )) : layers.map(layer => (
             <div
               key={layer.name}
               className="rounded-xl overflow-hidden"
@@ -2985,12 +3092,7 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
-  const [credits, setCredits] = useState<{
-    used: number;
-    limit: number;
-    isPro: boolean;
-    planType?: PlanType;
-  } | null>(null);
+  const [planType, setPlanType] = useState<PlanType>('free');
   const [showMidiUploadModal, setShowMidiUploadModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -3039,7 +3141,7 @@ export default function Home() {
 
   const result = variations[selectedVariation]?.result ?? null;
 
-  const isStudio = Boolean(credits?.isPro && credits?.planType === 'studio');
+  const isStudio = planType === 'studio';
 
   const selectedParams = useMemo(() => variations[selectedVariation]?.params ?? params, [variations, selectedVariation, params]);
   const selectedLayerNotes = useMemo(() => {
@@ -3397,20 +3499,12 @@ export default function Home() {
     if (!effectiveIsSignedIn || !effectiveUserId || e2eBypass) return;
     void (async () => {
       try {
-        const res = await fetch('/api/credits');
+        const res = await fetch('/api/usage', { cache: 'no-store' });
         if (!res.ok) return;
         const d = (await res.json()) as {
-          credits_used: number;
-          limit: number;
-          is_pro: boolean;
           plan_type?: PlanType;
         };
-        setCredits({
-          used: d.credits_used,
-          limit: d.limit,
-          isPro: d.is_pro,
-          planType: d.plan_type ?? (d.is_pro ? 'pro' : 'free'),
-        });
+        setPlanType(d.plan_type ?? 'free');
       } catch {
         // ignore
       }
@@ -3440,12 +3534,7 @@ export default function Home() {
       setActiveStyleTag(null);
       setReversedLayers({});
       setPreReversalNotes({});
-      setCredits({
-        used: data.credits.credits_used,
-        limit: data.credits.limit,
-        isPro: data.credits.is_pro,
-        planType: data.credits.plan_type,
-      });
+      if (data.planType) setPlanType(data.planType);
       setEditorView('piano');
       if (effectiveUserId) void loadHistoryFromDb(effectiveUserId);
       window.setTimeout(() => toolRef.current?.scrollIntoView({ behavior: 'smooth' }), 120);
@@ -3552,23 +3641,10 @@ export default function Home() {
           const d = (await res.json().catch(() => ({}))) as {
             error?: string;
             retryAfter?: number;
-            credits_used?: number;
-            limit?: number;
-            is_pro?: boolean;
           };
-          if (d.error === 'Monthly limit reached') {
-            if (d.credits_used !== undefined && d.limit !== undefined) {
-              setCredits({
-                used: d.credits_used,
-                limit: d.limit,
-                isPro: Boolean(d.is_pro),
-              });
-            }
+          if (d.error === 'Monthly build limit reached') {
             setShowUpgradeModal(true);
             throw new Error('monthly-limit');
-          }
-          if (d.error === 'Guest limit reached') {
-            throw new Error('guest-limit');
           }
           throw new Error('rate-limited');
         }
@@ -3585,16 +3661,7 @@ export default function Home() {
         if (!res.ok) throw new Error('generate failed');
         const data = (await res.json()) as {
           variations: { result: GenerationResult; params: GenerationParams }[];
-          credits?: { credits_used: number; limit: number; is_pro: boolean; plan_type?: PlanType };
         };
-        if (data.credits) {
-          setCredits(prev => ({
-            used: data.credits!.credits_used,
-            limit: data.credits!.limit,
-            isPro: data.credits!.is_pro,
-            planType: data.credits!.plan_type ?? prev?.planType ?? (data.credits!.is_pro ? 'pro' : 'free'),
-          }));
-        }
         return data.variations;
       };
 
@@ -3615,7 +3682,7 @@ export default function Home() {
           p2 = variations[1]!.params;
           p3 = variations[2]!.params;
         } catch (e) {
-          if (e instanceof Error && (e.message === 'monthly-limit' || e.message === 'guest-limit' || e.message === 'rate-limited' || e.message === 'unavailable')) {
+          if (e instanceof Error && (e.message === 'monthly-limit' || e.message === 'rate-limited' || e.message === 'unavailable')) {
             throw e;
           }
           gen1 = generateTrack(p1);
@@ -3643,7 +3710,7 @@ export default function Home() {
         variation_count: 3,
       });
 
-      // Persist to Supabase + update credits
+      // Persist to Supabase.
       if (!e2eBypass && effectiveIsSignedIn && effectiveUserId) {
         try {
           const ins = (layers: GenerationResult, p: GenerationParams) =>
@@ -3697,9 +3764,7 @@ export default function Home() {
       genFailed = true;
       const msg = e instanceof Error ? e.message : '';
       if (msg === 'monthly-limit') {
-        setGenerationError('Monthly limit reached. Upgrade to keep generating.');
-      } else if (msg === 'guest-limit') {
-        setGenerationError('Guest limit reached. Sign in to continue.');
+        setGenerationError('Monthly usage window reached. Upgrade to keep generating.');
       } else if (msg === 'rate-limited') {
         setGenerationError('Rate limited. Try again in a moment.');
       } else if (msg === 'unavailable') {
@@ -4335,22 +4400,13 @@ export default function Home() {
           });
           if (res.status === 429) {
             const d = (await res.json().catch(() => ({}))) as { error?: string };
-            if (d.error === 'Monthly limit reached') setShowUpgradeModal(true);
+            if (d.error === 'Monthly build limit reached') setShowUpgradeModal(true);
             throw new Error('rate-limited');
           }
           if (!res.ok) throw new Error('generate failed');
           const data = (await res.json()) as {
             variations: { result: GenerationResult; params: GenerationParams }[];
-            credits?: { credits_used: number; limit: number; is_pro: boolean; plan_type?: PlanType };
           };
-          if (data.credits) {
-            setCredits(prev => ({
-              used: data.credits!.credits_used,
-              limit: data.credits!.limit,
-              isPro: data.credits!.is_pro,
-              planType: data.credits!.plan_type ?? prev?.planType ?? (data.credits!.is_pro ? 'pro' : 'free'),
-            }));
-          }
           newResult = data.variations[0]!.result;
           finalParams = data.variations[0]!.params ?? similarParams;
         } catch (e) {
@@ -5214,7 +5270,7 @@ export default function Home() {
         <h2>Features</h2>
         <p>Natural language prompts, piano roll editor, one-click DAW export, REST API, 20 plus genre models, MIDI and WAV export.</p>
         <h2>Pricing</h2>
-        <p>Free plan with 20 generations per month. Pro plan at 7 dollars per month with 150 generations. Studio plan at 19 dollars per month with 600 generations.</p>
+        <p>Free, Pro, and Studio plans are available. Paid plans raise cost windows and unlock advanced export, upload, and conversion tools.</p>
       </div>
       {/* ── HERO ── */}
       <section ref={heroRef} className="relative overflow-hidden px-4 sm:px-8 pb-28 pt-24" style={{ background: 'var(--bg)' }}>
@@ -6201,7 +6257,7 @@ export default function Home() {
                           <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>
                             {t.name}
                           </div>
-                          <div style={{ marginTop: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>
+                          <div style={{ marginTop: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
                             {t.subtitle}
                           </div>
                         </button>
@@ -6418,7 +6474,7 @@ export default function Home() {
                           <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>
                             {t.name}
                           </div>
-                          <div style={{ marginTop: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>
+                          <div style={{ marginTop: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)' }}>
                             {t.subtitle}
                           </div>
                         </button>
@@ -6705,7 +6761,7 @@ export default function Home() {
             )}
             {!effectiveIsSignedIn && (
               <p className="-mt-2 mb-4 text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
-                No card required · 20 generations per month
+                No card required
               </p>
             )}
 
@@ -6831,24 +6887,6 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            {/* Credits indicator */}
-            {credits !== null && !credits.isPro && (
-              <p className="text-xs mb-3 mt-1" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}>
-                <span style={{ color: credits.used >= credits.limit ? 'var(--accent)' : 'var(--muted)' }}>
-                  {Math.max(0, credits.limit - credits.used)} / {credits.limit}
-                </span>
-                {' '}
-                {effectiveIsSignedIn ? (
-                  <>
-                    generations remaining ·{' '}
-                    <a href="/pricing" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Upgrade to Pro</a>
-                  </>
-                ) : (
-                  'guest generations left today'
-                )}
-              </p>
-            )}
-
             {/* Style tags */}
             <div ref={styleTagsRef} className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
               {VIBES.map(vibe => {
@@ -6885,86 +6923,7 @@ export default function Home() {
               })}
             </div>
 
-            {variations.length === 0 && !isGenerating && (
-              <div
-                className="mb-6 rounded-2xl overflow-hidden"
-                style={{ border: '1px solid var(--border)', background: 'var(--surface)', position: 'relative' }}
-              >
-                {/* Header */}
-                <div
-                  className="flex items-center justify-between px-4 py-3"
-                  style={{ borderBottom: '1px solid var(--border)' }}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em' }}>
-                      OUTPUT PREVIEW
-                    </span>
-                  </div>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-                    Generate to unlock editor
-                  </span>
-                </div>
-
-                {/* Fake piano rolls */}
-                <div className="grid grid-cols-2 gap-3 p-4">
-                  {[
-                    { name: 'Melody', color: LAYER_VIZ_COLORS.melody },
-                    { name: 'Chords', color: LAYER_VIZ_COLORS.chords },
-                    { name: 'Bass', color: LAYER_VIZ_COLORS.bass },
-                    { name: 'Drums', color: LAYER_VIZ_COLORS.drums },
-                  ].map(layer => (
-                    <div
-                      key={layer.name}
-                      className="rounded-xl overflow-hidden"
-                      style={{ border: '1px solid var(--border-weak)', background: 'var(--bg)', height: 64, position: 'relative' }}
-                    >
-                      {/* Layer label */}
-                      <div className="absolute top-2 left-3 flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: layer.color }} />
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: layer.color, opacity: 0.8 }}>
-                          {layer.name.toUpperCase()}
-                        </span>
-                      </div>
-                      {/* Fake notes as colored rectangles */}
-                      <div className="absolute inset-0 flex items-center px-3 pt-6 gap-1">
-                        {Array.from({ length: layer.name === 'Drums' ? 16 : 8 }, (_, i) => {
-                          const show = layer.name === 'Melody' ? [0, 1, 3, 5, 6].includes(i) :
-                            layer.name === 'Chords' ? [0, 2, 4, 6].includes(i) :
-                              layer.name === 'Bass' ? [0, 1, 2, 4, 5, 6, 7].includes(i) :
-                                i % 2 === 0;
-                          return show ? (
-                            <div
-                              key={i}
-                              style={{
-                                flex: 1,
-                                height: layer.name === 'Melody' ? `${30 + Math.sin(i * 1.5) * 20}%` :
-                                  layer.name === 'Chords' ? '60%' :
-                                    layer.name === 'Bass' ? '40%' : '70%',
-                                background: layer.color,
-                                borderRadius: 2,
-                                opacity: 0.6 + (i % 3) * 0.15,
-                                alignSelf: 'flex-end',
-                              }}
-                            />
-                          ) : <div key={i} style={{ flex: 1 }} />;
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Overlay CTA */}
-                <div
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 100%)' }}
-                >
-                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
-                    Results appear here as editable MIDI layers
-                  </p>
-                </div>
-              </div>
-            )}
+            <OutputPreview result={variations[0]?.result ?? null} />
 
             {/* Layer toggles */}
             <div className="flex gap-2 mb-4 flex-wrap">
@@ -6980,9 +6939,10 @@ export default function Home() {
               ))}
             </div>
 
-            {variations.length === 0 && !isGenerating && (
-              <HeroDemoPreview />
-            )}
+            <HeroDemoPreview
+              result={variations[0]?.result ?? null}
+              params={variations[0]?.params ?? params}
+            />
 
             {/* Manual controls */}
             <div className="mb-6 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>

@@ -9,11 +9,12 @@ import { downloadMidi, generateMidiFormat0 } from '@/lib/midi-writer';
 import { stopAllAppAudio } from '@/lib/audio-control';
 import type { NoteEvent } from '@/lib/music-engine';
 
-const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
-const SCALES = ['minor', 'major', 'dorian', 'mixolydian', 'phrygian', 'lydian', 'harmonic_minor', 'melodic_minor', 'pentatonic_minor', 'pentatonic_major', 'blues'] as const;
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_SECONDS = 45;
 const BASIC_PITCH_SAMPLE_RATE = 22050;
+const DEFAULT_KEY = 'C';
+const DEFAULT_SCALE = 'minor';
+const DEFAULT_BPM = 120;
 
 type BasicPitchNote = {
   startTimeSeconds: number;
@@ -42,19 +43,6 @@ function clamp(v: number, lo: number, hi: number) {
 function extOk(name: string) {
   const lower = name.toLowerCase();
   return lower.endsWith('.wav') || lower.endsWith('.mp3') || lower.endsWith('.m4a');
-}
-
-function fieldStyle(): React.CSSProperties {
-  return {
-    width: '100%',
-    border: '1px solid var(--border)',
-    background: 'var(--surface)',
-    color: 'var(--text)',
-    borderRadius: 8,
-    padding: '12px 12px',
-    outline: 'none',
-    fontFamily: 'DM Sans, system-ui, sans-serif',
-  };
 }
 
 function labelStyle(): React.CSSProperties {
@@ -154,9 +142,6 @@ function midiFileName(sourceName: string, bpm: number) {
 }
 
 export function TranscribeClient() {
-  const [key, setKey] = useState<(typeof KEYS)[number]>('C');
-  const [scale, setScale] = useState<(typeof SCALES)[number]>('minor');
-  const [bpm, setBpm] = useState(124);
   const [bars, setBars] = useState(4);
   const [notes, setNotes] = useState<NoteEvent[]>([]);
   const [rawCount, setRawCount] = useState(0);
@@ -170,14 +155,21 @@ export function TranscribeClient() {
   const [error, setError] = useState<string | null>(null);
 
   const canExport = notes.length > 0;
-  const subtitle = useMemo(() => `${key} ${scale.replace('_', ' ')} · ${bpm} BPM · ${bars} bars`, [bars, bpm, key, scale]);
+  const subtitle = useMemo(() => `${DEFAULT_KEY} ${DEFAULT_SCALE} · ${DEFAULT_BPM} BPM · ${bars} bars`, [bars]);
 
   async function cleanupWithClaude(inputNotes: NoteEvent[], name: string) {
     setProgress('Claude cleanup...');
     const res = await fetch('/api/postprocess-transcription', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: inputNotes, key, scale, bpm, bars, sourceName: name }),
+      body: JSON.stringify({
+        notes: inputNotes,
+        key: DEFAULT_KEY,
+        scale: DEFAULT_SCALE,
+        bpm: DEFAULT_BPM,
+        bars,
+        sourceName: name,
+      }),
     });
     const data = await res.json() as CleanupResponse | { error?: string };
     if (!res.ok) {
@@ -214,11 +206,11 @@ export function TranscribeClient() {
       }
       const modelAudio = await resampleAudioBuffer(audio, BASIC_PITCH_SAMPLE_RATE);
 
-      const estimatedBars = Math.max(1, Math.min(32, Math.ceil(audio.duration / (60 / bpm) / 4)));
+      const estimatedBars = Math.max(1, Math.min(32, Math.ceil(audio.duration / (60 / DEFAULT_BPM) / 4)));
       setBars((current) => Math.max(current, estimatedBars));
 
       setProgress('Running Basic Pitch...');
-      const rawNotes = await runBasicPitch(modelAudio, bpm, Math.max(bars, estimatedBars), setProgress);
+      const rawNotes = await runBasicPitch(modelAudio, DEFAULT_BPM, Math.max(bars, estimatedBars), setProgress);
       if (rawNotes.length === 0) {
         throw new Error('No notes detected. Try a clearer single-instrument recording.');
       }
@@ -260,14 +252,14 @@ export function TranscribeClient() {
   function download() {
     if (!canExport) return;
     stopAllAppAudio();
-    downloadMidi(generateMidiFormat0(notes, bpm, 'pulp-transcription'), midiFileName(sourceName, bpm));
+    downloadMidi(generateMidiFormat0(notes, DEFAULT_BPM, 'pulp-transcription'), midiFileName(sourceName, DEFAULT_BPM));
   }
 
   function onDragStart(event: React.DragEvent<HTMLButtonElement>) {
     if (!canExport) return;
     stopAllAppAudio();
-    const filename = midiFileName(sourceName, bpm);
-    const bytes = generateMidiFormat0(notes, bpm, 'pulp-transcription');
+    const filename = midiFileName(sourceName, DEFAULT_BPM);
+    const bytes = generateMidiFormat0(notes, DEFAULT_BPM, 'pulp-transcription');
     const file = new File([bytes.buffer as ArrayBuffer], filename, { type: 'audio/midi' });
     const url = URL.createObjectURL(file);
     event.dataTransfer.effectAllowed = 'copy';
@@ -332,29 +324,6 @@ export function TranscribeClient() {
               </p>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div>
-                <label style={labelStyle()} htmlFor="transcribe-key">Key</label>
-                <select id="transcribe-key" value={key} onChange={(e) => setKey(e.target.value as typeof key)} style={fieldStyle()} disabled={loading}>
-                  {KEYS.map((item) => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle()} htmlFor="transcribe-scale">Scale</label>
-                <select id="transcribe-scale" value={scale} onChange={(e) => setScale(e.target.value as typeof scale)} style={fieldStyle()} disabled={loading}>
-                  {SCALES.map((item) => <option key={item} value={item}>{item.replace('_', ' ')}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle()} htmlFor="transcribe-bpm">BPM</label>
-                <input id="transcribe-bpm" type="number" min={60} max={220} value={bpm} onChange={(e) => setBpm(clamp(Number(e.target.value), 60, 220))} style={fieldStyle()} disabled={loading} />
-              </div>
-              <div>
-                <label style={labelStyle()} htmlFor="transcribe-bars">Bars</label>
-                <input id="transcribe-bars" type="number" min={1} max={32} value={bars} onChange={(e) => setBars(clamp(Number(e.target.value), 1, 32))} style={fieldStyle()} disabled={loading} />
-              </div>
-            </div>
-
             <SignedOut>
               <SignInButtonDeferred mode="modal">
                 <button type="button" className="btn-primary mt-5 w-full">
@@ -366,7 +335,7 @@ export function TranscribeClient() {
             <SignedIn>
               <button type="button" className="btn-secondary mt-5 w-full" onClick={openPicker} disabled={loading}>
                 <FileAudio size={17} aria-hidden />
-                Choose audio file
+                Transcribe audio
               </button>
             </SignedIn>
 
@@ -425,7 +394,7 @@ export function TranscribeClient() {
                   color="#FF6D3F"
                   bars={bars}
                   layerName="transcription"
-                  bpm={bpm}
+                  bpm={DEFAULT_BPM}
                   onNotesChange={setNotes}
                   gridHeightPx={360}
                   velocityHeightPx={96}

@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
 import { SiteFooter } from '@/components/SiteFooter';
-import { checkCreditsAllowed } from '@/lib/credits';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ProfileAccountClient } from './ProfileAccountClient';
@@ -105,7 +104,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CreditsStatWithUpgrade({ value, isPro }: { value: string; isPro: boolean }) {
+function PlanStatWithUpgrade({ planType, isPro }: { planType: string; isPro: boolean }) {
   return (
     <div
       className="rounded-2xl p-6 flex flex-col gap-4 h-full"
@@ -122,10 +121,10 @@ function CreditsStatWithUpgrade({ value, isPro }: { value: string; isPro: boolea
             textTransform: 'uppercase',
           }}
         >
-          Credits remaining
+          Current plan
         </p>
         <p className="font-extrabold" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, fontSize: 32, letterSpacing: '0.02em', color: 'var(--foreground)' }}>
-          {value}
+          {planType}
         </p>
       </div>
       {!isPro && (
@@ -241,14 +240,9 @@ export default async function ProfilePage() {
   const memberSince = formatMemberSince(user.createdAt ? new Date(user.createdAt) : null);
   const avatarUrl = user.imageUrl;
 
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-
-  let totalGenerations = 0;
-  let thisMonth = 0;
   let favoriteGenreData: { genre: string | null }[] | null = null;
-  let creditsUsed = 0;
-  let creditLimit = 10;
   let isPro = false;
+  let planType = 'Free';
   let currentPeriodEnd: number | null = null;
   let recentGenerations: {
     id: string;
@@ -267,13 +261,7 @@ export default async function ProfilePage() {
   };
 
   try {
-    const [totalRes, monthRes, genreRes, recentRes, creditSnap, badgesSnap, avatarSnap, usageSnap] = await Promise.all([
-      db.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-      db
-        .from('generations')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .gte('created_at', monthStart),
+    const [genreRes, recentRes, planSnap, badgesSnap, usageSnap] = await Promise.all([
       db.from('generations').select('genre').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
       db
         .from('generations')
@@ -281,27 +269,18 @@ export default async function ProfilePage() {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(5),
-      checkCreditsAllowed(userId).catch(() => ({
-        credits_used: 0,
-        is_pro: false,
-        limit: 10,
-        allowed: true,
-        plan_type: 'free' as const,
-      })),
+      db.from('user_credits').select('is_pro, plan_type, avatar_color').eq('user_id', userId).maybeSingle(),
       getUserBadges(userId).catch(() => [] as EarnedBadge[]),
-      db.from('user_credits').select('avatar_color').eq('user_id', userId).maybeSingle(),
       getAiUsageDashboard(userId).catch(() => aiUsage),
     ]);
 
-    totalGenerations = totalRes.count ?? 0;
-    thisMonth = monthRes.count ?? 0;
     favoriteGenreData = genreRes.data;
-    creditsUsed = creditSnap.credits_used;
-    creditLimit = creditSnap.limit;
-    isPro = creditSnap.is_pro;
+    const planRow = planSnap.data as { is_pro?: boolean | null; plan_type?: string | null; avatar_color?: string | null } | null;
+    isPro = Boolean(planRow?.is_pro);
+    planType = planRow?.plan_type === 'studio' ? 'Studio' : isPro ? 'Pro' : 'Free';
     recentGenerations = (recentRes.data as typeof recentGenerations) ?? [];
     earnedBadges = badgesSnap;
-    avatarColor = (avatarSnap.data as { avatar_color?: string | null } | null)?.avatar_color ?? null;
+    avatarColor = planRow?.avatar_color ?? null;
     aiUsage = usageSnap;
   } catch {
     // keep defaults
@@ -313,8 +292,6 @@ export default async function ProfilePage() {
 
   const favoriteGenre = mostFrequentGenre(favoriteGenreData);
   const favoriteGenreDisplay = favoriteGenre ? formatGenreLabel(favoriteGenre) : '—';
-
-  const creditsRemainingDisplay = String(Math.max(0, creditLimit - creditsUsed));
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
@@ -370,11 +347,10 @@ export default async function ProfilePage() {
           {/* SECTION 2 — Stats */}
           <section>
             <h2 className="sr-only">Statistics</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              <StatCard label="Total generations" value={String(totalGenerations)} />
-              <StatCard label="This month" value={String(thisMonth)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <StatCard label="Member since" value={memberSince} />
               <StatCard label="Favorite genre" value={favoriteGenreDisplay} />
-              <CreditsStatWithUpgrade value={creditsRemainingDisplay} isPro={isPro} />
+              <PlanStatWithUpgrade planType={planType} isPro={isPro} />
             </div>
           </section>
 

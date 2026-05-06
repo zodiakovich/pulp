@@ -2,46 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { History as HistoryIcon, Moon, Settings as SettingsIcon, Sun } from 'lucide-react';
 import { useAuth, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
 import { WhatsNew } from '@/components/WhatsNew';
-
-type CreditsData = { credits_used: number; limit: number; is_pro: boolean; plan_type: string } | null;
-
-function GenerationPill({ data, onClick }: { data: CreditsData; onClick: () => void }) {
-  if (!data) return null;
-  const remaining = Math.max(0, data.limit - data.credits_used);
-  const usedPct = data.limit > 0 ? data.credits_used / data.limit : 0;
-  const exhausted = usedPct >= 1;
-  const warning = !exhausted && usedPct >= 0.8;
-  const color = exhausted ? '#E94560' : warning ? '#F59E0B' : '#00B894';
-  const textColor = warning ? '#1a0f00' : color;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: 11,
-        color: textColor,
-        border: `1px solid ${color}55`,
-        background: warning ? '#F59E0B33' : `${color}14`,
-        borderRadius: 20,
-        padding: '3px 10px',
-        cursor: 'pointer',
-        whiteSpace: 'nowrap',
-        letterSpacing: '0.03em',
-        lineHeight: 1.5,
-        animation: exhausted ? 'generate-glow-pulse 1.4s ease infinite' : 'none',
-      }}
-      title={`${remaining} of ${data.limit} generations remaining`}
-    >
-      {remaining} / {data.limit}
-    </button>
-  );
-}
 
 const STORAGE_KEY = 'pulp_theme';
 
@@ -58,7 +23,6 @@ function beginThemeTransition() {
 
 export function Navbar({
   active,
-  historyCount,
 }: {
   active?: 'create' | 'midi' | 'transcribe' | 'explore' | 'build' | 'pricing' | 'profile' | 'blog' | 'changelog' | 'settings';
   onHistory?: () => void;
@@ -66,26 +30,9 @@ export function Navbar({
 }) {
   const { isLoaded, isSignedIn } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [credits, setCredits] = useState<CreditsData>(null);
-
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    async function fetchCredits() {
-      try {
-        const res = await fetch('/api/credits');
-        if (res.ok) setCredits(await res.json() as CreditsData);
-      } catch { /* silent */ }
-    }
-    void fetchCredits();
-
-    function onGenerated() { void fetchCredits(); }
-    window.addEventListener('pulp:generation-created', onGenerated);
-    return () => window.removeEventListener('pulp:generation-created', onGenerated);
-  }, [isLoaded, isSignedIn]);
 
   const scrollToGenerator = () => {
     document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -218,10 +165,6 @@ export function Navbar({
             {theme === 'dark' ? <Sun size={16} strokeWidth={1.75} aria-hidden /> : <Moon size={16} strokeWidth={1.75} aria-hidden />}
           </button>
           <SignedIn>
-            <GenerationPill
-              data={credits}
-              onClick={() => router.push(credits?.is_pro ? '/profile' : '/pricing')}
-            />
             {pathname === '/' ? (
               <div className="hidden sm:block">
                 <button type="button" className="btn-primary btn-sm" onClick={() => scrollToGenerator()}>
@@ -235,10 +178,21 @@ export function Navbar({
                 </Link>
               </div>
             )}
-            <UserButton>
+            <UserButton
+              appearance={{
+                elements: {
+                  userButtonPopoverActionButtonText: {
+                    color: 'var(--text, #FAFAFA)',
+                  },
+                  userButtonPopoverActionButtonIcon: {
+                    color: 'var(--text, #FAFAFA)',
+                  },
+                },
+              }}
+            >
               <UserButton.MenuItems>
                 <UserButton.Link
-                  label={(historyCount ?? 0) > 0 ? `History (${historyCount})` : 'History'}
+                  label="History"
                   href="/?history=1"
                   labelIcon={<HistoryIcon size={14} aria-hidden />}
                 />

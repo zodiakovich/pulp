@@ -404,27 +404,10 @@ function AccountSection() {
     </div>
   );
 }
-
-type CreditsData = {
-  credits_used: number;
-  limit: number;
-  is_pro: boolean;
-  plan_type: string;
-  allowed: boolean;
-};
-
 function BillingSection() {
   const router = useRouter();
   const { toast } = useToast();
-  const [credits, setCredits] = useState<CreditsData | null>(null);
   const [loadingPortal, setLoadingPortal] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/credits')
-      .then(r => r.json())
-      .then(d => setCredits(d as CreditsData))
-      .catch(() => {});
-  }, []);
 
   async function handlePortal() {
     setLoadingPortal(true);
@@ -439,26 +422,8 @@ function BillingSection() {
     }
   }
 
-  const now = new Date();
-  const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const resetLabel = nextReset.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
-
-  const planLabel = credits?.plan_type === 'studio' ? 'Studio' : credits?.is_pro ? 'Pro' : 'Free';
-  const planColor = credits?.is_pro ? '#00B894' : 'var(--muted)';
-  const used = credits?.credits_used ?? 0;
-  const limit = credits?.limit ?? 20;
-  const remaining = Math.max(0, limit - used);
-  const pct = limit > 0 ? Math.min(1, used / limit) : 0;
-  const barColor = pct < 0.5 ? '#00B894' : pct < 0.8 ? '#FF6D3F' : '#E94560';
-  const planSummary = credits?.is_pro
-    ? credits.plan_type === 'studio'
-      ? 'High-volume writing, upload, and conversion workflows.'
-      : 'More generations and export options for regular production work.'
-    : 'Start free with enough generations to test real song ideas.';
-
   return (
     <div className="space-y-3">
-      {/* Plan overview */}
       <SectionCard>
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -470,17 +435,17 @@ function BillingSection() {
                   fontSize: 11,
                   padding: '5px 12px',
                   borderRadius: 999,
-                  border: `1px solid ${planColor}33`,
-                  color: planColor,
-                  background: credits?.is_pro ? 'rgba(0,184,148,0.1)' : 'transparent',
+                  border: '1px solid rgba(255,109,63,0.35)',
+                  color: 'var(--foreground)',
+                  background: 'rgba(255,109,63,0.08)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                 }}
               >
-                {credits ? planLabel : 'Loading'}
+                Plan
               </span>
               <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)' }}>
-                {planSummary}
+                Billing is managed through Stripe. Usage limits are based on daily and monthly cost windows.
               </span>
             </div>
           </div>
@@ -493,85 +458,22 @@ function BillingSection() {
           </a>
         </div>
 
-        <div className="my-6">
-          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {[
-              { label: 'Used', value: credits ? String(used) : '-' },
-              { label: 'Remaining', value: credits ? String(remaining) : '-' },
-              { label: 'Limit', value: credits ? String(limit) : '-' },
-            ].map(item => (
-              <div key={item.label} className="rounded-xl px-4 py-3" style={{ border: '1px solid var(--border)', background: 'var(--surface-strong)' }}>
-                <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                  {item.label}
-                </p>
-                <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, color: 'var(--foreground)', letterSpacing: '0.02em' }}>
-                  {item.value}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between mb-2">
-            <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--foreground)' }}>
-              Monthly generation allowance
-            </span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--muted)' }}>
-              {credits ? `${Math.round(pct * 100)}% used` : '-'}
-            </span>
-          </div>
-          <div style={{ height: 6, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-            <div
-              style={{
-                height: '100%',
-                width: `${pct * 100}%`,
-                background: barColor,
-                borderRadius: 4,
-                transition: 'width 0.4s ease',
-              }}
-            />
-          </div>
-          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-            Resets on {resetLabel}
-          </p>
-        </div>
-
-        <div className="flex gap-3 flex-wrap">
-          {credits?.is_pro ? (
-            <>
-              <button
-                type="button"
-                className="btn-primary btn-sm"
-                onClick={handlePortal}
-                disabled={loadingPortal}
-              >
-                {loadingPortal ? 'Loading...' : 'Manage billing'}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                onClick={handlePortal}
-                disabled={loadingPortal}
-              >
-                View billing history
-              </button>
-              {credits.plan_type !== 'studio' && (
-                <a
-                  href="/pricing"
-                  className="btn-secondary btn-sm"
-                  style={{ textDecoration: 'none' }}
-                >
-                  Upgrade to Studio
-                </a>
-              )}
-            </>
-          ) : (
-            <a
-              href="/pricing"
-              className="btn-primary btn-sm"
-              style={{ textDecoration: 'none' }}
-            >
-              Upgrade plan
-            </a>
-          )}
+        <div className="mt-6 flex gap-3 flex-wrap">
+          <button
+            type="button"
+            className="btn-primary btn-sm"
+            onClick={handlePortal}
+            disabled={loadingPortal}
+          >
+            {loadingPortal ? 'Loading...' : 'Manage billing'}
+          </button>
+          <a
+            href="/pricing"
+            className="btn-secondary btn-sm"
+            style={{ textDecoration: 'none' }}
+          >
+            Change plan
+          </a>
         </div>
       </SectionCard>
     </div>
@@ -919,7 +821,7 @@ function NotificationsSection() {
   }
 
   const emailRows: { key: keyof NotifPrefs; label: string; description: string }[] = [
-    { key: 'low_gen_warning', label: 'Low generation warning', description: 'Alert when running low on generations this month' },
+    { key: 'low_gen_warning', label: 'Usage warning', description: 'Alert when approaching a usage limit' },
     { key: 'new_features', label: 'New genres & features', description: 'Product updates, new genres, and releases' },
     { key: 'tips', label: 'Tips & tutorials', description: 'Occasional beat-making tips and tutorials' },
     { key: 'weekly_digest', label: 'Weekly digest', description: 'A weekly summary of your activity and trending patterns' },
@@ -1112,22 +1014,6 @@ function UsageSection() {
   return (
     <div className="space-y-3">
       <SectionCard>
-        <SectionLabel>Usage</SectionLabel>
-        <h2
-          style={{
-            fontFamily: 'Syne, DM Sans, system-ui, sans-serif',
-            fontWeight: 800,
-            fontSize: 24,
-            letterSpacing: 0,
-            color: 'var(--foreground)',
-            marginBottom: 8,
-          }}
-        >
-          Feature limits
-        </h2>
-        <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.6 }}>
-          Track your daily and monthly windows for each creation tool.
-        </p>
         <UsageDashboard />
       </SectionCard>
     </div>

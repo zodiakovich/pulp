@@ -16,8 +16,8 @@ const FAQS = [
     a: 'Yes. Cancel from your account; paid access stays active until the end of the billing period.',
   },
   {
-    q: 'Do unused generations roll over?',
-    a: 'No. Allowances reset each calendar month: 20 for Free, 150 for Pro, and 600 for Studio.',
+    q: 'Do unused usage windows roll over?',
+    a: 'No. Usage windows reset on their normal daily and monthly cadence for each plan.',
   },
   {
     q: 'How does billing work?',

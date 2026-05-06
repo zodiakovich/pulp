@@ -3,13 +3,14 @@
 import { useCallback, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { GenerationParams, GenerationResult } from '@/lib/music-engine';
-import type { PlanType } from '@/lib/credits';
+
+type PlanType = 'free' | 'pro' | 'studio';
 
 export type MidiUploadSuccessPayload = {
   prompt: string;
   params: GenerationParams;
   variations: { result: GenerationResult; params: GenerationParams }[];
-  credits: { credits_used: number; limit: number; is_pro: boolean; plan_type: PlanType };
+  planType?: PlanType;
   variationIds: (string | null)[];
 };
 
@@ -121,7 +122,7 @@ export function StudioMidiUploadModal({
         return;
       }
       if (res.status === 429) {
-        setError(data.error === 'Monthly limit reached' ? 'Monthly limit reached.' : 'Rate limited. Try again later.');
+        setError(data.error?.includes('limit reached') ? 'Usage limit reached.' : 'Rate limited. Try again later.');
         return;
       }
       if (!res.ok) {

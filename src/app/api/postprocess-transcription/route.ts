@@ -22,10 +22,10 @@ const NoteEventSchema = z.object({
 
 const BodySchema = z.object({
   notes: z.array(NoteEventSchema).min(1).max(1000),
-  key: z.string().refine((k) => KEY_WHITELIST.includes(k), { message: 'Invalid key' }),
-  scale: z.string().refine((s) => SCALE_WHITELIST.includes(s), { message: 'Invalid scale' }),
-  bpm: z.number().int().min(60).max(220),
-  bars: z.number().int().min(1).max(32),
+  key: z.string().optional().default('C').refine((k) => KEY_WHITELIST.includes(k), { message: 'Invalid key' }),
+  scale: z.string().optional().default('minor').refine((s) => SCALE_WHITELIST.includes(s), { message: 'Invalid scale' }),
+  bpm: z.number().int().min(60).max(220).optional().default(120),
+  bars: z.number().int().min(1).max(32).optional().default(4),
   sourceName: z.string().max(200).optional().default('audio'),
 });
 

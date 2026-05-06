@@ -66,7 +66,7 @@ export default function ProSuccessPage() {
           You&apos;re now Pro!
         </h1>
         <p className="mt-3" style={{ color: 'var(--muted)' }}>
-          Unlimited generations and full commercial rights unlocked.
+          Paid usage windows and full commercial rights unlocked.
         </p>
         <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
           <Link href="/" className="btn-primary btn-sm" style={{ textDecoration: 'none', background: 'var(--accent)' }}>

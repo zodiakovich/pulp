@@ -3,16 +3,11 @@ import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
 import { auth } from '@clerk/nextjs/server';
 import { enforceRateLimit } from '@/lib/ratelimit';
-import {
-  checkCreditsAllowed,
-  getOrCreateCredits,
-  incrementCredits,
-  resolvePlanType,
-} from '@/lib/credits';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { GENRES, NOTE_NAMES, type GenerationParams, type GenerationResult, type NoteEvent } from '@/lib/music-engine';
 import { bucketNotesForPrompt, parseMidiToAnalysis, sampleNotesForPrompt } from '@/lib/midi-upload-parse';
-import { logAnthropicUsage } from '@/lib/ai-usage';
+import { calculateAnthropicCostUsd, logAnthropicUsage } from '@/lib/ai-usage';
+import { checkFeatureAllowed, incrementFeatureCost } from '@/lib/feature-credits';
 
 export const runtime = 'nodejs';
 
@@ -128,7 +123,7 @@ async function runMidiAnthropic(opts: {
   mode: 'continue' | 'vary';
   analysisJson: string;
   userId?: string | null;
-}): Promise<z.infer<typeof OutSchema>> {
+}): Promise<{ parsed: z.infer<typeof OutSchema>; costUsd: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) throw new Error('no_anthropic');
 
@@ -176,6 +171,7 @@ The three variations must be musically different from each other.`;
       analysisBytes: opts.analysisJson.length,
     },
   });
+  const costUsd = calculateAnthropicCostUsd(message.usage);
 
   const block = message.content[0];
   const text = block?.type === 'text' ? block.text : '';
@@ -188,7 +184,7 @@ The three variations must be musically different from each other.`;
   }
   const parsed = OutSchema.safeParse(raw);
   if (!parsed.success) throw new Error('schema_fail');
-  return parsed.data;
+  return { parsed: parsed.data, costUsd };
 }
 
 export async function POST(req: NextRequest) {
@@ -203,12 +199,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const row = await getOrCreateCredits(userId);
-    if (!row.is_pro || resolvePlanType(row) !== 'studio') {
+    if (!supabaseAdmin) throw new Error('supabase_admin_unavailable');
+    const { data: row, error } = await supabaseAdmin
+      .from('user_credits')
+      .select('is_pro, plan_type')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row?.is_pro || row.plan_type !== 'studio') {
       return NextResponse.json({ error: 'Studio plan required' }, { status: 403 });
     }
   } catch {
-    return NextResponse.json({ error: 'Credits check failed' }, { status: 503 });
+    return NextResponse.json({ error: 'Plan check failed' }, { status: 503 });
   }
 
   let json: unknown;
@@ -254,20 +256,26 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const c = await checkCreditsAllowed(userId);
-    if (!c.allowed) {
+    const usage = await checkFeatureAllowed(userId, 'midi');
+    if (!usage.allowed) {
       return NextResponse.json(
         {
-          error: 'Monthly limit reached',
-          credits_used: c.credits_used,
-          limit: c.limit,
-          is_pro: c.is_pro,
+          error: usage.blocked_by === 'daily'
+            ? 'Daily midi limit reached'
+            : 'Monthly midi limit reached',
+          blocked_by: usage.blocked_by,
+          daily_cost: usage.daily_cost,
+          daily_limit: usage.daily_limit,
+          monthly_cost: usage.monthly_cost,
+          monthly_limit: usage.monthly_limit,
+          daily_pct: usage.daily_pct,
+          monthly_pct: usage.monthly_pct,
         },
         { status: 429 },
       );
     }
   } catch {
-    return NextResponse.json({ error: 'Credits check unavailable' }, { status: 503 });
+    return NextResponse.json({ error: 'Usage check unavailable' }, { status: 503 });
   }
 
   const buckets = bucketNotesForPrompt(analysis.notes);
@@ -290,8 +298,11 @@ export async function POST(req: NextRequest) {
   };
 
   let out: z.infer<typeof OutSchema>;
+  let costUsd = 0;
   try {
-    out = await runMidiAnthropic({ mode, analysisJson: JSON.stringify(analysisPayload), userId });
+    const arranged = await runMidiAnthropic({ mode, analysisJson: JSON.stringify(analysisPayload), userId });
+    out = arranged.parsed;
+    costUsd = arranged.costUsd;
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown';
     if (msg === 'no_anthropic') {
@@ -312,16 +323,8 @@ export async function POST(req: NextRequest) {
     return { result: layersToResult(layers, p), params: p };
   });
 
-  let creditsPayload: { credits_used: number; limit: number; is_pro: boolean; plan_type: string };
   try {
-    await incrementCredits(userId);
-    const fin = await checkCreditsAllowed(userId);
-    creditsPayload = {
-      credits_used: fin.credits_used,
-      limit: fin.limit,
-      is_pro: fin.is_pro,
-      plan_type: fin.plan_type,
-    };
+    await incrementFeatureCost(userId, 'midi', costUsd);
   } catch {
     return NextResponse.json({ error: 'Usage accounting failed' }, { status: 500 });
   }
@@ -357,7 +360,6 @@ export async function POST(req: NextRequest) {
     prompt: promptTag,
     params: variations[0]!.params,
     variations,
-    credits: creditsPayload,
     variationIds,
   });
 }

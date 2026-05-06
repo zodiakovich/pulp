@@ -121,7 +121,7 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
               <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage invoices, payment method, and cancellation in Stripe.</span>
             ) : (
               <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
-                Free plan includes 20 generations per month. Upgrade when pulp becomes part of your workflow.
+                Free plan includes starter usage windows. Upgrade when pulp becomes part of your workflow.
               </span>
             )}
           </div>
@@ -203,8 +203,8 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
             </h2>
             <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.6 }}>
               {endDate
-                ? <>You&apos;ll keep Pro access until <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>. After that you&apos;ll move to the Free plan (20 generations/month).</>
-                : <>You&apos;ll keep Pro access until the end of your billing period. After that you&apos;ll move to the Free plan (20 generations/month).</>
+                ? <>You&apos;ll keep Pro access until <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>. After that you&apos;ll move to the Free plan.</>
+                : <>You&apos;ll keep Pro access until the end of your billing period. After that you&apos;ll move to the Free plan.</>
               }
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">

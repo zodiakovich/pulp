@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, FileAudio, Loader2, Music2, Sparkles } from 'lucide-react';
+import { ChevronDown, Download, FileAudio, Loader2, Music2, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { SignedIn, SignedOut } from '@clerk/nextjs';
 import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
 import { PianoRollEditor } from '@/components/PianoRollEditor';
@@ -74,6 +74,7 @@ export function MidiGeneratorClient() {
   const [bpm, setBpm] = useState(124);
   const [bars, setBars] = useState(4);
   const [trackType, setTrackType] = useState<(typeof TRACK_TYPES)[number]>('melody');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [notes, setNotes] = useState<NoteEvent[]>([]);
   const [result, setResult] = useState<MidiSingleResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -162,34 +163,73 @@ export function MidiGeneratorClient() {
               style={{ ...fieldStyle(), resize: 'vertical', minHeight: 150 }}
             />
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div>
-                <label style={labelStyle()} htmlFor="midi-key">Key</label>
-                <select id="midi-key" value={key} onChange={(e) => setKey(e.target.value as typeof key)} style={fieldStyle()}>
-                  {KEYS.map((item) => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle()} htmlFor="midi-scale">Scale</label>
-                <select id="midi-scale" value={scale} onChange={(e) => setScale(e.target.value as typeof scale)} style={fieldStyle()}>
-                  {SCALES.map((item) => <option key={item} value={item}>{item.replace('_', ' ')}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle()} htmlFor="midi-bpm">BPM</label>
-                <input id="midi-bpm" type="number" min={60} max={220} value={bpm} onChange={(e) => setBpm(Number(e.target.value))} style={fieldStyle()} />
-              </div>
-              <div>
-                <label style={labelStyle()} htmlFor="midi-bars">Bars</label>
-                <input id="midi-bars" type="number" min={1} max={16} value={bars} onChange={(e) => setBars(Number(e.target.value))} style={fieldStyle()} />
-              </div>
-            </div>
+            <button
+              type="button"
+              className="mt-3 inline-flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors"
+              style={{
+                border: '1px solid var(--border)',
+                background: advancedOpen ? 'var(--surface-strong)' : 'transparent',
+                color: 'var(--muted)',
+                fontFamily: 'DM Sans, system-ui, sans-serif',
+              }}
+              aria-expanded={advancedOpen}
+              aria-controls="midi-advanced-options"
+              onClick={() => setAdvancedOpen((open) => !open)}
+            >
+              <SlidersHorizontal size={15} aria-hidden />
+              Advanced options
+              <ChevronDown
+                size={15}
+                aria-hidden
+                style={{
+                  transform: advancedOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 180ms ease',
+                }}
+              />
+            </button>
 
-            <div className="mt-4">
-              <label style={labelStyle()} htmlFor="midi-track-type">Track type</label>
-              <select id="midi-track-type" value={trackType} onChange={(e) => setTrackType(e.target.value as typeof trackType)} style={fieldStyle()}>
-                {TRACK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
+            <div
+              id="midi-advanced-options"
+              aria-hidden={!advancedOpen}
+              style={{
+                display: 'grid',
+                gridTemplateRows: advancedOpen ? '1fr' : '0fr',
+                opacity: advancedOpen ? 1 : 0,
+                transform: advancedOpen ? 'translateY(0)' : 'translateY(-4px)',
+                transition: 'grid-template-rows 220ms ease, opacity 180ms ease, transform 220ms ease',
+              }}
+            >
+              <div style={{ overflow: 'hidden' }}>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div>
+                    <label style={labelStyle()} htmlFor="midi-key">Key</label>
+                    <select id="midi-key" value={key} onChange={(e) => setKey(e.target.value as typeof key)} style={fieldStyle()} tabIndex={advancedOpen ? 0 : -1}>
+                      {KEYS.map((item) => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle()} htmlFor="midi-scale">Scale</label>
+                    <select id="midi-scale" value={scale} onChange={(e) => setScale(e.target.value as typeof scale)} style={fieldStyle()} tabIndex={advancedOpen ? 0 : -1}>
+                      {SCALES.map((item) => <option key={item} value={item}>{item.replace('_', ' ')}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle()} htmlFor="midi-bpm">BPM</label>
+                    <input id="midi-bpm" type="number" min={60} max={220} value={bpm} onChange={(e) => setBpm(Number(e.target.value))} style={fieldStyle()} tabIndex={advancedOpen ? 0 : -1} />
+                  </div>
+                  <div>
+                    <label style={labelStyle()} htmlFor="midi-bars">Bars</label>
+                    <input id="midi-bars" type="number" min={1} max={16} value={bars} onChange={(e) => setBars(Number(e.target.value))} style={fieldStyle()} tabIndex={advancedOpen ? 0 : -1} />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label style={labelStyle()} htmlFor="midi-track-type">Track type</label>
+                  <select id="midi-track-type" value={trackType} onChange={(e) => setTrackType(e.target.value as typeof trackType)} style={fieldStyle()} tabIndex={advancedOpen ? 0 : -1}>
+                    {TRACK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
 
             <SignedIn>
