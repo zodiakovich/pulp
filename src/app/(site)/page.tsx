@@ -6476,72 +6476,6 @@ export default function Home() {
               </div>
             )}
 
-            {effectiveIsSignedIn && (
-              <div className="mb-4 flex justify-center">
-                <div className="flex items-center gap-3">
-                  <div className="relative inline-block">
-                  <button
-                    type="button"
-                    className="rounded-xl border px-5 py-3 text-sm font-semibold transition-opacity"
-                    style={{
-                      fontFamily: 'DM Sans, sans-serif',
-                      borderColor: isStudio ? 'rgba(255,109,63,0.45)' : 'var(--border-weak)',
-                      color: isStudio ? 'var(--text)' : 'var(--muted)',
-                      background: isStudio ? 'rgba(255,109,63,0.08)' : 'transparent',
-                      opacity: isStudio ? 1 : 0.75,
-                      cursor: 'pointer',
-                    }}
-                    title={isStudio ? undefined : 'Upgrade to Studio to upload MIDI'}
-                    onClick={() => {
-                      if (!isStudio) {
-                        setShowUpgradeModal(true);
-                        return;
-                      }
-                      setShowMidiUploadModal(true);
-                    }}
-                  >
-                    Upload MIDI
-                  </button>
-                  <span
-                    className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                    style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontFamily: 'DM Sans, sans-serif' }}
-                  >
-                    Studio
-                  </span>
-                </div>
-                  <div className="relative inline-block">
-                    <button
-                      type="button"
-                      className="rounded-xl border px-5 py-3 text-sm font-semibold transition-opacity"
-                      style={{
-                        fontFamily: 'DM Sans, sans-serif',
-                        borderColor: isStudio ? 'rgba(255,109,63,0.40)' : 'var(--border-weak)',
-                        color: isStudio ? 'var(--text)' : 'var(--muted)',
-                        background: isStudio ? 'rgba(255,109,63,0.10)' : 'transparent',
-                        opacity: isStudio ? 1 : 0.75,
-                        cursor: 'pointer',
-                      }}
-                      title={isStudio ? undefined : 'Upgrade to Studio to convert audio to MIDI'}
-                      onClick={() => {
-                        if (!isStudio) {
-                          setShowUpgradeModal(true);
-                          return;
-                        }
-                        setShowAudioToMidiModal(true);
-                      }}
-                    >
-                      Audio to MIDI
-                    </button>
-                    <span
-                      className="pointer-events-none absolute -right-1 -top-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                      style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontFamily: 'DM Sans, sans-serif' }}
-                    >
-                      Studio
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
             {!effectiveIsSignedIn && (
               <p className="-mt-2 mb-4 text-center" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
                 No card required
@@ -7228,21 +7162,6 @@ export default function Home() {
                     <span className="copy-label-stack__b">Copied</span>
                   </SpotlightButton>
                   <SpotlightButton
-                    type="button"
-                    onClick={() => {
-                      if (!isStudio) {
-                        setShowUpgradeModal(true);
-                        return;
-                      }
-                      setShowAudioToMidiModal(true);
-                    }}
-                    className="btn-secondary btn-sm"
-                    style={isStudio ? { borderColor: 'rgba(255,109,63,0.30)', color: 'var(--text)' } : undefined}
-                    title={isStudio ? 'Convert audio to editable MIDI (Studio)' : 'Available on Studio plan'}
-                  >
-                    Audio to MIDI
-                  </SpotlightButton>
-                  <SpotlightButton
                     onClick={handleCreateCollab}
                     className="btn-secondary btn-sm copy-label-stack"
                     data-copied={collabCopied ? 'true' : 'false'}
@@ -7287,8 +7206,6 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
-
-            {/* Audio → MIDI is now a Studio modal next to Upload MIDI */}
 
             {/* Performance & Sound */}
             <AnimatePresence>
@@ -7907,7 +7824,6 @@ export default function Home() {
               { label: 'MIDI + WAV Export', values: ['✓', '✓', '✓', '✓'] },
               { label: 'Piano Roll Editor', values: ['✓', '—', '—', '✓'] },
               { label: 'Web-based (no install)', values: ['✓', '✓', '✓', '✓'] },
-              { label: 'Audio to MIDI', values: ['✓', '—', '—', '—'] },
             ];
 
             const labelStyle: React.CSSProperties = {
