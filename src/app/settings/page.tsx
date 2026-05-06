@@ -23,6 +23,15 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'danger', label: 'Danger Zone' },
 ];
 
+type PlanType = 'free' | 'pro' | 'studio';
+
+function planLabel(planType: PlanType | null) {
+  if (planType === 'studio') return 'Studio';
+  if (planType === 'pro') return 'Pro';
+  if (planType === 'free') return 'Free';
+  return 'Plan';
+}
+
 function SectionCard({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -408,6 +417,25 @@ function BillingSection() {
   const router = useRouter();
   const { toast } = useToast();
   const [loadingPortal, setLoadingPortal] = useState(false);
+  const [planType, setPlanType] = useState<PlanType | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPlan() {
+      try {
+        const res = await fetch('/api/usage', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json() as { plan_type?: PlanType };
+        if (!cancelled && data.plan_type) setPlanType(data.plan_type);
+      } catch {
+        // keep neutral label
+      }
+    }
+    void loadPlan();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handlePortal() {
     setLoadingPortal(true);
@@ -442,7 +470,7 @@ function BillingSection() {
                   letterSpacing: '0.05em',
                 }}
               >
-                Plan
+                {planLabel(planType)}
               </span>
               <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)' }}>
                 Billing is managed through Stripe. Usage limits are based on daily and monthly cost windows.

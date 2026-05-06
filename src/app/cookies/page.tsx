@@ -25,7 +25,7 @@ export default function CookiePolicyPage() {
             authentication and account features will not work reliably.
           </li>
           <li>
-            <strong style={{ color: 'var(--text)' }}>Security and routing.</strong> Our host or middleware may set short-lived cookies or tokens needed for
+            <strong style={{ color: 'var(--text)' }}>Security and routing.</strong> Our host or middleware may set short-lived cookies or session data needed for
             security (for example CSRF protection or session continuity).
           </li>
         </ul>

@@ -88,7 +88,7 @@ function addDays(date: Date, days: number): string {
   return next.toISOString();
 }
 
-function resolvePlanType(row: Pick<FeatureCreditRow, 'plan_type' | 'is_pro'>): PlanType {
+export function resolvePlanType(row: Pick<FeatureCreditRow, 'plan_type' | 'is_pro'>): PlanType {
   if (row.plan_type === 'studio') return 'studio';
   if (row.plan_type === 'pro') return 'pro';
   if (row.is_pro) return 'pro';
@@ -253,4 +253,9 @@ export async function getFeatureUsage(userId: string): Promise<FeatureUsageState
     blocked_by: result.blocked_by,
     allowed: result.allowed,
   };
+}
+
+export async function getUserPlanType(userId: string): Promise<PlanType> {
+  const row = await getOrCreateFeatureCreditRow(userId);
+  return resolvePlanType(row);
 }

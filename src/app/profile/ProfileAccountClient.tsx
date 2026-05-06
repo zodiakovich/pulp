@@ -15,11 +15,18 @@ function formatDate(ts: number): string {
 }
 
 type Props = {
-  isPro: boolean;
+  planType: 'free' | 'pro' | 'studio' | null;
   currentPeriodEnd: number | null;
 };
 
-export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
+function planLabel(planType: Props['planType']) {
+  if (planType === 'studio') return 'Studio';
+  if (planType === 'pro') return 'Pro';
+  if (planType === 'free') return 'Free';
+  return 'Plan';
+}
+
+export function ProfileAccountClient({ planType, currentPeriodEnd }: Props) {
   const { signOut } = useClerk();
   const { toast } = useToast();
   const router = useRouter();
@@ -64,6 +71,7 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
   }
 
   const endDate = cancelledAt ?? currentPeriodEnd;
+  const isPaid = planType === 'pro' || planType === 'studio';
 
   return (
     <>
@@ -101,13 +109,13 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
               style={{
                 fontFamily: 'JetBrains Mono, monospace',
                 border: '1px solid var(--border)',
-                color: isPro ? '#00B894' : 'var(--foreground-muted)',
-                background: isPro ? 'rgba(0, 184, 148, 0.12)' : 'transparent',
+                color: isPaid ? '#00B894' : 'var(--foreground-muted)',
+                background: isPaid ? 'rgba(0, 184, 148, 0.12)' : 'transparent',
               }}
             >
-              {isPro ? 'Pro' : 'Free'}
+              {planLabel(planType)}
             </span>
-            {isPro && endDate ? (
+            {isPaid && endDate ? (
               cancelledAt ? (
                 <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
                   Access ends <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>. You can resubscribe anytime.
@@ -117,18 +125,20 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
                   Renews on <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>
                 </span>
               )
-            ) : isPro ? (
+            ) : isPaid ? (
               <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage invoices, payment method, and cancellation in Stripe.</span>
-            ) : (
+            ) : planType === 'free' ? (
               <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>
                 Free plan includes starter usage windows. Upgrade when pulp becomes part of your workflow.
               </span>
+            ) : (
+              <span style={{ fontSize: 14, color: 'var(--foreground-muted)' }}>Manage your billing and account access.</span>
             )}
           </div>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-          {isPro ? (
+          {isPaid ? (
             <>
               <button
                 type="button"
@@ -149,7 +159,7 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
                 </button>
               )}
             </>
-          ) : (
+          ) : planType === 'free' ? (
             <Link
               href="/pricing"
               className="btn-primary btn-sm"
@@ -157,6 +167,15 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
             >
               Upgrade plan
             </Link>
+          ) : (
+            <button
+              type="button"
+              className="btn-primary btn-sm"
+              onClick={handlePortal}
+              disabled={portalLoading}
+            >
+              {portalLoading ? 'Loading...' : 'Manage billing'}
+            </button>
           )}
           <button
             type="button"
@@ -203,8 +222,8 @@ export function ProfileAccountClient({ isPro, currentPeriodEnd }: Props) {
             </h2>
             <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.6 }}>
               {endDate
-                ? <>You&apos;ll keep Pro access until <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>. After that you&apos;ll move to the Free plan.</>
-                : <>You&apos;ll keep Pro access until the end of your billing period. After that you&apos;ll move to the Free plan.</>
+                ? <>You&apos;ll keep {planLabel(planType)} access until <strong style={{ color: 'var(--text)' }}>{formatDate(endDate)}</strong>. After that you&apos;ll move to the Free plan.</>
+                : <>You&apos;ll keep {planLabel(planType)} access until the end of your billing period. After that you&apos;ll move to the Free plan.</>
               }
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">

@@ -26,14 +26,6 @@ type BasicPitchNote = {
 type CleanupResponse = {
   notes: NoteEvent[];
   suggestions: string[];
-  model: string;
-  usage?: {
-    input_tokens: number;
-    output_tokens: number;
-    cache_creation_input_tokens: number;
-    cache_read_input_tokens: number;
-  };
-  cost_usd?: number;
 };
 
 function clamp(v: number, lo: number, hi: number) {
@@ -126,7 +118,7 @@ async function runBasicPitch(audioBuffer: AudioBuffer, bpm: number, bars: number
       contours.push(...contourChunk);
     },
     (percent: number) => {
-      setProgress(`Basic Pitch ${(percent * 100).toFixed(0)}%`);
+      setProgress(`Analyzing audio ${(percent * 100).toFixed(0)}%`);
     },
   );
 
@@ -148,8 +140,6 @@ export function TranscribeClient() {
   const [sourceName, setSourceName] = useState('audio');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [progress, setProgress] = useState('Ready');
-  const [cleanupCost, setCleanupCost] = useState<number | null>(null);
-  const [cleanupTokens, setCleanupTokens] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,8 +147,8 @@ export function TranscribeClient() {
   const canExport = notes.length > 0;
   const subtitle = useMemo(() => `${DEFAULT_KEY} ${DEFAULT_SCALE} · ${DEFAULT_BPM} BPM · ${bars} bars`, [bars]);
 
-  async function cleanupWithClaude(inputNotes: NoteEvent[], name: string) {
-    setProgress('Claude cleanup...');
+  async function refineTranscription(inputNotes: NoteEvent[], name: string) {
+    setProgress('Refining transcription...');
     const res = await fetch('/api/postprocess-transcription', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -173,7 +163,7 @@ export function TranscribeClient() {
     });
     const data = await res.json() as CleanupResponse | { error?: string };
     if (!res.ok) {
-      throw new Error('error' in data && data.error ? data.error : 'Claude cleanup failed');
+      throw new Error('Transcription cleanup failed');
     }
     return data as CleanupResponse;
   }
@@ -182,8 +172,6 @@ export function TranscribeClient() {
     stopAllAppAudio();
     setError(null);
     setSuggestions([]);
-    setCleanupCost(null);
-    setCleanupTokens(null);
     setNotes([]);
     setRawCount(0);
     setSourceName(file.name);
@@ -209,7 +197,7 @@ export function TranscribeClient() {
       const estimatedBars = Math.max(1, Math.min(32, Math.ceil(audio.duration / (60 / DEFAULT_BPM) / 4)));
       setBars((current) => Math.max(current, estimatedBars));
 
-      setProgress('Running Basic Pitch...');
+      setProgress('Analyzing audio...');
       const rawNotes = await runBasicPitch(modelAudio, DEFAULT_BPM, Math.max(bars, estimatedBars), setProgress);
       if (rawNotes.length === 0) {
         throw new Error('No notes detected. Try a clearer single-instrument recording.');
@@ -217,17 +205,15 @@ export function TranscribeClient() {
       setRawCount(rawNotes.length);
 
       try {
-        const cleaned = await cleanupWithClaude(rawNotes, file.name);
+        const cleaned = await refineTranscription(rawNotes, file.name);
         setNotes(cleaned.notes);
         setSuggestions(cleaned.suggestions ?? []);
-        setCleanupCost(typeof cleaned.cost_usd === 'number' ? cleaned.cost_usd : null);
-        setCleanupTokens(cleaned.usage ? cleaned.usage.input_tokens + cleaned.usage.output_tokens : null);
         setProgress(`Done: ${cleaned.notes.length} cleaned notes`);
       } catch (cleanupError) {
         setNotes(rawNotes);
-        setSuggestions(['Claude cleanup was unavailable, so this is the raw Basic Pitch transcription.']);
-        setProgress(`Basic Pitch done: ${rawNotes.length} raw notes`);
-        setError(cleanupError instanceof Error ? cleanupError.message : 'Claude cleanup failed');
+        setSuggestions(['Cleanup was unavailable, so this is the raw transcription.']);
+        setProgress(`Transcription done: ${rawNotes.length} raw notes`);
+        setError(cleanupError instanceof Error ? cleanupError.message : 'Transcription cleanup failed');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Audio transcription failed');
@@ -286,7 +272,7 @@ export function TranscribeClient() {
             </h1>
           </div>
           <p className="max-w-[560px]" style={{ color: 'var(--muted)', fontSize: 16, lineHeight: 1.7 }}>
-            Upload WAV, MP3, or M4A. Spotify Basic Pitch transcribes it, then Claude cleans the MIDI for a tighter piano-roll edit.
+            Upload WAV, MP3, or M4A and turn audio into a tighter piano-roll edit.
           </p>
         </div>
 
@@ -328,7 +314,7 @@ export function TranscribeClient() {
               <SignInButtonDeferred mode="modal">
                 <button type="button" className="btn-primary mt-5 w-full">
                   <Sparkles size={17} aria-hidden />
-                  Sign in for Claude cleanup
+                  Sign in to transcribe
                 </button>
               </SignInButtonDeferred>
             </SignedOut>
@@ -349,8 +335,6 @@ export function TranscribeClient() {
               <div className="mt-5 grid grid-cols-2 gap-2" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>raw notes<br /><span style={{ color: 'var(--text)' }}>{rawCount}</span></div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>clean notes<br /><span style={{ color: 'var(--text)' }}>{notes.length}</span></div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>cleanup cost<br /><span style={{ color: 'var(--text)' }}>{cleanupCost === null ? 'raw' : `$${cleanupCost.toFixed(6)}`}</span></div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>cleanup tokens<br /><span style={{ color: 'var(--text)' }}>{cleanupTokens ?? 'raw'}</span></div>
               </div>
             )}
 

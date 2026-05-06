@@ -9,7 +9,7 @@ import { ProfileAccountClient } from './ProfileAccountClient';
 import { getUserBadges, type EarnedBadge } from '@/lib/badges';
 import { BadgesSection } from './BadgesSection';
 import { UserAvatar } from '@/components/UserAvatar';
-import { getAiUsageDashboard, type AiUsageDashboard, type AiUsageSummary } from '@/lib/ai-usage';
+import { getUserPlanType, type PlanType } from '@/lib/feature-credits';
 import Stripe from 'stripe';
 
 const db = supabaseAdmin ?? supabase;
@@ -104,7 +104,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlanStatWithUpgrade({ planType, isPro }: { planType: string; isPro: boolean }) {
+function planLabel(planType: PlanType | null) {
+  if (planType === 'studio') return 'Studio';
+  if (planType === 'pro') return 'Pro';
+  if (planType === 'free') return 'Free';
+  return 'Plan';
+}
+
+function PlanStatWithUpgrade({ planType }: { planType: PlanType | null }) {
   return (
     <div
       className="rounded-2xl p-6 flex flex-col gap-4 h-full"
@@ -124,10 +131,10 @@ function PlanStatWithUpgrade({ planType, isPro }: { planType: string; isPro: boo
           Current plan
         </p>
         <p className="font-extrabold" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, fontSize: 32, letterSpacing: '0.02em', color: 'var(--foreground)' }}>
-          {planType}
+          {planLabel(planType)}
         </p>
       </div>
-      {!isPro && (
+      {planType === 'free' && (
         <Link
           href="/pricing"
           className="btn-primary inline-flex items-center justify-center w-full text-center mt-auto"
@@ -140,96 +147,6 @@ function PlanStatWithUpgrade({ planType, isPro }: { planType: string; isPro: boo
   );
 }
 
-function formatUsd(value: number) {
-  if (value <= 0) return '$0.0000';
-  return `$${value.toFixed(4)}`;
-}
-
-function formatTokens(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(Math.round(value));
-}
-
-function UsageBar({ label, summary, denominator }: { label: string; summary: AiUsageSummary; denominator: number }) {
-  const pct = denominator > 0 ? Math.min(100, Math.round((summary.costUsd / denominator) * 100)) : 0;
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{label}</span>
-        <span style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
-          {formatUsd(summary.costUsd)} · {pct}%
-        </span>
-      </div>
-      <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 999 }} />
-      </div>
-      <p className="mt-2" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
-        {summary.calls} calls · {formatTokens(summary.totalTokens)} tokens
-      </p>
-    </div>
-  );
-}
-
-function AiUsageSection({ usage }: { usage: AiUsageDashboard }) {
-  const denominator = Math.max(usage.month.costUsd, usage.week.costUsd, usage.today.costUsd, 0.000001);
-  return (
-    <section className="rounded-2xl p-6" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p
-            style={{
-              fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 11,
-              color: 'var(--muted)',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              marginBottom: 10,
-            }}
-          >
-            Anthropic usage
-          </p>
-          <h2 style={{ color: 'var(--foreground)', fontFamily: 'DM Sans, system-ui, sans-serif', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em' }}>
-            Real cost dashboard
-          </h2>
-        </div>
-        <p className="max-w-[460px]" style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>
-          Observed spend only. Plan caps stay unset until enough real usage data exists.
-        </p>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-5">
-          <UsageBar label="Today" summary={usage.today} denominator={denominator} />
-          <UsageBar label="Last 7 days" summary={usage.week} denominator={denominator} />
-          <UsageBar label="Last 30 days" summary={usage.month} denominator={denominator} />
-        </div>
-
-        <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
-          <p style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-            Endpoint mix
-          </p>
-          {usage.byEndpoint.length === 0 ? (
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>No Anthropic usage logged yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {usage.byEndpoint.map((row) => (
-                <div key={row.endpoint} className="flex items-center justify-between gap-3">
-                  <span className="truncate" style={{ color: 'var(--foreground)', fontSize: 13 }}>{row.endpoint}</span>
-                  <span style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
-                    {formatUsd(row.costUsd)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
 export default async function ProfilePage() {
   const user = await currentUser();
   if (!user) redirect('/');
@@ -241,8 +158,7 @@ export default async function ProfilePage() {
   const avatarUrl = user.imageUrl;
 
   let favoriteGenreData: { genre: string | null }[] | null = null;
-  let isPro = false;
-  let planType = 'Free';
+  let planType: PlanType | null = null;
   let currentPeriodEnd: number | null = null;
   let recentGenerations: {
     id: string;
@@ -253,15 +169,15 @@ export default async function ProfilePage() {
   }[] = [];
   let earnedBadges: EarnedBadge[] = [];
   let avatarColor: string | null = null;
-  let aiUsage: AiUsageDashboard = {
-    today: { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, totalTokens: 0, costUsd: 0 },
-    week: { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, totalTokens: 0, costUsd: 0 },
-    month: { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, totalTokens: 0, costUsd: 0 },
-    byEndpoint: [],
-  };
 
   try {
-    const [genreRes, recentRes, planSnap, badgesSnap, usageSnap] = await Promise.all([
+    planType = await getUserPlanType(userId);
+  } catch {
+    // keep neutral plan label instead of incorrectly showing Free
+  }
+
+  try {
+    const [genreRes, recentRes, avatarSnap, badgesSnap] = await Promise.all([
       db.from('generations').select('genre').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
       db
         .from('generations')
@@ -269,24 +185,21 @@ export default async function ProfilePage() {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(5),
-      db.from('user_credits').select('is_pro, plan_type, avatar_color').eq('user_id', userId).maybeSingle(),
+      db.from('user_credits').select('avatar_color').eq('user_id', userId).maybeSingle(),
       getUserBadges(userId).catch(() => [] as EarnedBadge[]),
-      getAiUsageDashboard(userId).catch(() => aiUsage),
     ]);
 
     favoriteGenreData = genreRes.data;
-    const planRow = planSnap.data as { is_pro?: boolean | null; plan_type?: string | null; avatar_color?: string | null } | null;
-    isPro = Boolean(planRow?.is_pro);
-    planType = planRow?.plan_type === 'studio' ? 'Studio' : isPro ? 'Pro' : 'Free';
     recentGenerations = (recentRes.data as typeof recentGenerations) ?? [];
     earnedBadges = badgesSnap;
-    avatarColor = planRow?.avatar_color ?? null;
-    aiUsage = usageSnap;
+    avatarColor = (avatarSnap.data as { avatar_color?: string | null } | null)?.avatar_color ?? null;
   } catch {
     // keep defaults
   }
 
-  if (isPro) {
+  const isPaid = planType === 'pro' || planType === 'studio';
+
+  if (isPaid) {
     currentPeriodEnd = await fetchCurrentPeriodEnd(userId);
   }
 
@@ -335,11 +248,11 @@ export default async function ProfilePage() {
                 style={{
                   fontFamily: 'JetBrains Mono, monospace',
                   border: '1px solid var(--border)',
-                  color: isPro ? '#00B894' : 'var(--foreground-muted)',
-                  background: isPro ? 'rgba(0, 184, 148, 0.12)' : 'transparent',
+                  color: isPaid ? '#00B894' : 'var(--foreground-muted)',
+                  background: isPaid ? 'rgba(0, 184, 148, 0.12)' : 'transparent',
                 }}
               >
-                {isPro ? 'Pro' : 'Free'}
+                {planLabel(planType)}
               </span>
             </div>
           </section>
@@ -350,17 +263,14 @@ export default async function ProfilePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <StatCard label="Member since" value={memberSince} />
               <StatCard label="Favorite genre" value={favoriteGenreDisplay} />
-              <PlanStatWithUpgrade planType={planType} isPro={isPro} />
+              <PlanStatWithUpgrade planType={planType} />
             </div>
           </section>
 
           {/* SECTION 3 — Badges */}
           <BadgesSection earned={earnedBadges} />
 
-          {/* SECTION 4 — AI usage */}
-          <AiUsageSection usage={aiUsage} />
-
-          {/* SECTION 5 — Recent generations */}
+          {/* SECTION 4 — Recent generations */}
           <section>
             <p
               style={{
@@ -442,7 +352,7 @@ export default async function ProfilePage() {
 
           {/* SECTION 6 — Account */}
           <section>
-            <ProfileAccountClient isPro={isPro} currentPeriodEnd={currentPeriodEnd} />
+          <ProfileAccountClient planType={planType} currentPeriodEnd={currentPeriodEnd} />
           </section>
         </div>
       </main>

@@ -181,11 +181,20 @@ export function Navbar({
             <UserButton
               appearance={{
                 elements: {
+                  userButtonPopoverActionButton: {
+                    color: '#FAFAFA !important',
+                  },
+                  userButtonPopoverActionButton__manageAccount: {
+                    color: '#FAFAFA !important',
+                  },
+                  userButtonPopoverActionButton__signOut: {
+                    color: '#FAFAFA !important',
+                  },
                   userButtonPopoverActionButtonText: {
-                    color: 'var(--text, #FAFAFA)',
+                    color: '#FAFAFA !important',
                   },
                   userButtonPopoverActionButtonIcon: {
-                    color: 'var(--text, #FAFAFA)',
+                    color: '#FAFAFA !important',
                   },
                 },
               }}

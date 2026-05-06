@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, Download, FileAudio, Loader2, Music2, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { SignedIn, SignedOut } from '@clerk/nextjs';
 import { SignInButtonDeferred } from '@/components/ClerkAuthDeferred';
@@ -24,14 +24,6 @@ type MidiSingleResponse = {
     trackType: string;
   };
   notes: NoteEvent[];
-  model: string;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-    cache_creation_input_tokens: number;
-    cache_read_input_tokens: number;
-  };
-  cost_usd: number;
 };
 
 function fieldStyle(): React.CSSProperties {
@@ -76,15 +68,11 @@ export function MidiGeneratorClient() {
   const [trackType, setTrackType] = useState<(typeof TRACK_TYPES)[number]>('melody');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [notes, setNotes] = useState<NoteEvent[]>([]);
-  const [result, setResult] = useState<MidiSingleResponse | null>(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canExport = notes.length > 0;
-  const totalTokens = useMemo(() => {
-    if (!result) return 0;
-    return result.usage.input_tokens + result.usage.output_tokens;
-  }, [result]);
 
   async function generate() {
     stopAllAppAudio();
@@ -101,8 +89,8 @@ export function MidiGeneratorClient() {
         throw new Error('error' in data && data.error ? data.error : 'Generation failed');
       }
       const generation = data as MidiSingleResponse;
-      setResult(generation);
       setNotes(generation.notes);
+      setHasGenerated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
@@ -253,12 +241,9 @@ export function MidiGeneratorClient() {
               </p>
             )}
 
-            {result && (
-              <div className="mt-5 grid grid-cols-2 gap-2" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+            {hasGenerated && (
+              <div className="mt-5" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>notes<br /><span style={{ color: 'var(--text)' }}>{notes.length}</span></div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>tokens<br /><span style={{ color: 'var(--text)' }}>{totalTokens}</span></div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>cost<br /><span style={{ color: 'var(--text)' }}>${result.cost_usd.toFixed(6)}</span></div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>model<br /><span style={{ color: 'var(--text)' }}>Haiku 4.5</span></div>
               </div>
             )}
           </section>

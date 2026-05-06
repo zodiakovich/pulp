@@ -132,7 +132,7 @@ html.light {
   --btn-loading-fill: rgba(17, 24, 39, 0.72);
 }
 
-/* Always-dark navbar: forces dark-mode tokens inside the nav
+/* Always-dark navbar: forces dark-mode values inside the nav
    so it stays #1A1A1E-bg + white text regardless of color scheme */
 .navbar-always-dark {
   --bg: #0A0A0B;

@@ -2639,223 +2639,6 @@ function normalizeScaleToEngine(value: string): string {
   return 'minor';
 }
 
-function OutputPreview({ result }: { result: GenerationResult | null }) {
-  const layers = [
-    { key: 'melody', name: 'Melody', color: LAYER_VIZ_COLORS.melody, notes: result?.melody ?? [] },
-    { key: 'chords', name: 'Chords', color: LAYER_VIZ_COLORS.chords, notes: result?.chords ?? [] },
-    { key: 'bass', name: 'Bass', color: LAYER_VIZ_COLORS.bass, notes: result?.bass ?? [] },
-    { key: 'drums', name: 'Drums', color: LAYER_VIZ_COLORS.drums, notes: result?.drums ?? [] },
-  ] as const;
-  const hasResult = layers.some(layer => layer.notes.length > 0);
-
-  return (
-    <div
-      className="mb-6 rounded-2xl overflow-hidden"
-      style={{ border: '1px solid var(--border)', background: 'var(--surface)', position: 'relative' }}
-    >
-      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em' }}>
-            OUTPUT PREVIEW
-          </span>
-        </div>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>
-          {hasResult ? 'Editable MIDI layers ready' : 'Generate to unlock editor'}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 p-4">
-        {layers.map(layer => (
-          <div
-            key={layer.key}
-            className="rounded-xl overflow-hidden"
-            style={{ border: '1px solid var(--border-weak)', background: 'var(--bg)', minHeight: 72 }}
-          >
-            <div className="flex items-center justify-between gap-2 px-3 py-2">
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: layer.color }} />
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: layer.color, opacity: 0.85 }}>
-                  {layer.name.toUpperCase()}
-                </span>
-              </div>
-              {hasResult && (
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'var(--muted)' }}>
-                  {layer.notes.length} notes
-                </span>
-              )}
-            </div>
-            <div className="px-3 pb-3">
-              {layer.notes.length > 0 ? (
-                <PianoRoll notes={layer.notes} color={layer.color} height={44} />
-              ) : (
-                <div style={{ height: 44, borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-weak)' }} />
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {!hasResult && (
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 100%)' }}
-        >
-          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
-            Results appear here as editable MIDI layers
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HeroDemoPreview({ result, params }: { result?: GenerationResult | null; params?: GenerationParams }) {
-  const [tick, setTick] = React.useState(0)
-  const [playhead, setPlayhead] = React.useState(0)
-
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      setTick(t => (t + 1) % 60)
-      setPlayhead(t => (t + 1) % 100)
-    }, 200)
-    return () => clearInterval(interval)
-  }, [])
-
-  const layers = [
-    { name: 'Melody', color: LAYER_VIZ_COLORS.melody, pattern: [1,0,1,1,0,1,0,1,1,0,1,0,1,1,0,1] },
-    { name: 'Chords', color: LAYER_VIZ_COLORS.chords, pattern: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
-    { name: 'Bass',   color: LAYER_VIZ_COLORS.bass, pattern: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
-    { name: 'Drums',  color: LAYER_VIZ_COLORS.drums, pattern: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
-  ]
-  const liveLayers = [
-    { name: 'Melody', color: LAYER_VIZ_COLORS.melody, notes: result?.melody ?? [] },
-    { name: 'Chords', color: LAYER_VIZ_COLORS.chords, notes: result?.chords ?? [] },
-    { name: 'Bass', color: LAYER_VIZ_COLORS.bass, notes: result?.bass ?? [] },
-    { name: 'Drums', color: LAYER_VIZ_COLORS.drums, notes: result?.drums ?? [] },
-  ]
-  const hasResult = liveLayers.some(layer => layer.notes.length > 0)
-  const liveLabel = hasResult && params
-    ? `LIVE PREVIEW · ${GENRES[params.genre]?.name ?? params.genre} · ${params.bpm} BPM · ${params.key}${params.scale === 'minor' ? 'm' : ` ${params.scale}`}`
-    : 'LIVE PREVIEW · Tech House · 128 BPM · Am'
-
-  return (
-    <div className="relative mb-6" style={{ position: 'relative' }}>
-      {/* Ambient glow behind */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          zIndex: -1,
-          inset: -20,
-          background: 'radial-gradient(ellipse, rgba(255,109,63,0.08) 0%, transparent 70%)',
-          filter: 'blur(40px)',
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        className="rounded-2xl overflow-hidden"
-        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-2"
-          style={{ borderBottom: '1px solid var(--border)' }}
-        >
-          <div className="flex items-center gap-2">
-            <div
-              className="animate-pulse"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: DS.accent,
-              }}
-            />
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.06em' }}>
-              {liveLabel}
-            </span>
-          </div>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>
-            {hasResult ? 'updated from generation' : 'generate yours'}
-          </span>
-        </div>
-        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {hasResult ? liveLayers.map(layer => (
-            <div
-              key={layer.name}
-              className="rounded-xl overflow-hidden"
-              style={{ background: 'var(--bg)', border: '1px solid var(--border-weak)', minHeight: 62 }}
-            >
-              <div className="flex items-center justify-between gap-2 px-2 pt-1.5">
-                <div className="flex items-center gap-1.5">
-                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: layer.color, flexShrink: 0 }} />
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: layer.color, opacity: 0.7 }}>
-                    {layer.name.toUpperCase()}
-                  </span>
-                </div>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: 'var(--muted)' }}>
-                  {layer.notes.length}
-                </span>
-              </div>
-              <div className="px-2 pb-2 pt-1">
-                {layer.notes.length > 0 ? (
-                  <PianoRoll notes={layer.notes} color={layer.color} height={34} />
-                ) : (
-                  <div style={{ height: 34, borderRadius: 6, background: 'rgba(255,255,255,0.04)' }} />
-                )}
-              </div>
-            </div>
-          )) : layers.map(layer => (
-            <div
-              key={layer.name}
-              className="rounded-xl overflow-hidden"
-              style={{ background: 'var(--bg)', border: '1px solid var(--border-weak)', height: 52 }}
-            >
-              <div className="flex items-center gap-1.5 px-2 pt-1.5">
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: layer.color, flexShrink: 0 }} />
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: layer.color, opacity: 0.7 }}>
-                  {layer.name.toUpperCase()}
-                </span>
-              </div>
-              <div className="flex items-end gap-px px-2 pb-2" style={{ height: 32, position: 'relative' }}>
-                {layer.pattern.map((on, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      flex: 1,
-                      borderRadius: 3,
-                      background: layer.color,
-                      opacity: on ? (i === tick % 16 ? 1 : 0.45) : 0.08,
-                      height: on ? (layer.name === 'Melody' ? `${50 + Math.sin(i * 0.8) * 35}%` : layer.name === 'Drums' ? '80%' : '55%') : '15%',
-                      transition: 'opacity 0.1s',
-                      boxShadow: on ? 'inset 0 1px 0 rgba(255,255,255,0.15)' : undefined,
-                    }}
-                  />
-                ))}
-                {/* Animated playhead */}
-                <div
-                  aria-hidden
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    bottom: 0,
-                    width: 1,
-                    background: 'rgba(255,255,255,0.7)',
-                    left: `${playhead}%`,
-                    pointerEvents: 'none',
-                    zIndex: 10,
-                    filter: 'drop-shadow(0 0 4px rgba(255,255,255,0.9))',
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function ShareModal({
   url,
   prompt,
@@ -3092,7 +2875,7 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeStyleTag, setActiveStyleTag] = useState<string | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
-  const [planType, setPlanType] = useState<PlanType>('free');
+  const [planType, setPlanType] = useState<PlanType | null>(null);
   const [showMidiUploadModal, setShowMidiUploadModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -3504,7 +3287,7 @@ export default function Home() {
         const d = (await res.json()) as {
           plan_type?: PlanType;
         };
-        setPlanType(d.plan_type ?? 'free');
+        if (d.plan_type) setPlanType(d.plan_type);
       } catch {
         // ignore
       }
@@ -6923,8 +6706,6 @@ export default function Home() {
               })}
             </div>
 
-            <OutputPreview result={variations[0]?.result ?? null} />
-
             {/* Layer toggles */}
             <div className="flex gap-2 mb-4 flex-wrap">
               {LAYERS.map(layer => (
@@ -6938,11 +6719,6 @@ export default function Home() {
                 </button>
               ))}
             </div>
-
-            <HeroDemoPreview
-              result={variations[0]?.result ?? null}
-              params={variations[0]?.params ?? params}
-            />
 
             {/* Manual controls */}
             <div className="mb-6 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
