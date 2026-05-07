@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
 import { SiteFooter } from '@/components/SiteFooter';
 import { pageMeta } from '@/lib/seo-metadata';
+import { supabase } from '@/lib/supabase';
 
 export const revalidate = 3600;
 
@@ -11,6 +13,15 @@ export const metadata = pageMeta({
   path: '/blog',
 });
 
+type BlogPost = {
+  slug: string;
+  title: string;
+  excerpt: string;
+  tag: string;
+  read_time: string;
+  published_at: string;
+};
+
 const TAG_COLORS: Record<string, string> = {
   Theory: '#FF6D3F',
   Production: '#FF6D3F',
@@ -18,53 +29,23 @@ const TAG_COLORS: Record<string, string> = {
   Genre: 'rgba(255,255,255,0.50)',
 };
 
-const FEATURED = {
-  title: 'Afro House Chord Progressions: The Complete Guide for Electronic Producers',
-  excerpt: 'Learn the minor 7th voicings, syncopated rhythms, and modal harmony that define the Afro House sound. With MIDI examples you can drop straight into your DAW.',
-  tag: 'Theory',
-  readTime: '8 min read',
-  date: 'Apr 7, 2026',
-} as const;
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
-const POSTS = [
-  {
-    title: 'Tech House Basslines: 5 Patterns That Work Every Time',
-    excerpt: 'From driving 16th-note grooves to syncopated subs — the bassline formulas behind every Tech House peak-time banger.',
-    tag: 'Production',
-    readTime: '5 min read',
-    date: 'Mar 31, 2026',
-  },
-  {
-    title: 'How to Use MIDI in FL Studio: Layer by Layer',
-    excerpt: 'A step-by-step guide to importing and arranging multi-track MIDI files in FL Studio. From the Channel Rack to the Mixer.',
-    tag: 'Tutorial',
-    readTime: '6 min read',
-    date: 'Mar 24, 2026',
-  },
-  {
-    title: 'Melodic Techno Scales: Why Phrygian Dominates the Genre',
-    excerpt: 'The exotic tension of the Phrygian mode explained for producers. Why Charlotte de Witte, Alignment, and Anyma keep coming back to it.',
-    tag: 'Theory',
-    readTime: '4 min read',
-    date: 'Mar 17, 2026',
-  },
-  {
-    title: 'Deep House vs Tech House: The Production Differences Explained',
-    excerpt: 'BPM, groove, chord complexity, bass character — a technical breakdown of what separates these two genres at the production level.',
-    tag: 'Genre',
-    readTime: '5 min read',
-    date: 'Mar 10, 2026',
-  },
-  {
-    title: 'The Humanization Parameter: Why Perfect MIDI Sounds Wrong',
-    excerpt: 'Why quantized-to-the-grid MIDI sounds robotic, and how micro-timing variations create the groove that makes people move.',
-    tag: 'Production',
-    readTime: '3 min read',
-    date: 'Mar 3, 2026',
-  },
-] as const;
+export default async function BlogIndexPage() {
+  const { data } = await supabase
+    .from('blog_posts')
+    .select('slug, title, excerpt, tag, read_time, published_at')
+    .order('published_at', { ascending: false })
+    .limit(20);
 
-export default function BlogIndexPage() {
+  const posts: BlogPost[] = data ?? [];
+  const featured = posts[0] ?? null;
+  const rest = posts.slice(1);
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       <Navbar active="blog" />
@@ -83,126 +64,123 @@ export default function BlogIndexPage() {
           </p>
 
           {/* Featured */}
-          <div
-            className="mt-10 rounded-2xl p-8 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[color:var(--accent)]"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="px-2 py-1 rounded-md text-xs"
-                    style={{
-                      fontFamily: 'JetBrains Mono, monospace',
-                      color: '#FF6D3F',
-                      background: 'rgba(255,109,63,0.10)',
-                      border: '1px solid rgba(255,109,63,0.25)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Featured
-                  </span>
-                  <span
-                    className="px-2 py-1 rounded-md text-xs"
-                    style={{
-                      fontFamily: 'JetBrains Mono, monospace',
-                      color: TAG_COLORS[FEATURED.tag] ?? '#FF6D3F',
-                      background: `${(TAG_COLORS[FEATURED.tag] ?? '#FF6D3F')}18`,
-                      border: `1px solid ${(TAG_COLORS[FEATURED.tag] ?? '#FF6D3F')}33`,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {FEATURED.tag}
-                  </span>
-                </div>
+          {featured && (
+            <Link href={`/blog/${featured.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className="mt-10 rounded-2xl p-8 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[color:var(--accent)] cursor-pointer">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className="px-2 py-1 rounded-md text-xs"
+                        style={{
+                          fontFamily: 'JetBrains Mono, monospace',
+                          color: '#FF6D3F',
+                          background: 'rgba(255,109,63,0.10)',
+                          border: '1px solid rgba(255,109,63,0.25)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Featured
+                      </span>
+                      <span
+                        className="px-2 py-1 rounded-md text-xs"
+                        style={{
+                          fontFamily: 'JetBrains Mono, monospace',
+                          color: TAG_COLORS[featured.tag] ?? '#FF6D3F',
+                          background: `${(TAG_COLORS[featured.tag] ?? '#FF6D3F')}18`,
+                          border: `1px solid ${(TAG_COLORS[featured.tag] ?? '#FF6D3F')}33`,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {featured.tag}
+                      </span>
+                    </div>
 
-                <div
-                  className="mt-4"
-                  style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', lineHeight: 1.2 }}
-                >
-                  {FEATURED.title}
-                </div>
+                    <div
+                      className="mt-4"
+                      style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', lineHeight: 1.2 }}
+                    >
+                      {featured.title}
+                    </div>
 
-                <p className="mt-4" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, color: 'var(--foreground-muted)', lineHeight: 1.7, maxWidth: 880 }}>
-                  {FEATURED.excerpt}
-                </p>
-              </div>
+                    <p className="mt-4" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, color: 'var(--foreground-muted)', lineHeight: 1.7, maxWidth: 880 }}>
+                      {featured.excerpt}
+                    </p>
+                  </div>
 
-              <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                <span
-                  className="px-2 py-1 rounded-md text-xs"
-                  style={{
-                    fontFamily: 'JetBrains Mono, monospace',
-                    color: '#FF6D3F',
-                    border: '1px solid rgba(255,109,63,0.25)',
-                    background: 'rgba(255,109,63,0.10)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Coming soon
-                </span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(138,138,154,0.55)' }}>
-                  {FEATURED.date} · {FEATURED.readTime}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Grid */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {POSTS.map(p => {
-              const tagColor = TAG_COLORS[p.tag] ?? '#FF6D3F';
-              return (
-                <div
-                  key={p.title}
-                  className="rounded-2xl p-6 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[color:var(--accent)] relative"
-                >
-                  <span
-                    className="absolute top-4 right-4 px-2 py-1 rounded-md text-xs"
-                    style={{
-                      fontFamily: 'JetBrains Mono, monospace',
-                      color: '#FF6D3F',
-                      border: '1px solid rgba(255,109,63,0.25)',
-                      background: 'rgba(255,109,63,0.10)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Coming soon
-                  </span>
-
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(138,138,154,0.55)', whiteSpace: 'nowrap' }}>
+                      {formatDate(featured.published_at)} · {featured.read_time}
+                    </span>
                     <span
                       className="px-2 py-1 rounded-md text-xs"
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
-                        color: tagColor,
-                        background: `${tagColor}18`,
-                        border: `1px solid ${tagColor}33`,
+                        color: 'var(--accent)',
+                        border: '1px solid rgba(255,109,63,0.25)',
+                        background: 'rgba(255,109,63,0.08)',
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {p.tag}
-                    </span>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(138,138,154,0.55)' }}>
-                      {p.date} · {p.readTime}
+                      Read →
                     </span>
                   </div>
-
-                  <div className="mt-4" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                    {p.title}
-                  </div>
-
-                  <p className="mt-3" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: 'var(--foreground-muted)', lineHeight: 1.7 }}>
-                    {p.excerpt}
-                  </p>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            </Link>
+          )}
+
+          {/* Grid */}
+          {rest.length > 0 && (
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {rest.map(p => {
+                const tagColor = TAG_COLORS[p.tag] ?? '#FF6D3F';
+                return (
+                  <Link key={p.slug} href={`/blog/${p.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div className="rounded-2xl p-6 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[color:var(--accent)] h-full">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className="px-2 py-1 rounded-md text-xs"
+                          style={{
+                            fontFamily: 'JetBrains Mono, monospace',
+                            color: tagColor,
+                            background: `${tagColor}18`,
+                            border: `1px solid ${tagColor}33`,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {p.tag}
+                        </span>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(138,138,154,0.55)' }}>
+                          {formatDate(p.published_at)} · {p.read_time}
+                        </span>
+                      </div>
+
+                      <div className="mt-4" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                        {p.title}
+                      </div>
+
+                      <p className="mt-3" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: 'var(--foreground-muted)', lineHeight: 1.7 }}>
+                        {p.excerpt}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {posts.length === 0 && (
+            <div className="mt-16 text-center" style={{ color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
+              Articles coming soon.
+            </div>
+          )}
 
           {/* Subscribe */}
           <div className="mt-10 rounded-2xl p-8 bg-[var(--surface)] border border-[color:var(--border)]">
             <div style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-              New articles every Monday. Subscribe to get notified.
+              New articles every week. Subscribe to get notified.
             </div>
             <div className="mt-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
               <input
@@ -242,4 +220,3 @@ export default function BlogIndexPage() {
     </div>
   );
 }
-
