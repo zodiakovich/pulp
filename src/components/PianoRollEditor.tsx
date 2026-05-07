@@ -5,6 +5,7 @@ import type { NoteEvent } from '@/lib/music-engine';
 import { readCssColor } from '@/lib/design-system';
 import { generateMidiFormat0, downloadMidi } from '@/lib/midi-writer';
 import { stopAllAppAudio, subscribeToAudioStop } from '@/lib/audio-control';
+import { playTonePreview } from '@/lib/tone-lazy';
 
 export interface PianoRollEditorProps {
   notes: NoteEvent[];
@@ -21,6 +22,7 @@ export interface PianoRollEditorProps {
   onChordStripVisibleChange?: (visible: boolean) => void;
   bpm?: number;
   onExportChopAll?: (startBeat: number, endBeat: number) => void;
+  playbackLayer?: 'melody' | 'chords' | 'bass' | 'drums';
 }
 
 const MIDI_MIN = 36;
@@ -180,6 +182,7 @@ export function PianoRollEditor({
   onChordStripVisibleChange,
   bpm = 120,
   onExportChopAll,
+  playbackLayer = 'melody',
 }: PianoRollEditorProps) {
   const totalBeats = bars * 4;
   const GRID_H = gridHeightPx ?? GRID_H_DEFAULT;
@@ -196,6 +199,12 @@ export function PianoRollEditor({
   const [chordStripInternal, setChordStripInternal] = useState(true);
   const [compactChords, setCompactChords] = useState(false);
   const [chopSelection, setChopSelection] = useState<{ startBeat: number; endBeat: number } | null>(null);
+
+  // Internal playback state (used when parent does not control isPlaying)
+  const [selfPlaying, setSelfPlaying] = useState(false);
+  const [selfPlayheadBeat, setSelfPlayheadBeat] = useState(0);
+  const selfPlayStartRef = useRef<number | null>(null);
+  const selfPlayRafRef = useRef<number | null>(null);
 
   const chordControlled = chordStripVisibleProp !== undefined;
   const showChords = chordControlled ? chordStripVisibleProp : chordStripInternal;
@@ -220,8 +229,55 @@ export function PianoRollEditor({
   const dragRef = useRef<DragState>({ mode: 'none' });
   const playPreview = usePreviewAudio();
 
+  const stopSelfPlay = useCallback(() => {
+    if (selfPlayRafRef.current !== null) {
+      cancelAnimationFrame(selfPlayRafRef.current);
+      selfPlayRafRef.current = null;
+    }
+    selfPlayStartRef.current = null;
+    setSelfPlaying(false);
+    setSelfPlayheadBeat(0);
+  }, []);
+
+  useEffect(() => subscribeToAudioStop(stopSelfPlay), [stopSelfPlay]);
+  useEffect(() => () => { stopSelfPlay(); }, [stopSelfPlay]);
+
   const wPx = Math.max(320, totalBeats * pxPerBeat);
   const rowH = GRID_H / PITCH_ROWS;
+
+  function startSelfPlay() {
+    if (notesRef.current.length === 0) return;
+    stopAllAppAudio(); // triggers stopSelfPlay via event, cancels any existing audio
+    setSelfPlaying(true);
+    const startMs = Date.now();
+    selfPlayStartRef.current = startMs;
+
+    void playTonePreview(notesRef.current, bpm, playbackLayer, '', () => {
+      setSelfPlaying(false);
+      setSelfPlayheadBeat(0);
+      selfPlayStartRef.current = null;
+    });
+
+    const spb = 60 / bpm;
+    const totalDur = totalBeats * spb;
+
+    function tick() {
+      if (selfPlayStartRef.current === null) return;
+      const elapsed = (Date.now() - selfPlayStartRef.current) / 1000;
+      if (elapsed >= totalDur) return;
+      setSelfPlayheadBeat(elapsed / spb);
+      selfPlayRafRef.current = requestAnimationFrame(tick);
+    }
+    selfPlayRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function toggleSelfPlay() {
+    if (selfPlaying) {
+      stopAllAppAudio();
+    } else {
+      startSelfPlay();
+    }
+  }
 
   const commitHistory = useCallback((snapshot: NoteEvent[]) => {
     historyRef.current.push(snapshot.map(n => ({ ...n })));
@@ -459,9 +515,11 @@ export function PianoRollEditor({
       ctx.globalAlpha = 1;
     }
 
-    // Playhead — always shown when playing
-    if (isPlaying) {
-      const pb = ((playheadBeat % totalBeats) + totalBeats) % totalBeats;
+    // Playhead — shown when playing (external or internal)
+    const effPlaying = isPlaying || selfPlaying;
+    const effBeat = isPlaying ? playheadBeat : selfPlayheadBeat;
+    if (effPlaying) {
+      const pb = ((effBeat % totalBeats) + totalBeats) % totalBeats;
       const px = (pb / totalBeats) * w;
       ctx.strokeStyle = PRIMARY;
       ctx.lineWidth = 2;
@@ -481,7 +539,7 @@ export function PianoRollEditor({
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }, [notes, color, totalBeats, wPx, bars, snapStep, pxPerBeat, selectedKeys, isPlaying, playheadBeat, rowH, chopSelection]);
+  }, [notes, color, totalBeats, wPx, bars, snapStep, pxPerBeat, selectedKeys, isPlaying, playheadBeat, selfPlaying, selfPlayheadBeat, rowH, chopSelection]);
 
   const drawVelocity = useCallback(() => {
     const canvas = velCanvasRef.current;
@@ -888,6 +946,12 @@ export function PianoRollEditor({
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     const mod = e.ctrlKey || e.metaKey;
 
+    if (e.key === ' ' && !isPlaying) {
+      e.preventDefault();
+      toggleSelfPlay();
+      return;
+    }
+
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (!selectedKeys.size) return;
       e.preventDefault();
@@ -1035,6 +1099,19 @@ export function PianoRollEditor({
             ✂ Chop
           </button>
         </div>
+
+        {/* Play / Stop — internal playback (hidden when parent controls playback) */}
+        {!isPlaying && (
+          <button
+            type="button"
+            style={selfPlaying ? activeBtn : inactiveBtn}
+            onClick={toggleSelfPlay}
+            disabled={notes.length === 0}
+            title={selfPlaying ? 'Stop (Space)' : 'Play (Space)'}
+          >
+            {selfPlaying ? '■ Stop' : '▶ Play'}
+          </button>
+        )}
 
         {/* Undo / Redo */}
         <div className="flex items-center gap-1">

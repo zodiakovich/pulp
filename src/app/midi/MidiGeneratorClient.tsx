@@ -67,6 +67,13 @@ function labelStyle(): React.CSSProperties {
   };
 }
 
+function trackTypeToLayer(t: string): 'melody' | 'chords' | 'bass' | 'drums' {
+  if (t === 'bass') return 'bass';
+  if (t === 'drums') return 'drums';
+  if (t === 'chords' || t === 'pad') return 'chords';
+  return 'melody';
+}
+
 function makeMidi(notes: NoteEvent[], bpm: number, trackType: string) {
   return generateMidiFormat0(notes, bpm, `pulp-${trackType}`);
 }
@@ -436,6 +443,7 @@ export function MidiGeneratorClient() {
                   onNotesChange={setNotes}
                   gridHeightPx={360}
                   velocityHeightPx={96}
+                  playbackLayer={trackTypeToLayer(trackType)}
                 />
               </div>
             ) : (
