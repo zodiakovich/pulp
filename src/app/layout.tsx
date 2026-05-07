@@ -134,6 +134,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             color: '#FFFFFF',
             border: '1px solid rgba(255,255,255,0.12)',
           },
+          socialButtonsBlockButton__github: {
+            background: '#24292F',
+            color: '#FFFFFF',
+            border: '1px solid rgba(255,255,255,0.18)',
+          },
           dividerText: {
             color: '#8A8A9A',
             fontSize: '13px',
