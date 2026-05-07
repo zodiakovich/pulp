@@ -5137,7 +5137,7 @@ export default function Home() {
                 fontWeight: 400,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                color: 'rgba(28,28,36,0.72)',
+                color: 'var(--foreground, #FAFAFA)',
                 background: 'rgba(255,109,63,0.08)',
                 border: '1px solid rgba(255,109,63,0.22)',
                 boxShadow: '0 0 12px rgba(255,109,63,0.08)',
