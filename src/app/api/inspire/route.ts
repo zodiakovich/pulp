@@ -23,7 +23,10 @@ export async function POST(req: NextRequest) {
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
-      system: `You are a music expert. The user wants to create music inspired by a song or artist.
+      system: [
+        {
+          type: 'text',
+          text: `You are a music expert. The user wants to create music inspired by a song or artist.
 Extract musical characteristics and return ONLY valid JSON:
 {
   "genre": "string (from our 20 genres list)",
@@ -34,6 +37,9 @@ Extract musical characteristics and return ONLY valid JSON:
   "styleTag": "string or null",
   "promptSuggestion": "string (a short prompt describing the vibe)"
 }`,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: [{ role: 'user', content: inspiration }],
     });
     await logAnthropicUsage({

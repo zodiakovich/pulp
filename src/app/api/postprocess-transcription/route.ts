@@ -162,7 +162,10 @@ export async function POST(req: NextRequest) {
   }
 
   const client = new Anthropic({ apiKey });
-  const system = `You are pulp's MIDI transcription cleanup engineer.
+  const system = [
+    {
+      type: 'text' as const,
+      text: `You are pulp's MIDI transcription cleanup engineer.
 Return ONLY valid JSON. No markdown.
 
 You receive notes produced by Spotify Basic Pitch from an uploaded audio file.
@@ -178,7 +181,10 @@ Return:
 {
   "notes": [{"pitch": 60, "startTime": 0, "duration": 0.5, "velocity": 92}],
   "suggestions": ["short practical suggestion"]
-}`;
+}`,
+      cache_control: { type: 'ephemeral' as const },
+    },
+  ];
 
   try {
     const message = await client.messages.create({

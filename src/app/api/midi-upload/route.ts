@@ -127,7 +127,10 @@ async function runMidiAnthropic(opts: {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) throw new Error('no_anthropic');
 
-  const system = `You are an expert MIDI arranger for electronic music DAWs.
+  const system = [
+    {
+      type: 'text' as const,
+      text: `You are an expert MIDI arranger for electronic music DAWs.
 You receive JSON describing a parsed MIDI file (tempo, key guess, rough layer buckets, sampled notes).
 Return ONLY valid JSON (no markdown) with this exact shape:
 {
@@ -148,11 +151,14 @@ Return ONLY valid JSON (no markdown) with this exact shape:
 Each NoteEvent: {"pitch":0-127,"startTime":beats from 0,"duration":beats>0.02,"velocity":1-127}.
 All note startTime must be within [0, params.bars * 4) beats. Use four-on-floor style drums on channel-style GM drums pitches when possible.
 
-Mode "${opts.mode}":
+The mode is specified in the input JSON:
 - continue: write the NEXT musical section (8–16 bars in params.bars) that feels like a natural continuation of the uploaded material (same BPM/key feel, coherent groove).
 - vary: three DISTINCT reimaginings of the same core idea (different voicings/rhythms while keeping genre and approximate density).
 
-The three variations must be musically different from each other.`;
+The three variations must be musically different from each other.`,
+      cache_control: { type: 'ephemeral' as const },
+    },
+  ];
 
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({

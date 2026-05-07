@@ -23,7 +23,10 @@ export async function POST(req: NextRequest) {
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 256,
-      system: `You are a music production assistant for pulp, an AI MIDI generator.
+      system: [
+        {
+          type: 'text',
+          text: `You are a music production assistant for pulp, an AI MIDI generator.
 Extract musical parameters from the user's prompt and return ONLY valid JSON with no explanation.
 Return this exact structure:
 {
@@ -34,6 +37,9 @@ Return this exact structure:
   "density": "string (sparse, medium, dense)",
   "styleTag": "string or null (closest matching style tag or null)"
 }`,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: [{ role: 'user', content: prompt }],
     });
     await logAnthropicUsage({

@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
       model: MODEL,
       max_tokens: 3200,
       temperature: 0.72,
-      system: buildSystemPrompt(),
+      system: [{ type: 'text', text: buildSystemPrompt(), cache_control: { type: 'ephemeral' } }],
       messages: [
         {
           role: 'user',
