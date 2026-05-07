@@ -5202,7 +5202,7 @@ export default function Home() {
                 See workflow
               </a>
             </div>
-            <div className="mt-5 flex items-center gap-3">
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -5222,6 +5222,24 @@ export default function Home() {
                 </svg>
                 100% Royalty-Free — MIDI is yours
               </span>
+              {totalGenerations !== null && totalGenerations > 0 && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 11,
+                  fontWeight: 400,
+                  letterSpacing: '0.04em',
+                  color: 'var(--muted)',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 20,
+                  padding: '4px 10px',
+                }}>
+                  ✦ {totalGenerations.toLocaleString()} tracks generated
+                </span>
+              )}
             </div>
             <p style={{ marginTop: 14, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.04em' }}>
               Works in Ableton · FL Studio · Logic Pro · Reaper · Cubase

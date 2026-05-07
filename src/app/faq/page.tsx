@@ -78,6 +78,22 @@ const FAQ_ITEMS = [
       </>
     ),
   },
+  {
+    question: 'Do I need to pay to try pulp?',
+    answer: 'No. The Free plan lets you generate MIDI tracks without a credit card. Paid plans add more generations per month and a commercial license.',
+  },
+  {
+    question: 'How do I import the MIDI into Ableton Live?',
+    answer: 'Export the .mid file from pulp, then drag it directly onto a MIDI track in Ableton. Each layer (melody, chords, bass, drums) is a separate file so you can drop them onto separate tracks. The same drag-and-drop method works in FL Studio, Logic Pro, and Reaper.',
+  },
+  {
+    question: "What's the difference between MIDI Format 0 and Format 1?",
+    answer: 'Format 0 merges all MIDI channels into a single track — useful for quick compatibility. Format 1 keeps each layer on its own track, which is better when you want to manipulate melody, chords, bass, and drums independently in your DAW. When in doubt, use Format 1.',
+  },
+  {
+    question: 'What happens when I run out of generations?',
+    answer: 'Your generation count resets at the start of each billing period. If you hit the limit, you can upgrade your plan from the Profile page or wait for the reset. You keep access to all MIDI you already generated.',
+  },
 ];
 
 export default function FaqPage() {
