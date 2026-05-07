@@ -84,7 +84,7 @@ export default function BlogIndexPage() {
 
           {/* Featured */}
           <div
-            className="mt-10 rounded-2xl p-8 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[#FF6D3F]"
+            className="mt-10 rounded-2xl p-8 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[color:var(--accent)]"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -154,7 +154,7 @@ export default function BlogIndexPage() {
               return (
                 <div
                   key={p.title}
-                  className="rounded-2xl p-6 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[#FF6D3F] relative"
+                  className="rounded-2xl p-6 transition-colors bg-[var(--surface)] border border-[color:var(--border)] hover:border-[color:var(--accent)] relative"
                 >
                   <span
                     className="absolute top-4 right-4 px-2 py-1 rounded-md text-xs"
@@ -222,7 +222,7 @@ export default function BlogIndexPage() {
                 type="button"
                 className="h-11 px-5 rounded-xl text-sm font-semibold transition-all"
                 style={{
-                  background: '#FF6D3F',
+                  background: 'var(--accent)',
                   border: '1px solid rgba(255,109,63,0.45)',
                   color: 'var(--on-accent)',
                   fontFamily: 'JetBrains Mono, monospace',

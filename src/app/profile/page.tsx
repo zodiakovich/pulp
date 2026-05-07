@@ -2,6 +2,13 @@ import { currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
+import { pageMeta } from '@/lib/seo-metadata';
+
+export const metadata = pageMeta({
+  title: 'Profile',
+  description: 'Your pulp profile: generation history, badges, plan details, and account settings.',
+  path: '/profile',
+});
 import { SiteFooter } from '@/components/SiteFooter';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';

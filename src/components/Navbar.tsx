@@ -90,6 +90,9 @@ export function Navbar({
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
+      <Link href="/pricing" className={navClass(active === 'pricing')}>
+        Pricing
+      </Link>
       <Link href="/profile" className={navClass(active === 'profile')}>
         Profile
       </Link>
@@ -104,7 +107,7 @@ export function Navbar({
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         borderBottom: '1px solid var(--border-weak)',
-        boxShadow: scrolled ? '0 4px 24px -4px rgba(255,109,63,0.10)' : 'none',
+        boxShadow: scrolled ? '0 4px 24px -4px color-mix(in srgb, var(--accent) 10%, transparent)' : 'none',
         transition: 'box-shadow 300ms ease, background 300ms ease, border-color 300ms ease',
       }}
     >

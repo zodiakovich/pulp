@@ -21,7 +21,7 @@ const LAYER_LABELS: Record<LayerKey, string> = {
 
 const LAYER_PURPOSE: Record<LayerKey, { color: string; body: string }> = {
   melody: {
-    color: '#FF6D3F',
+    color: 'var(--accent)',
     body: 'Your hook and topline. Use it as the main synth/lead or layer it with a second instrument for width.',
   },
   chords: {

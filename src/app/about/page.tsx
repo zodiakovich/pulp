@@ -12,7 +12,7 @@ export const metadata = pageMeta({
 export default function AboutPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-      <Navbar active="create" />
+      <Navbar />
       <div className="mx-auto max-w-[720px] px-6 pb-24 pt-24 sm:px-8 sm:pt-28">
         <Link
           href="/"

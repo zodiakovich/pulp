@@ -19,7 +19,7 @@ function formatDate(iso: string) {
 export default function ChangelogPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-      <Navbar active="create" />
+      <Navbar active="changelog" />
       <div className="max-w-[720px] mx-auto px-8 pt-32 pb-24">
         <h1
           style={{
