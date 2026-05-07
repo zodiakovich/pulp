@@ -98,14 +98,14 @@ export function Navbar({
 
   return (
     <nav
-      className="sticky top-0 left-0 right-0 z-50 navbar-always-dark"
+      className="sticky top-0 left-0 right-0 z-50"
       style={{
-        background: 'rgba(10,10,11,0.97)',
+        background: 'color-mix(in srgb, var(--bg) 94%, transparent)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '1px solid var(--border-weak)',
         boxShadow: scrolled ? '0 4px 24px -4px rgba(255,109,63,0.10)' : 'none',
-        transition: 'box-shadow 300ms ease',
+        transition: 'box-shadow 300ms ease, background 300ms ease, border-color 300ms ease',
       }}
     >
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 md:px-8 h-14 flex items-center justify-between gap-3 sm:gap-4">
@@ -122,8 +122,8 @@ export function Navbar({
               fontWeight: 400,
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.5)',
-              background: 'rgba(255,255,255,0.08)',
+              color: 'var(--muted)',
+              background: 'var(--surface)',
               borderRadius: 20,
               padding: '2px 7px',
               lineHeight: 1.5,
@@ -146,7 +146,7 @@ export function Navbar({
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             className="hidden min-[380px]:flex h-9 w-9 rounded-lg items-center justify-center transition-opacity hover:opacity-90"
-            style={{ color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)' }}
+            style={{ color: 'var(--muted)', border: '1px solid var(--border)', background: 'var(--surface-weak)' }}
             onClick={() => {
               const html = document.documentElement;
               const next: 'dark' | 'light' = theme === 'dark' ? 'light' : 'dark';
@@ -227,7 +227,7 @@ export function Navbar({
             className="md:hidden flex flex-col gap-1.5 p-2 rounded-lg transition-all"
             onClick={() => setMobileMenuOpen(v => !v)}
             aria-label="Toggle menu"
-            style={{ color: 'rgba(255,255,255,0.5)' }}
+            style={{ color: 'var(--muted)' }}
           >
             <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, transition: 'transform 0.2s', transform: mobileMenuOpen ? 'translateY(5px) rotate(45deg)' : 'none' }} />
             <span style={{ display: 'block', width: 20, height: 1.5, background: 'currentColor', borderRadius: 1, opacity: mobileMenuOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
@@ -239,7 +239,7 @@ export function Navbar({
       {mobileMenuOpen && (
         <div
           className="md:hidden px-6 pb-4 flex flex-col gap-1"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(10,10,11,0.97)' }}
+          style={{ borderTop: '1px solid var(--border-weak)', background: 'color-mix(in srgb, var(--bg) 97%, transparent)' }}
         >
           <SignedOut>
             <SignInButtonDeferred mode="modal">
