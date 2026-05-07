@@ -5056,7 +5056,7 @@ export default function Home() {
         <p>Free, Pro, and Studio plans are available. Paid plans raise cost windows and unlock advanced export, upload, and conversion tools.</p>
       </div>
       {/* ── HERO ── */}
-      <section ref={heroRef} className="relative overflow-hidden px-4 sm:px-8 pb-28 pt-24" style={{ background: 'var(--bg)' }}>
+      <section ref={heroRef} className="relative px-4 sm:px-8 pb-28 pt-24" style={{ background: 'var(--bg)', overflow: 'clip' }}>
         {/* Subtle depth: grid pattern + hero glow */}
         <div
           aria-hidden
