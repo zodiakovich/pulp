@@ -5081,7 +5081,7 @@ export default function Home() {
             left: 0,
             width: 400,
             height: 400,
-            background: 'radial-gradient(circle, rgba(255,109,63,0.04) 0%, transparent 60%)',
+            background: 'radial-gradient(circle, rgba(255,109,63,0.10) 0%, transparent 60%)',
             pointerEvents: 'none',
             zIndex: 0,
           }}
@@ -5138,9 +5138,9 @@ export default function Home() {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 color: 'var(--foreground, #FAFAFA)',
-                background: 'rgba(255,109,63,0.08)',
-                border: '1px solid rgba(255,109,63,0.22)',
-                boxShadow: '0 0 12px rgba(255,109,63,0.08)',
+                background: 'rgba(255,109,63,0.14)',
+                border: '1px solid rgba(255,109,63,0.30)',
+                boxShadow: '0 0 18px rgba(255,109,63,0.14)',
                 borderRadius: 20,
                 padding: '4px 12px',
                 marginBottom: 16,
@@ -5161,7 +5161,9 @@ export default function Home() {
                 lineHeight: 1.12,
               }}
             >
-              Go from prompt to playable idea in under a minute.
+              {'Go from prompt to '}
+              <span className="text-gradient-accent">playable idea</span>
+              {' in under a minute.'}
             </h1>
             <p
               className="mt-6 max-w-[620px] text-[16px] leading-snug sm:text-[18px] text-left"
@@ -5221,6 +5223,9 @@ export default function Home() {
                 100% Royalty-Free — MIDI is yours
               </span>
             </div>
+            <p style={{ marginTop: 14, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.04em' }}>
+              Works in Ableton · FL Studio · Logic Pro · Reaper · Cubase
+            </p>
           </motion.div>
         </div>
 

@@ -32,7 +32,7 @@ function FooterCol({ title, links }: { title: string; links: FooterLink[] }) {
               href={l.href}
               className={[
                 'block w-fit max-w-full truncate transition-opacity duration-200 ease-ui',
-                l.muted ? 'opacity-[0.35] hover:opacity-[0.55]' : 'opacity-50 hover:opacity-80',
+                l.muted ? 'opacity-[0.45] hover:opacity-[0.70]' : 'opacity-[0.65] hover:opacity-90',
               ].join(' ')}
               style={{
                 fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
@@ -86,7 +86,7 @@ export function SiteFooter() {
                   fontSize: 14,
                   lineHeight: 1.6,
                   color: 'var(--text)',
-                  opacity: 0.5,
+                  opacity: 0.65,
                 }}
               >
                 AI MIDI Generator
@@ -97,7 +97,7 @@ export function SiteFooter() {
                   fontSize: 14,
                   lineHeight: 1.6,
                   color: 'var(--text)',
-                  opacity: 0.35,
+                  opacity: 0.50,
                 }}
               >
                 a <span style={{ fontWeight: 700, opacity: 0.95 }}>papaya</span>
@@ -124,7 +124,7 @@ export function SiteFooter() {
                   fontSize: 13,
                   lineHeight: 1.65,
                   color: 'var(--text)',
-                  opacity: 0.45,
+                  opacity: 0.60,
                 }}
               >
                 pulp is an AI MIDI generator built by papaya, a one-person studio based in Madrid.
@@ -136,7 +136,7 @@ export function SiteFooter() {
                   fontSize: 13,
                   lineHeight: 1.65,
                   color: 'var(--text)',
-                  opacity: 0.35,
+                  opacity: 0.50,
                 }}
               >
                 Part of the{' '}
@@ -206,7 +206,7 @@ export function SiteFooter() {
                     href={l.href}
                     className={[
                       'block w-fit max-w-full truncate transition-opacity duration-200 ease-ui',
-                      l.muted ? 'opacity-[0.35] hover:opacity-[0.55]' : 'opacity-50 hover:opacity-80',
+                      l.muted ? 'opacity-[0.45] hover:opacity-[0.70]' : 'opacity-[0.65] hover:opacity-90',
                     ].join(' ')}
                     style={{
                       fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
@@ -223,7 +223,7 @@ export function SiteFooter() {
               <li className="min-w-0">
                 <CrispSupportLink
                   label="Support"
-                  className="block w-fit max-w-full truncate transition-opacity duration-200 ease-ui opacity-50 hover:opacity-80"
+                  className="block w-fit max-w-full truncate transition-opacity duration-200 ease-ui opacity-[0.65] hover:opacity-90"
                   style={{
                     fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                     fontSize: 14,
@@ -244,7 +244,7 @@ export function SiteFooter() {
               fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
               fontSize: 14,
               color: 'var(--text)',
-              opacity: 0.5,
+              opacity: 0.65,
             }}
           >
             <span>© {new Date().getFullYear()} papaya. All rights reserved.</span>
@@ -271,7 +271,7 @@ export function SiteFooter() {
               <div key={l.href} className="flex items-center">
                 <Link
                   href={l.href}
-                  className="transition-opacity duration-200 ease-ui opacity-50 hover:opacity-80"
+                  className="transition-opacity duration-200 ease-ui opacity-[0.65] hover:opacity-90"
                   style={{
                     fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                     fontSize: 14,

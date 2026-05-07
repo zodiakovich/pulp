@@ -20,19 +20,19 @@ html:not(.light) {
   --background: #0A0A0B;
   --bg: #0A0A0B;
 
-  --surface: rgba(255, 255, 255, 0.04);
-  --surface-strong: rgba(255, 255, 255, 0.05);
-  --surface-weak: rgba(255, 255, 255, 0.03);
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-strong: rgba(255, 255, 255, 0.09);
+  --surface-weak: rgba(255, 255, 255, 0.04);
 
-  --border: rgba(255, 255, 255, 0.10);
-  --border-weak: rgba(255, 255, 255, 0.08);
-  --divider: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.13);
+  --border-weak: rgba(255, 255, 255, 0.10);
+  --divider: rgba(255, 255, 255, 0.07);
 
-  --text: rgba(255, 255, 255, 0.90);
-  --foreground: rgba(255, 255, 255, 0.90);
-  --foreground-muted: rgba(255, 255, 255, 0.50);
-  --muted: rgba(255, 255, 255, 0.50);
-  --text-micro: rgba(255, 255, 255, 0.30);
+  --text: rgba(255, 255, 255, 0.93);
+  --foreground: rgba(255, 255, 255, 0.93);
+  --foreground-muted: rgba(255, 255, 255, 0.65);
+  --muted: rgba(255, 255, 255, 0.65);
+  --text-micro: rgba(255, 255, 255, 0.42);
 
   --button-text: rgba(255, 255, 255, 0.90);
   --button-text-muted: rgba(255, 255, 255, 0.50);
@@ -471,6 +471,13 @@ section h2, .section-title {
 .stagger-4 { animation-delay: 240ms; }
 .stagger-5 { animation-delay: 300ms; }
 
+.text-gradient-accent {
+  background: linear-gradient(135deg, #FF6D3F 0%, #ffb085 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 /* Generate button pulsing glow */
 @keyframes generate-glow-pulse {
   0%, 100% { box-shadow: 0 0 56px rgba(255,109,63,0.15); }
@@ -550,10 +557,10 @@ section h2, .section-title {
   padding: 18px 42px !important;
   font-size: clamp(17px, 2.4vw, 20px) !important;
   font-weight: 500;
-  box-shadow: 0 0 56px rgba(255,109,63,0.15);
+  box-shadow: 0 0 48px rgba(255,109,63,0.32), 0 4px 20px rgba(255,109,63,0.18);
 }
 .btn-hero:hover:not(:disabled) {
-  box-shadow: 0 0 60px rgba(255,109,63,0.15);
+  box-shadow: 0 0 64px rgba(255,109,63,0.45), 0 4px 24px rgba(255,109,63,0.22);
 }
 
 .btn-secondary {
