@@ -5297,7 +5297,7 @@ export default function Home() {
                     borderRadius: 10,
                     border: '1px solid rgba(255,255,255,0.06)',
                     background: 'rgba(255,255,255,0.025)',
-                    overflow: 'hidden',
+                    overflow: 'visible',
                   }}
                 >
                   <div
