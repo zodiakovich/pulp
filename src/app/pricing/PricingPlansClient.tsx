@@ -221,13 +221,13 @@ export function PricingPlansClient() {
             color: 'var(--text)',
           }}
         >
-          Choose the right output tier.
+          Start free. Upgrade when it clicks.
         </h1>
         <p
           className="mx-auto max-w-[520px] mb-12 text-base leading-relaxed"
           style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)' }}
         >
-          Start free, then upgrade when pulp becomes part of your writing workflow. Every paid plan uses Stripe billing and can be managed from your account.
+          Every plan gives you real MIDI — melody, chords, bass, drums — ready for your DAW. No credit card required to start.
         </p>
 
         <div
@@ -281,22 +281,20 @@ export function PricingPlansClient() {
             onClick={() => setBilling('annual')}
           >
             Annual{' '}
-            {billing === 'annual' && (
-              <span
-                style={{
-                  marginLeft: 6,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: ACCENT,
-                  background: 'rgba(255,109,63,0.12)',
-                  borderRadius: 6,
-                  padding: '2px 7px',
-                  letterSpacing: '0.02em',
-                }}
-              >
-                Save 20%
-              </span>
-            )}
+            <span
+              style={{
+                marginLeft: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                color: billing === 'annual' ? ACCENT : 'rgba(255,109,63,0.65)',
+                background: billing === 'annual' ? 'rgba(255,109,63,0.12)' : 'rgba(255,109,63,0.07)',
+                borderRadius: 6,
+                padding: '2px 7px',
+                letterSpacing: '0.02em',
+              }}
+            >
+              Save 20%
+            </span>
           </button>
         </div>
         <div className="mx-auto mt-8 grid max-w-[760px] grid-cols-1 gap-2 sm:grid-cols-3">
@@ -330,7 +328,7 @@ export function PricingPlansClient() {
                 Free
               </p>
               <p className="mb-6 text-sm leading-relaxed" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)' }}>
-                Test ideas and export sketches without committing to a subscription.
+                Try the generator, hear what pulp sounds like, and export your first ideas — no card required.
               </p>
               <div className="flex flex-wrap items-end gap-2 mb-2">
                 <span
@@ -382,14 +380,32 @@ export function PricingPlansClient() {
             style={{ border: `1px solid ${ACCENT}` }}
           >
             <div className="mb-8">
-              <p
-                className="mb-3 text-xs uppercase tracking-[0.12em]"
-                style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}
-              >
-                Pro
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p
+                  className="text-xs uppercase tracking-[0.12em]"
+                  style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}
+                >
+                  Pro
+                </p>
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: ACCENT,
+                    background: 'rgba(255,109,63,0.12)',
+                    border: `1px solid rgba(255,109,63,0.30)`,
+                    borderRadius: 6,
+                    padding: '3px 8px',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Most popular
+                </span>
+              </div>
               <p className="mb-6 text-sm leading-relaxed" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', color: 'var(--muted)' }}>
-                For producers using pulp as a regular starting point for sessions.
+                Full genre library, WAV and Ableton exports, and enough generations to make pulp a real part of your workflow.
               </p>
               <PaidPlanPriceBlock baseMonthly={PRO_MONTHLY} billing={billing} />
               <p className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 400, letterSpacing: '0.02em', color: 'var(--muted)' }}>

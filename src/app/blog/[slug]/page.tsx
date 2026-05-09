@@ -6,6 +6,8 @@ import remarkGfm from 'remark-gfm';
 import { supabase } from '@/lib/supabase';
 import { articlePageMeta } from '@/lib/seo-metadata';
 import { ArticleJsonLd } from './ArticleJsonLd';
+import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 
 export const revalidate = 3600;
 
@@ -71,14 +73,15 @@ export default async function BlogPostPage({
   const post = data as BlogPost;
 
   return (
-    <div className="min-h-screen px-8 pt-24 pb-16" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       <ArticleJsonLd
         slug={post.slug}
         title={post.title}
         excerpt={post.excerpt}
         publishedAt={post.published_at}
       />
-      <div className="mx-auto" style={{ maxWidth: 720 }}>
+      <Navbar active="blog" />
+      <div className="mx-auto px-8 pt-24 pb-16" style={{ maxWidth: 720 }}>
         <Link href="/blog" style={{ textDecoration: 'none', color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
           ← Back to blog
         </Link>
@@ -145,7 +148,77 @@ export default async function BlogPostPage({
             </ReactMarkdown>
           </div>
         </article>
+
+        {/* CTA */}
+        <div
+          className="mt-10 rounded-2xl p-8"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,109,63,0.10) 0%, rgba(255,109,63,0.04) 100%)',
+            border: '1px solid rgba(255,109,63,0.25)',
+          }}
+        >
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+            Try it yourself
+          </p>
+          <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--foreground)', marginBottom: 8 }}>
+            Generate MIDI from a text prompt — free to start.
+          </p>
+          <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', lineHeight: 1.65, marginBottom: 20 }}>
+            Describe a genre, mood, or reference. pulp gives you melody, chords, bass, and drums — ready to drag into your DAW.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: 44,
+                padding: '0 20px',
+                borderRadius: 10,
+                background: 'var(--accent)',
+                color: 'var(--on-accent)',
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 500,
+                fontSize: 14,
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Open generator →
+            </Link>
+            <Link
+              href="/pricing"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: 44,
+                padding: '0 20px',
+                borderRadius: 10,
+                background: 'transparent',
+                color: 'var(--muted)',
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 500,
+                fontSize: 14,
+                textDecoration: 'none',
+                border: '1px solid var(--border)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              See pricing
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-8 flex items-center justify-between">
+          <Link href="/blog" style={{ textDecoration: 'none', color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
+            ← All articles
+          </Link>
+          <Link href="/blog" style={{ textDecoration: 'none', color: 'var(--muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
+            More from the blog →
+          </Link>
+        </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }
