@@ -55,10 +55,10 @@ export function SiteFooter() {
   const { isLoaded, isSignedIn } = useAuth();
   const productLinks: FooterLink[] = [
     { label: 'Generator', href: '/' },
-    { label: 'Piano Roll', href: '/' },
+    { label: 'Piano Roll Editor', href: '/docs/piano-roll' },
     { label: 'Build My Track', href: '/build' },
-    { label: 'Templates', href: '/create' },
-    ...(isLoaded && isSignedIn ? [{ label: 'Pricing', href: '/pricing' }] : []),
+    { label: 'Transcribe Audio', href: '/transcribe' },
+    ...(isLoaded && isSignedIn ? [] : [{ label: 'Pricing', href: '/pricing' }]),
     { label: 'Changelog', href: '/changelog' },
   ];
 
@@ -89,7 +89,7 @@ export function SiteFooter() {
                   opacity: 0.65,
                 }}
               >
-                AI MIDI Generator
+                Text prompt → melody, chords, bass, drums
               </div>
               <div
                 style={{
@@ -127,8 +127,7 @@ export function SiteFooter() {
                   opacity: 0.60,
                 }}
               >
-                pulp is an AI MIDI generator built by papaya, a one-person studio based in Madrid.
-                Built for producers who want to move fast and stay creative.
+                pulp turns text prompts into playable MIDI — melody, chords, bass, and drums — ready to drag into your DAW. Built by papaya, a one-person studio in Madrid.
               </p>
               <p
                 style={{

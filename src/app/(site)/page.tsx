@@ -261,6 +261,84 @@ function MiniPianoRollThumb({ layers }: { layers: GenerationResult }) {
   );
 }
 
+// ─── HERO PIANO ROLL CANVAS ──────────────────────────────────
+const HERO_LAYERS: GenerationResult = (() => {
+  try {
+    return generateTrack({ ...getDefaultParams(), genre: 'afro_house', bpm: 122, key: 'E', scale: 'minor', bars: 4 });
+  } catch {
+    return { melody: [], chords: [], bass: [], drums: [] } as unknown as GenerationResult;
+  }
+})();
+
+function HeroRollCanvas() {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const colorScheme = useColorScheme();
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 460;
+    const h = canvas.clientHeight || 220;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const cv = getLayerVizColorsForCanvas();
+    const bg = readCssColor('--bg', '#0A0A0B');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    const cols = 16;
+    for (let i = 1; i < cols; i++) {
+      const x = (i / cols) * w;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    const layers: { notes: typeof HERO_LAYERS['melody']; color: string }[] = [
+      { notes: HERO_LAYERS.melody, color: cv.melody },
+      { notes: HERO_LAYERS.chords, color: cv.chords },
+      { notes: HERO_LAYERS.bass, color: cv.bass },
+      { notes: HERO_LAYERS.drums, color: cv.drums },
+    ];
+    const allNotes = layers.flatMap(l => l.notes);
+    if (allNotes.length === 0) return;
+
+    const totalBeats = 4 * 4;
+    const pitches = allNotes.map(n => n.pitch);
+    const minP = Math.min(...pitches) - 1;
+    const maxP = Math.max(...pitches) + 1;
+    const range = Math.max(1, maxP - minP);
+
+    for (const { notes, color } of layers) {
+      for (const n of notes) {
+        const x0 = (n.startTime / totalBeats) * w;
+        const x1 = ((n.startTime + Math.max(0.12, n.duration)) / totalBeats) * w;
+        const y = h - ((n.pitch - minP) / range) * h;
+        const noteH = Math.max(3, (1 / range) * h * 0.8);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.88;
+        ctx.beginPath();
+        const rx = Math.min(4, (x1 - x0) / 2);
+        ctx.roundRect(x0 + 1, y - noteH / 2, Math.max(3, x1 - x0 - 2), noteH, rx);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }, [colorScheme]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: '100%', height: 220, display: 'block', borderRadius: 8 }}
+    />
+  );
+}
+
 // ─── ONBOARDING TOOLTIP ───────────────────────────────────────
 function ClerkConnectionFallback({ onRetry }: { onRetry: () => void }) {
   return (
@@ -5148,7 +5226,7 @@ export default function Home() {
                 whiteSpace: 'normal',
               }}
             >
-              Multi-track MIDI, ready for your DAW
+              Melody · Chords · Bass · Drums — export-ready MIDI
             </span>
             <h1
               className="font-extrabold leading-[1.05] tracking-tight text-left"
@@ -5169,7 +5247,7 @@ export default function Home() {
               className="mt-6 max-w-[620px] text-[16px] leading-snug sm:text-[18px] text-left"
               style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 400, color: 'var(--muted)', lineHeight: 1.6 }}
             >
-              Describe a genre, reference, or mood. pulp gives you melody, chords, bass, and drums in one shot, then lets you preview, edit, and drag everything straight into your session.
+              Describe a genre, mood, or artist reference — pulp generates melody, chords, bass, and drums in one shot. Preview and edit in the browser, then drag the MIDI straight into Ableton, FL Studio, Logic, or anywhere else you work.
             </p>
             <div className="mt-10 flex flex-col items-stretch justify-start gap-4 sm:mt-12 sm:flex-row sm:items-center sm:justify-start">
               {effectiveIsSignedIn ? (
@@ -5323,87 +5401,23 @@ export default function Home() {
                     overflow: 'visible',
                   }}
                 >
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '72px 1fr',
-                      minHeight: 274,
-                    }}
-                  >
-                    <div
-                      style={{
-                        borderRight: '1px solid rgba(255,255,255,0.06)',
-                        background: 'rgba(255,255,255,0.02)',
-                        padding: '14px 10px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 10,
-                      }}
-                    >
-                      {['Chords', 'Bass', 'Melody', 'Drums'].map((layer, index) => (
-                        <div
-                          key={layer}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 11,
-                            color: index === 2 ? 'var(--text)' : 'rgba(255,255,255,0.55)',
-                            background: index === 2 ? 'rgba(255,109,63,0.12)' : 'transparent',
-                            border: index === 2 ? '1px solid rgba(255,109,63,0.25)' : '1px solid transparent',
-                            borderRadius: 8,
-                            padding: '8px 10px',
-                            minHeight: 34,
-                            lineHeight: 1,
-                          }}
-                        >
-                          {layer}
-                        </div>
+                  <div style={{ padding: '12px 16px 16px' }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                      {(['melody', 'chords', 'bass', 'drums'] as const).map((l, i) => (
+                        <span key={l} style={{
+                          fontFamily: 'JetBrains Mono, monospace',
+                          fontSize: 10,
+                          letterSpacing: '0.05em',
+                          textTransform: 'uppercase',
+                          padding: '3px 8px',
+                          borderRadius: 20,
+                          background: i === 0 ? 'rgba(255,109,63,0.14)' : 'rgba(255,255,255,0.04)',
+                          border: i === 0 ? '1px solid rgba(255,109,63,0.3)' : '1px solid rgba(255,255,255,0.06)',
+                          color: i === 0 ? 'rgba(255,109,63,0.9)' : 'rgba(255,255,255,0.5)',
+                        }}>{l}</span>
                       ))}
                     </div>
-                    <div
-                      style={{
-                        position: 'relative',
-                        padding: 16,
-                        backgroundImage:
-                          'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
-                        backgroundSize: '40px 32px',
-                      }}
-                    >
-                      {[
-                        { top: 42, left: 36, width: 92 },
-                        { top: 74, left: 144, width: 70 },
-                        { top: 106, left: 238, width: 86 },
-                        { top: 138, left: 116, width: 110 },
-                        { top: 170, left: 308, width: 74 },
-                        { top: 202, left: 196, width: 96 },
-                      ].map((note, index) => (
-                        <div
-                          key={`${note.left}-${note.top}-${index}`}
-                          style={{
-                            position: 'absolute',
-                            top: note.top,
-                            left: note.left,
-                            width: note.width,
-                            height: 18,
-                            borderRadius: 6,
-                            background: index % 2 === 0 ? 'rgba(255,109,63,0.92)' : 'rgba(255,109,63,0.65)',
-                            boxShadow: '0 0 18px rgba(255,109,63,0.18)',
-                          }}
-                        />
-                      ))}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 18,
-                          bottom: 16,
-                          left: '56%',
-                          width: 2,
-                          borderRadius: 2,
-                          background: 'rgba(255,255,255,0.5)',
-                        }}
-                      />
-                    </div>
+                    <HeroRollCanvas />
                   </div>
                 </div>
                 <div style={{ display: 'grid', gap: 14 }}>
@@ -5615,6 +5629,84 @@ export default function Home() {
               </div>
             </motion.div>
           ))}
+        </div>
+      </motion.section>
+
+      {/* ── WHO IT'S FOR ── */}
+      <motion.section className="px-4 sm:px-8 py-24" style={{ background: 'var(--bg)' }} {...scrollSection}>
+        <div className="mx-auto max-w-[1100px]">
+          <div className="mb-12 text-center">
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 12 }}>
+              Who it&apos;s for
+            </p>
+            <h2 style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 'clamp(1.6rem, 3.5vw, 2.4rem)', letterSpacing: '-0.02em', lineHeight: 1.15, color: 'var(--text)', maxWidth: 640, margin: '0 auto' }}>
+              If you make music, pulp fits your process.
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5"/>
+                    <path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M15.54 8.46a5 5 0 010 7.07M8.46 8.46a5 5 0 000 7.07" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                ),
+                who: 'Beatmakers & producers',
+                headline: 'Sketch a full arrangement in minutes',
+                body: 'Stop staring at a blank session. Drop a genre or reference, get melody, chords, bass, and drums instantly, then finish in your DAW.',
+                tag: 'Ableton · FL Studio · Logic · Reaper',
+              },
+              {
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                    <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M7 10l3 3 7-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ),
+                who: 'Game & app developers',
+                headline: 'Generate loops for any scene or state',
+                body: 'Need ambient underscores, tension loops, or victory stings? Describe the mood, get MIDI loops you can license freely and integrate directly.',
+                tag: 'No royalties · MIDI format 0 & 1',
+              },
+              {
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path d="M12 3v18M3 9l9-6 9 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M8 21V11h8v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                ),
+                who: 'Educators & students',
+                headline: 'Hear any concept as a playable example',
+                body: 'Generate a ii-V-I in any key, a 4-on-the-floor groove, or a pentatonic melody instantly — then dissect it note by note in the piano roll.',
+                tag: 'Music theory · Ear training',
+              },
+            ].map((card) => (
+              <div
+                key={card.who}
+                className="rounded-2xl p-6"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}
+              >
+                <div style={{ color: 'var(--accent)', width: 24, height: 24 }}>{card.icon}</div>
+                <div>
+                  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 }}>
+                    {card.who}
+                  </p>
+                  <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 17, letterSpacing: '-0.01em', lineHeight: 1.25, color: 'var(--text)', marginBottom: 8 }}>
+                    {card.headline}
+                  </p>
+                  <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', lineHeight: 1.65 }}>
+                    {card.body}
+                  </p>
+                </div>
+                <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', opacity: 0.6, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                  {card.tag}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </motion.section>
 
