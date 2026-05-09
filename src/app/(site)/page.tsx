@@ -5333,14 +5333,13 @@ export default function Home() {
           <div
             style={{
               position: 'relative',
-              minHeight: 420,
               height: 'auto',
               background: 'linear-gradient(180deg, rgba(17,17,24,0.98) 0%, rgba(10,10,11,1) 100%)',
               border: '1px solid #1A1A2E',
               borderRadius: 12,
               overflow: 'visible',
               boxShadow: '0 30px 80px rgba(0,0,0,0.35)',
-              paddingBottom: 4,
+              paddingBottom: 16,
             }}
           >
             <div
@@ -5493,7 +5492,7 @@ export default function Home() {
                         padding: '12px 14px',
                       }}
                     >
-                      <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>
+                      <p style={{ fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 14, color: 'rgba(255,255,255,0.82)', lineHeight: 1.5 }}>
                         Built for sketching faster, then taking full control inside Ableton, FL Studio, Logic Pro, or wherever you finish records.
                       </p>
                     </div>
