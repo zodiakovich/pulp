@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { EmptyState } from '@/components/EmptyState';
 
 function newSessionId() {
@@ -29,6 +30,7 @@ export default function CollabIndexClient() {
           />
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

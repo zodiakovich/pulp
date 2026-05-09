@@ -1,71 +1,59 @@
-import Link from 'next/link';
-import { pageMeta } from '@/lib/seo-metadata';
+'use client';
 
-export const metadata = pageMeta({
-  title: 'Contact',
-  description:
-    'Contact options for pulp are coming soon. For product questions, use in-app help or Discord. This page will list email and support channels.',
-  path: '/contact',
-});
+import Link from 'next/link';
+import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
+import { CrispSupportLink } from '@/components/CrispSupportLink';
 
 export default function ContactPage() {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-8" style={{ background: 'var(--bg)' }}>
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: 0.025,
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-          pointerEvents: 'none',
-        }}
-      />
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <Navbar />
+      <div className="mx-auto px-8 pt-32 pb-24" style={{ maxWidth: 560 }}>
+        <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+          Contact
+        </p>
+        <h1 style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 36, letterSpacing: '-0.02em', lineHeight: 1.15, color: 'var(--text)', marginBottom: 16 }}>
+          Get in touch
+        </h1>
+        <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 16, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 40 }}>
+          Have a question, bug report, or feedback? Use the options below — we read everything.
+        </p>
 
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          transform: 'translate(-50%, -52%)',
-          fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
-          fontWeight: 700,
-          fontSize: 'clamp(86px, 12vw, 140px)',
-          letterSpacing: '-0.02em',
-          lineHeight: 1,
-          color: 'color-mix(in srgb, var(--text) 14%, transparent)',
-          userSelect: 'none',
-          pointerEvents: 'none',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        Coming soon
-      </div>
+        <div className="space-y-4">
+          <div className="rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>
+              Live chat
+            </p>
+            <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', lineHeight: 1.65, marginBottom: 14 }}>
+              The fastest way to reach us. Open the chat in the bottom corner of any page.
+            </p>
+            <CrispSupportLink
+              label="Open support chat →"
+              style={{
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontSize: 14,
+                fontWeight: 500,
+                color: 'var(--accent)',
+                cursor: 'pointer',
+              }}
+            />
+          </div>
 
-      <div className="relative z-10 flex flex-col items-center text-center">
-        <h1 className="sr-only">Contact</h1>
-        <div style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontSize: 16, color: 'var(--text)' }}>
-          Contact details are coming soon.
+          <div className="rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>
+              FAQ
+            </p>
+            <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', lineHeight: 1.65, marginBottom: 14 }}>
+              Common questions about exports, plans, billing, and DAW compatibility.
+            </p>
+            <Link href="/faq" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, fontWeight: 500, color: 'var(--accent)', textDecoration: 'none' }}>
+              Browse the FAQ →
+            </Link>
+          </div>
         </div>
-        <Link
-          href="/"
-          className="footer-link"
-          style={{
-            marginTop: 14,
-            fontFamily: 'DM Sans, sans-serif',
-            fontSize: 13,
-            color: 'var(--muted)',
-            textDecoration: 'underline',
-            textUnderlineOffset: 4,
-          }}
-        >
-          Back to pulp
-        </Link>
       </div>
+      <SiteFooter />
     </div>
   );
 }
-

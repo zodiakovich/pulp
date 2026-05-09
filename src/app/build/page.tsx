@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { GENRES } from '@/lib/music-engine';
 import { pageMeta } from '@/lib/seo-metadata';
 
@@ -352,6 +353,7 @@ export default function BuildMyTrackPage() {
           </div>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }
