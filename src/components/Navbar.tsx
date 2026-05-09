@@ -61,17 +61,14 @@ export function Navbar({
       <Link href="/" className={navClass(active === 'create')}>
         Create
       </Link>
-      <Link href="/midi" className={navClass(active === 'midi')}>
-        MIDI
-      </Link>
-      <Link href="/transcribe" className={navClass(active === 'transcribe')}>
-        Transcribe
-      </Link>
       <Link href="/explore" className={navClass(active === 'explore')}>
         Explore
       </Link>
       <Link href="/pricing" className={navClass(active === 'pricing')}>
         Pricing
+      </Link>
+      <Link href="/blog" className={navClass(active === 'blog')}>
+        Blog
       </Link>
     </>
   );

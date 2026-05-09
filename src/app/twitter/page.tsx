@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { pageMeta } from '@/lib/seo-metadata';
+import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata = pageMeta({
   title: 'Twitter / X',
@@ -10,7 +12,9 @@ export const metadata = pageMeta({
 
 export default function TwitterPage() {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-8" style={{ background: 'var(--bg)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <Navbar />
+    <div className="relative flex items-center justify-center overflow-hidden px-8" style={{ minHeight: 'calc(100vh - 200px)' }}>
       <div
         aria-hidden
         style={{
@@ -65,6 +69,8 @@ export default function TwitterPage() {
           Back to pulp
         </Link>
       </div>
+    </div>
+      <SiteFooter />
     </div>
   );
 }

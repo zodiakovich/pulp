@@ -4,6 +4,8 @@ import type { GenerationResult, NoteEvent } from '@/lib/music-engine';
 import { notFound } from 'next/navigation';
 import { clipDescription } from '@/lib/seo';
 import { pageMeta } from '@/lib/seo-metadata';
+import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { PlayButton } from './PlayButton';
 import { PianoRollViz } from './PianoRollViz';
 
@@ -84,13 +86,15 @@ export default async function GenerationPage({
   })();
 
   return (
-    <div className="min-h-screen px-8 pt-24 pb-16">
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <Navbar />
+      <div className="px-8 pt-24 pb-16">
       <div className="max-w-[860px] mx-auto">
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div className="min-w-0">
             <p
               className="text-xs mb-3"
-              style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)', letterSpacing: '0.08em' }}
+              style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', letterSpacing: '0.08em' }}
             >
               GENERATION
             </p>
@@ -122,14 +126,14 @@ export default async function GenerationPage({
               {inspiration && (
                 <span
                   className="px-2 py-1 rounded-md text-xs"
-                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.50)', background: 'var(--surface)', border: '1px solid var(--border)' }}
+                  style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}
                 >
                   {inspiration}
                 </span>
               )}
               <span
                 className="px-2 py-1 rounded-md text-xs"
-                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)', background: 'var(--surface)', border: '1px solid var(--border)' }}
+                style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
                 /g/{id}
               </span>
@@ -148,7 +152,7 @@ export default async function GenerationPage({
         <div className="mt-8 rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <p
             className="text-xs mb-3"
-            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(255,255,255,0.30)', letterSpacing: '0.08em' }}
+            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', letterSpacing: '0.08em' }}
           >
             CHORD PROGRESSION
           </p>
@@ -160,7 +164,7 @@ export default async function GenerationPage({
                 style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}
               >
                 {name}
-                {i < chords.length - 1 && <span style={{ color: 'rgba(138,138,154,0.35)' }}> → </span>}
+                {i < chords.length - 1 && <span style={{ color: 'var(--border)' }}> → </span>}
               </span>
             ))}
           </div>
@@ -169,7 +173,7 @@ export default async function GenerationPage({
         <div className="mt-4 rounded-2xl p-6" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
           <p
             className="text-xs"
-            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'rgba(138,138,154,0.45)' }}
+            style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)' }}
           >
             Read-only view. To generate new variations, go back to the main page.
           </p>
@@ -188,6 +192,8 @@ export default async function GenerationPage({
           </a>
         </div>
       </div>
+      </div>
+      <SiteFooter />
     </div>
   );
 }

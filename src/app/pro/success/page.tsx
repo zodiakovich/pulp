@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo } from 'react';
+import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 
 function Confetti() {
   const pieces = useMemo(() => Array.from({ length: 40 }, (_, i) => i), []);
@@ -54,7 +56,9 @@ function Confetti() {
 
 export default function ProSuccessPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center px-8" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <Navbar />
+      <div className="flex items-center justify-center px-8" style={{ minHeight: 'calc(100vh - 200px)' }}>
       <div className="relative w-full max-w-[720px] rounded-2xl p-8 text-center"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden' }}
       >
@@ -77,6 +81,8 @@ export default function ProSuccessPage() {
           </Link>
         </div>
       </div>
+      </div>
+      <SiteFooter />
     </div>
   );
 }
