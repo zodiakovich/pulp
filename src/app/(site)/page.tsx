@@ -261,6 +261,111 @@ function MiniPianoRollThumb({ layers }: { layers: GenerationResult }) {
   );
 }
 
+// ─── EMAIL CAPTURE SECTION ───────────────────────────────────
+function EmailCaptureSection() {
+  const [email, setEmail] = React.useState('');
+  const [state, setState] = React.useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [msg, setMsg] = React.useState('');
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setState('loading');
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setState('error'); setMsg(data.error ?? 'Something went wrong'); return; }
+      if (data.alreadySubscribed) { setState('success'); setMsg("You're already on the list."); return; }
+      setState('success'); setMsg("You're in! We'll send updates when we ship.");
+    } catch {
+      setState('error'); setMsg('Connection error — please try again.');
+    }
+  }
+
+  return (
+    <section style={{ background: 'var(--bg)', padding: '80px 32px 0' }}>
+      <div
+        style={{
+          maxWidth: 560,
+          margin: '0 auto',
+          borderRadius: 20,
+          padding: '48px 40px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          textAlign: 'center',
+        }}
+      >
+        <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 12 }}>
+          Stay in the loop
+        </p>
+        <h2 style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.15, color: 'var(--text)', marginBottom: 8 }}>
+          New genres, features, and tips
+        </h2>
+        <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)', lineHeight: 1.65, marginBottom: 28 }}>
+          Low volume. Only when we ship something worth knowing about.
+        </p>
+
+        {state === 'success' ? (
+          <p style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: '#00B894', fontWeight: 500 }}>
+            ✓ {msg}
+          </p>
+        ) : (
+          <form onSubmit={submit} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              style={{
+                flex: '1 1 220px',
+                height: 44,
+                padding: '0 16px',
+                borderRadius: 10,
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--text)',
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontSize: 14,
+                outline: 'none',
+              }}
+            />
+            <button
+              type="submit"
+              disabled={state === 'loading'}
+              style={{
+                height: 44,
+                padding: '0 20px',
+                borderRadius: 10,
+                background: 'var(--accent)',
+                color: '#fff',
+                fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
+                fontWeight: 500,
+                fontSize: 14,
+                border: 'none',
+                cursor: state === 'loading' ? 'not-allowed' : 'pointer',
+                opacity: state === 'loading' ? 0.7 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {state === 'loading' ? 'Subscribing…' : 'Notify me'}
+            </button>
+          </form>
+        )}
+        {state === 'error' && (
+          <p style={{ marginTop: 10, fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 13, color: '#E94560' }}>
+            {msg}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ─── HERO PIANO ROLL CANVAS ──────────────────────────────────
 const HERO_LAYERS: GenerationResult = (() => {
   try {
@@ -8069,6 +8174,7 @@ export default function Home() {
         </div>
       </motion.section>
 
+      <EmailCaptureSection />
       <SiteFooter />
       </>
       )}
