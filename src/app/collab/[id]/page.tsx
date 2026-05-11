@@ -467,7 +467,7 @@ export default function CollabSessionPage() {
                 fontFamily: 'JetBrains Mono, monospace',
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
-                color: 'var(--foreground)',
+                color: 'var(--text)',
               }}
             >
               {sessionCode}
@@ -500,7 +500,7 @@ export default function CollabSessionPage() {
                   background: dotColor,
                 }}
               />
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--foreground-muted)' }}>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--muted)' }}>
                 {dotLabel} · {onlineCount} {onlineCount === 1 ? 'producer' : 'producers'}
               </span>
             </div>
@@ -528,7 +528,7 @@ export default function CollabSessionPage() {
                   className="w-7 h-7 rounded-full flex items-center justify-center text-[11px]"
                   style={{
                     background: 'var(--surface)',
-                    color: 'var(--foreground)',
+                    color: 'var(--text)',
                     border: '2px solid var(--bg)',
                     fontFamily: 'JetBrains Mono, monospace',
                   }}
@@ -797,7 +797,7 @@ export default function CollabSessionPage() {
                                 borderRadius: 8,
                                 background: 'var(--surface)',
                                 border: '1px solid var(--border)',
-                                color: 'var(--foreground)',
+                                color: 'var(--text)',
                                 fontFamily: 'JetBrains Mono, monospace',
                                 fontSize: 11,
                                 whiteSpace: 'nowrap',
@@ -851,7 +851,7 @@ export default function CollabSessionPage() {
               style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             >
               {events.length === 0 ? (
-                <p style={{ fontSize: 13, color: 'var(--foreground-muted)' }}>Session events will appear here.</p>
+                <p style={{ fontSize: 13, color: 'var(--muted)' }}>Session events will appear here.</p>
               ) : (
                 events.map(ev => (
                   <div key={ev.id} className="flex items-start gap-2 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -866,7 +866,7 @@ export default function CollabSessionPage() {
                       }}
                     />
                     <div>
-                      <p style={{ fontSize: 13, color: 'var(--foreground)' }}>{ev.text}</p>
+                      <p style={{ fontSize: 13, color: 'var(--text)' }}>{ev.text}</p>
                       <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>{ev.time}</p>
                     </div>
                   </div>
@@ -911,7 +911,7 @@ export default function CollabSessionPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {messages.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--foreground-muted)' }}>No messages yet.</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>No messages yet.</div>
               ) : (
                 messages.map(m => (
                   <div key={m.id} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-weak)' }}>
@@ -919,7 +919,7 @@ export default function CollabSessionPage() {
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: m.color }}>{m.from}</div>
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>{m.time}</div>
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 13, color: 'var(--foreground)' }}>{m.text}</div>
+                    <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text)' }}>{m.text}</div>
                   </div>
                 ))
               )}
@@ -955,7 +955,7 @@ export default function CollabSessionPage() {
       {/* Invite link */}
       <section className="px-4 sm:px-8 py-12 mt-auto" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="max-w-[1280px] mx-auto text-center space-y-4">
-          <p style={{ fontSize: 14, color: 'var(--foreground-muted)', fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif' }}>
+          <p style={{ fontSize: 14, color: 'var(--muted)', fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif' }}>
             Share this link to invite producers
           </p>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-2xl mx-auto">
@@ -965,7 +965,7 @@ export default function CollabSessionPage() {
                 fontFamily: 'JetBrains Mono, monospace',
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
-                color: 'var(--foreground)',
+                color: 'var(--text)',
               }}
               onClick={() => void copyFooterUrl()}
               title="Click to copy"

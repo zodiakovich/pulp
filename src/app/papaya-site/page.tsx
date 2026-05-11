@@ -1,7 +1,12 @@
+import type { Metadata } from 'next';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 
 export const dynamic = 'force-static';
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 const PULP_URL = 'https://pulp.bypapaya.com';
 

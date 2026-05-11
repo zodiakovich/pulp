@@ -2871,7 +2871,7 @@ function ShareModal({
         aria-labelledby="share-modal-title"
       >
         <div className="flex items-center justify-between mb-6">
-          <h3 id="share-modal-title" className="font-extrabold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--foreground)' }}>
+          <h3 id="share-modal-title" className="font-extrabold" style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--text)' }}>
             Share generation
           </h3>
           <button
@@ -2886,7 +2886,7 @@ function ShareModal({
 
         <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--background)', border: '1px solid var(--border)' }}>
           <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>GENERATION</p>
-          <p style={{ fontSize: 14, color: 'var(--foreground)', marginBottom: 8 }}>{prompt || 'Untitled generation'}</p>
+          <p style={{ fontSize: 14, color: 'var(--text)', marginBottom: 8 }}>{prompt || 'Untitled generation'}</p>
           <div className="flex gap-2">
             <span
               style={{
@@ -5320,7 +5320,7 @@ export default function Home() {
                 fontWeight: 400,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                color: 'var(--foreground, #FAFAFA)',
+                color: 'var(--text, #FAFAFA)',
                 background: 'rgba(255,109,63,0.14)',
                 border: '1px solid rgba(255,109,63,0.30)',
                 boxShadow: '0 0 18px rgba(255,109,63,0.14)',
@@ -6393,7 +6393,7 @@ export default function Home() {
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
                         fontSize: 11,
-                        color: 'var(--foreground-muted)',
+                        color: 'var(--muted)',
                         background: 'none',
                         border: 'none',
                         cursor: 'pointer',
@@ -6411,7 +6411,7 @@ export default function Home() {
                     style={{
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 11,
-                      color: 'var(--foreground-muted)',
+                      color: 'var(--muted)',
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
@@ -6611,7 +6611,7 @@ export default function Home() {
                   style={{
                     fontFamily: 'JetBrains Mono, monospace',
                     fontSize: 11,
-                    color: 'var(--foreground-muted)',
+                    color: 'var(--muted)',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
@@ -6856,7 +6856,7 @@ export default function Home() {
                     <span style={{
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 11,
-                      color: isActive ? vibe.color : 'var(--foreground-muted)',
+                      color: isActive ? vibe.color : 'var(--muted)',
                       letterSpacing: '0.04em',
                       fontWeight: isActive ? 600 : 400,
                     }}>
@@ -8012,7 +8012,7 @@ export default function Home() {
           <div
             className="mx-auto mt-10 flex max-w-[1040px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
           >
-            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--foreground-muted)', letterSpacing: '0.04em' }}>
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--muted)', letterSpacing: '0.04em' }}>
               20+ genre models / drag-to-DAW / melody, chords, bass and drums / MIDI and WAV export
             </p>
             <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--text-micro)' }}>

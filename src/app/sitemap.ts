@@ -12,15 +12,18 @@ const publicStatic: {
   { path: '/changelog', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/about', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/blog', changeFrequency: 'weekly', priority: 0.85 },
+  { path: '/build', changeFrequency: 'monthly', priority: 0.7 },
+  { path: '/explore', changeFrequency: 'daily', priority: 0.75 },
+  { path: '/contact', changeFrequency: 'yearly', priority: 0.5 },
   { path: '/docs', changeFrequency: 'monthly', priority: 0.65 },
   { path: '/docs/getting-started', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/docs/daw-setup', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/docs/piano-roll', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/docs/mix-engine', changeFrequency: 'monthly', priority: 0.6 },
-  { path: '/privacy', changeFrequency: 'yearly', priority: 0.55 },
-  { path: '/terms', changeFrequency: 'yearly', priority: 0.55 },
-  { path: '/cookies', changeFrequency: 'yearly', priority: 0.45 },
-  { path: '/faq', changeFrequency: 'monthly', priority: 0.6 },
+  { path: '/privacy', changeFrequency: 'yearly', priority: 0.4 },
+  { path: '/terms', changeFrequency: 'yearly', priority: 0.4 },
+  { path: '/cookies', changeFrequency: 'yearly', priority: 0.3 },
+  { path: '/faq', changeFrequency: 'monthly', priority: 0.65 },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

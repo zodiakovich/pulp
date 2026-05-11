@@ -24,9 +24,9 @@ type BlogPost = {
 
 const TAG_COLORS: Record<string, string> = {
   Theory: '#FF6D3F',
-  Production: '#FF6D3F',
-  Tutorial: 'var(--muted)',
-  Genre: 'var(--muted)',
+  Production: '#00B894',
+  Tutorial: '#6C63FF',
+  Genre: '#0EA5E9',
 };
 
 function formatDate(iso: string) {
@@ -103,15 +103,16 @@ export default async function BlogIndexPage() {
                       {featured.title}
                     </div>
 
-                    <p className="mt-4" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, color: 'var(--foreground-muted)', lineHeight: 1.7, maxWidth: 880 }}>
+                    <p className="mt-4" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, color: 'var(--muted)', lineHeight: 1.7, maxWidth: 880 }}>
                       {featured.excerpt}
                     </p>
                   </div>
 
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(138,138,154,0.55)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-micro)', whiteSpace: 'nowrap' }}>
                       {formatDate(featured.published_at)} · {featured.read_time}
                     </span>
+
                     <span
                       className="px-2 py-1 rounded-md text-xs"
                       style={{
@@ -151,7 +152,7 @@ export default async function BlogIndexPage() {
                         >
                           {p.tag}
                         </span>
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(138,138,154,0.55)' }}>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-micro)' }}>
                           {formatDate(p.published_at)} · {p.read_time}
                         </span>
                       </div>
@@ -160,7 +161,7 @@ export default async function BlogIndexPage() {
                         {p.title}
                       </div>
 
-                      <p className="mt-3" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: 'var(--foreground-muted)', lineHeight: 1.7 }}>
+                      <p className="mt-3" style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: 'var(--muted)', lineHeight: 1.7 }}>
                         {p.excerpt}
                       </p>
                     </div>
@@ -190,7 +191,7 @@ export default async function BlogIndexPage() {
                 style={{
                   background: 'var(--bg)',
                   border: '1px solid var(--border)',
-                  color: 'var(--foreground)',
+                  color: 'var(--text)',
                   fontFamily: 'JetBrains Mono, monospace',
                   flex: 1,
                   minWidth: 220,
@@ -210,7 +211,7 @@ export default async function BlogIndexPage() {
                 Subscribe
               </button>
             </div>
-            <p className="mt-3" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(138,138,154,0.55)' }}>
+            <p className="mt-3" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-micro)' }}>
               No spam. Just production notes and new posts.
             </p>
           </div>

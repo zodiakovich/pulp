@@ -7,6 +7,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.1',
+    date: '2026-05-11',
+    title: 'Light mode polish, email signup, and navigation fixes',
+    changes: [
+      'Email capture on the landing page — subscribe for production tips and updates',
+      'Full light mode audit: every hardcoded dark color replaced with theme-aware tokens',
+      'Discord, GitHub, and API docs pages now include navigation and footer',
+      'FAQ page footer added — no more dead-end page on mobile',
+      'Settings page inputs and selects now fully theme-responsive',
+      'Billing loading state replaced with skeleton pill (no more "PLAN" flash)',
+      'Timeline and node colors on the Changelog page fully tokenised',
+    ],
+  },
+  {
     version: '0.2.0',
     date: '2026-05-07',
     title: 'Blog, performance, and visual polish',
