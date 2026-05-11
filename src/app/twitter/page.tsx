@@ -14,7 +14,7 @@ export default function TwitterPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       <Navbar />
-    <div className="relative flex items-center justify-center overflow-hidden px-8" style={{ minHeight: 'calc(100vh - 200px)' }}>
+      <div className="relative flex items-center justify-center overflow-hidden px-8" style={{ minHeight: 'calc(100vh - 200px)' }}>
       <div
         aria-hidden
         style={{
@@ -22,7 +22,7 @@ export default function TwitterPage() {
           inset: 0,
           opacity: 0.025,
           backgroundImage:
-            'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
+            'linear-gradient(var(--text) 1px, transparent 1px), linear-gradient(90deg, var(--text) 1px, transparent 1px)',
           backgroundSize: '64px 64px',
           pointerEvents: 'none',
         }}
@@ -69,7 +69,7 @@ export default function TwitterPage() {
           Back to pulp
         </Link>
       </div>
-    </div>
+      </div>
       <SiteFooter />
     </div>
   );

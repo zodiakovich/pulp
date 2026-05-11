@@ -14,7 +14,7 @@ export default function NotFound() {
           inset: 0,
           opacity: 0.025,
           backgroundImage:
-            'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
+            'linear-gradient(var(--text) 1px, transparent 1px), linear-gradient(90deg, var(--text) 1px, transparent 1px)',
           backgroundSize: '64px 64px',
           pointerEvents: 'none',
         }}

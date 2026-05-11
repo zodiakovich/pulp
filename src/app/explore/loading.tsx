@@ -10,7 +10,7 @@ export default function ExploreLoading() {
       <div className="max-w-[1280px] mx-auto px-8">
         <div
           className="mt-20 mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 16 }}
+          style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}
         >
           <div>
             <Skeleton style={{ height: 44, width: 200, marginBottom: 8, borderRadius: 8 }} />

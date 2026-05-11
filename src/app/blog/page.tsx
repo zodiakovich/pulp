@@ -25,8 +25,8 @@ type BlogPost = {
 const TAG_COLORS: Record<string, string> = {
   Theory: '#FF6D3F',
   Production: '#FF6D3F',
-  Tutorial: 'rgba(255,255,255,0.40)',
-  Genre: 'rgba(255,255,255,0.50)',
+  Tutorial: 'var(--muted)',
+  Genre: 'var(--muted)',
 };
 
 function formatDate(iso: string) {

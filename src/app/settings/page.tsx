@@ -103,13 +103,13 @@ function TextInput({
       style={{
         display: 'block',
         width: '100%',
-        background: 'rgba(255,255,255,0.03)',
+        background: 'color-mix(in srgb, var(--text) 3%, transparent)',
         border: '1px solid var(--border)',
         borderRadius: 10,
         padding: '10px 14px',
         fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
         fontSize: 14,
-        color: 'var(--foreground)',
+        color: 'var(--text)',
         outline: 'none',
         boxSizing: 'border-box',
         opacity: disabled ? 0.5 : 1,
@@ -457,21 +457,25 @@ function BillingSection() {
           <div>
             <SectionLabel>Current plan</SectionLabel>
             <div className="flex flex-wrap items-center gap-3">
-              <span
-                style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: 11,
-                  padding: '5px 12px',
-                  borderRadius: 999,
-                  border: '1px solid rgba(255,109,63,0.35)',
-                  color: 'var(--foreground)',
-                  background: 'rgba(255,109,63,0.08)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                {planLabel(planType)}
-              </span>
+              {planType === null ? (
+                <span style={{ display: 'inline-block', width: 64, height: 24, borderRadius: 999, background: 'var(--surface)', border: '1px solid var(--border)', opacity: 0.5 }} />
+              ) : (
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    padding: '5px 12px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(255,109,63,0.35)',
+                    color: 'var(--text)',
+                    background: 'rgba(255,109,63,0.08)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {planLabel(planType)}
+                </span>
+              )}
               <span style={{ fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif', fontSize: 14, color: 'var(--muted)' }}>
                 Billing is managed through Stripe. Usage limits are based on daily and monthly cost windows.
               </span>
@@ -527,13 +531,13 @@ function SelectField({
       style={{
         display: 'block',
         width: '100%',
-        background: 'rgba(255,255,255,0.03)',
+        background: 'color-mix(in srgb, var(--text) 3%, transparent)',
         border: '1px solid var(--border)',
         borderRadius: 10,
         padding: '10px 14px',
         fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
         fontSize: 14,
-        color: 'var(--foreground)',
+        color: 'var(--text)',
         outline: 'none',
         boxSizing: 'border-box',
         cursor: 'pointer',
@@ -637,13 +641,13 @@ function PreferencesSection() {
               style={{
                 display: 'block',
                 width: '100%',
-                background: 'rgba(255,255,255,0.03)',
+                background: 'color-mix(in srgb, var(--text) 3%, transparent)',
                 border: '1px solid var(--border)',
                 borderRadius: 10,
                 padding: '10px 14px',
                 fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                 fontSize: 14,
-                color: 'var(--foreground)',
+                color: 'var(--text)',
                 outline: 'none',
                 boxSizing: 'border-box',
               }}
@@ -1071,7 +1075,7 @@ export default function SettingsPage() {
               fontSize: 28,
               letterSpacing: '-0.02em',
               marginBottom: 32,
-              color: 'var(--foreground)',
+              color: 'var(--text)',
             }}
           >
             Settings

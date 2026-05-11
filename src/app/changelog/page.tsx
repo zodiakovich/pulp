@@ -27,7 +27,7 @@ export default function ChangelogPage() {
             fontWeight: 700,
             fontSize: 40,
             letterSpacing: '-0.02em',
-            color: 'var(--foreground)',
+            color: 'var(--text)',
             lineHeight: 1.15,
             marginBottom: 12,
           }}
@@ -48,7 +48,7 @@ export default function ChangelogPage() {
               top: 12,
               bottom: 0,
               width: 1,
-              background: 'linear-gradient(to bottom, rgba(255,109,63,0.4) 0%, rgba(255,255,255,0.06) 40%, transparent 100%)',
+              background: 'linear-gradient(to bottom, rgba(255,109,63,0.4) 0%, color-mix(in srgb, var(--text) 8%, transparent) 40%, transparent 100%)',
             }}
           />
 
@@ -64,8 +64,8 @@ export default function ChangelogPage() {
                         width: 22,
                         height: 22,
                         borderRadius: '50%',
-                        background: isLatest ? 'rgba(255,109,63,0.18)' : 'rgba(255,255,255,0.06)',
-                        border: isLatest ? '2px solid rgba(255,109,63,0.7)' : '2px solid rgba(255,255,255,0.12)',
+                        background: isLatest ? 'rgba(255,109,63,0.18)' : 'color-mix(in srgb, var(--text) 6%, transparent)',
+                        border: isLatest ? '2px solid rgba(255,109,63,0.7)' : '1px solid var(--border)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -77,7 +77,8 @@ export default function ChangelogPage() {
                           width: 8,
                           height: 8,
                           borderRadius: '50%',
-                          background: isLatest ? 'var(--accent)' : 'rgba(255,255,255,0.25)',
+                          background: isLatest ? 'var(--accent)' : 'var(--muted)',
+                          opacity: isLatest ? 1 : 0.4,
                         }}
                       />
                     </div>
@@ -92,8 +93,8 @@ export default function ChangelogPage() {
                           fontSize: 12,
                           padding: '3px 10px',
                           borderRadius: 20,
-                          border: isLatest ? '1px solid rgba(255,109,63,0.45)' : '1px solid rgba(255,255,255,0.1)',
-                          background: isLatest ? 'rgba(255,109,63,0.12)' : 'rgba(255,255,255,0.04)',
+                          border: isLatest ? '1px solid rgba(255,109,63,0.45)' : '1px solid var(--border)',
+                          background: isLatest ? 'rgba(255,109,63,0.12)' : 'color-mix(in srgb, var(--text) 4%, transparent)',
                           color: isLatest ? 'var(--accent)' : 'var(--muted)',
                         }}
                       >
@@ -124,7 +125,7 @@ export default function ChangelogPage() {
                         fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                         fontWeight: 700,
                         fontSize: 22,
-                        color: 'var(--foreground)',
+                        color: 'var(--text)',
                         letterSpacing: '-0.02em',
                         lineHeight: 1.2,
                         marginBottom: 16,
@@ -141,7 +142,7 @@ export default function ChangelogPage() {
                             style={{
                               fontFamily: 'DM Sans, system-ui, Segoe UI, sans-serif',
                               fontSize: 14,
-                              color: 'var(--foreground-muted)',
+                              color: 'var(--muted)',
                               lineHeight: 1.6,
                             }}
                           >

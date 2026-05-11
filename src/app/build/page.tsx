@@ -26,15 +26,15 @@ const LAYER_PURPOSE: Record<LayerKey, { color: string; body: string }> = {
     body: 'Your hook and topline. Use it as the main synth/lead or layer it with a second instrument for width.',
   },
   chords: {
-    color: 'rgba(255,255,255,0.50)',
+    color: 'var(--text)',
     body: 'Harmony and mood. Great for pads, stabs, or piano. Use inversions to keep the movement smooth.',
   },
   bass: {
-    color: 'rgba(255,255,255,0.40)',
+    color: 'var(--muted)',
     body: 'Low-end foundation. Keep it tight with the kick and simplify notes when the arrangement gets busy.',
   },
   drums: {
-    color: 'rgba(255,255,255,0.28)',
+    color: 'var(--muted)',
     body: 'Groove and energy. Swap sounds, add ghost hits, and automate fills to create transitions.',
   },
 };
@@ -107,7 +107,7 @@ function TimelineStep({
         >
           {num}
         </div>
-        <div className="flex-1 w-px" style={{ background: 'rgba(255,255,255,0.06)', marginTop: 16 }} />
+        <div className="flex-1 w-px" style={{ background: 'var(--border)', marginTop: 16 }} />
       </div>
 
       <div className="flex-1 pb-10">

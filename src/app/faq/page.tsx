@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { pageMeta } from '@/lib/seo-metadata';
 import { FaqAccordion } from './FaqAccordion';
 import { FaqJsonLd } from './FaqJsonLd';
@@ -148,6 +149,7 @@ export default function FaqPage() {
           <FaqAccordion items={FAQ_ITEMS} />
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }
